@@ -1,6 +1,7 @@
 import "server-only";
 import { topHolderInfo } from "./helius";
 import { tokenSafety, analyzeSafety } from "./safety";
+import { fetchBondingCurve } from "./bondingCurve";
 import type { Gem } from "../types";
 
 /**
@@ -8,9 +9,10 @@ import type { Gem } from "../types";
  * Runs both RPC calls in parallel. Safe to call multiple times.
  */
 export async function enrichGem(gem: Gem): Promise<Gem> {
-  const [safety, holders] = await Promise.all([
+  const [safety, holders, bc] = await Promise.all([
     tokenSafety(gem.contractAddress),
     topHolderInfo(gem.contractAddress),
+    fetchBondingCurve(gem.contractAddress),
   ]);
 
   const analysis = analyzeSafety(safety);
@@ -32,6 +34,26 @@ export async function enrichGem(gem: Gem): Promise<Gem> {
     if (holders.topPct > 30) {
       gem.redFlags.push(`Top holder ${holders.topPct.toFixed(0)}%`);
     }
+  }
+
+  if (bc) {
+    gem.bondingCurve = {
+      progress: bc.progress,
+      solCollected: bc.solCollected,
+      complete: bc.complete,
+    };
+    // Override the rough mc-based estimate with the real on-chain figure.
+    gem.bc = bc.progress;
+    gem.reasons = gem.reasons.filter((r) => !r.includes("bonding curve") && !r.includes("Graduated"));
+    if (bc.complete) {
+      gem.reasons.push("Graduated to Raydium");
+    } else if (bc.progress >= 70) {
+      gem.reasons.push(`Curve ${bc.progress.toFixed(0)}% — close to grad`);
+    } else if (bc.progress > 0) {
+      gem.reasons.push(`Curve ${bc.progress.toFixed(0)}% · ${bc.solCollected.toFixed(1)} SOL in`);
+    }
+  } else {
+    gem.bondingCurve = null;
   }
 
   return gem;

@@ -4,6 +4,22 @@ import { fmtMcap } from "@/lib/utils";
 import type { Gem } from "@/lib/types";
 import { ScoreRing } from "./ScoreRing";
 
+function BondingCurveBar({ pct, sol }: { pct: number; sol: number }) {
+  const clamped = Math.max(0, Math.min(100, pct));
+  const color = clamped >= 70 ? "#10b981" : clamped >= 30 ? "#eab308" : "#7c3aed";
+  return (
+    <div title={`Pump.fun bonding curve · ${sol.toFixed(2)} SOL collected`}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8, color: "#52525b", letterSpacing: ".8px", marginBottom: 3 }}>
+        <span>BONDING CURVE</span>
+        <span style={{ color, fontWeight: 700 }}>{clamped.toFixed(0)}% · {sol.toFixed(1)}◎</span>
+      </div>
+      <div style={{ height: 4, background: "#18181b", borderRadius: 2, overflow: "hidden" }}>
+        <div style={{ width: `${clamped}%`, height: "100%", background: color, transition: "width .4s ease" }} />
+      </div>
+    </div>
+  );
+}
+
 function SafetyBadge({ ok, label, tip }: { ok: boolean; label: string; tip: string }) {
   const c = ok ? "#10b981" : "#f59e0b";
   return (
@@ -68,7 +84,16 @@ export function GemCard({ gem, isNew, onSnipe }: { gem: Gem; isNew: boolean; onS
             HLD {gem.holders}
           </span>
         )}
+        {gem.bondingCurve?.complete && (
+          <span title="Migrated to Raydium"
+            style={{ fontSize: 8, fontWeight: 700, color: "#10b981", background: "#10b98115", border: "1px solid #10b98140", padding: "2px 6px", borderRadius: 3, letterSpacing: ".5px" }}>
+            ✓ RAYDIUM
+          </span>
+        )}
       </div>
+      {gem.bondingCurve && !gem.bondingCurve.complete && (
+        <BondingCurveBar pct={gem.bondingCurve.progress} sol={gem.bondingCurve.solCollected} />
+      )}
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {gem.reasons?.slice(0, 3).map((r, i) => (
           <div key={i} style={{ fontSize: 10, color: "#71717a", display: "flex", alignItems: "center", gap: 4 }}>

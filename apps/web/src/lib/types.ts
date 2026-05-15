@@ -29,6 +29,12 @@ export interface Gem {
   redFlags: string[];
   mintRev: boolean;
   freezeRev: boolean;
+  /** Pump.fun status if the token is still on the bonding curve. */
+  bondingCurve?: {
+    progress: number;        // 0-100
+    solCollected: number;    // SOL units
+    complete: boolean;       // graduated to Raydium
+  } | null;
   source: "helius" | "dex" | "ai" | "stream";
   dexUrl: string | null;
   detectedAt: string;
