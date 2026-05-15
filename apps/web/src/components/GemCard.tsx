@@ -4,6 +4,20 @@ import { fmtMcap } from "@/lib/utils";
 import type { Gem } from "@/lib/types";
 import { ScoreRing } from "./ScoreRing";
 
+function SafetyBadge({ ok, label, tip }: { ok: boolean; label: string; tip: string }) {
+  const c = ok ? "#10b981" : "#f59e0b";
+  return (
+    <span title={tip} style={{
+      fontSize: 8, fontWeight: 700, color: c,
+      background: c + "15", border: `1px solid ${c}40`,
+      padding: "2px 6px", borderRadius: 3, letterSpacing: ".5px",
+      display: "inline-flex", alignItems: "center", gap: 3,
+    }}>
+      <span style={{ fontSize: 9 }}>{ok ? "✓" : "⚠"}</span>{label}
+    </span>
+  );
+}
+
 export function GemCard({ gem, isNew, onSnipe }: { gem: Gem; isNew: boolean; onSnipe: (g: Gem) => void }) {
   const tier = TIER[gem.tier] || TIER.C_TIER;
   return (
@@ -45,13 +59,23 @@ export function GemCard({ gem, isNew, onSnipe }: { gem: Gem; isNew: boolean; onS
           ))}
         </div>
       )}
+      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+        <SafetyBadge ok={gem.mintRev} label="MINT" tip={gem.mintRev ? "Mint authority revoked" : "Mint authority active"} />
+        <SafetyBadge ok={gem.freezeRev} label="FREEZE" tip={gem.freezeRev ? "Freeze authority revoked" : "Freeze authority active"} />
+        {gem.holders > 0 && (
+          <span title={`${gem.holders} top holders observed`}
+            style={{ fontSize: 8, fontWeight: 700, color: "#71717a", background: "#18181b", border: "1px solid #27272a", padding: "2px 6px", borderRadius: 3, letterSpacing: ".5px" }}>
+            HLD {gem.holders}
+          </span>
+        )}
+      </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {gem.reasons?.slice(0, 3).map((r, i) => (
           <div key={i} style={{ fontSize: 10, color: "#71717a", display: "flex", alignItems: "center", gap: 4 }}>
             <span style={{ color: "#10b981", fontSize: 8 }}>✓</span>{r}
           </div>
         ))}
-        {gem.redFlags?.slice(0, 1).map((r, i) => (
+        {gem.redFlags?.slice(0, 2).map((r, i) => (
           <div key={i} style={{ fontSize: 10, color: "#f59e0b", display: "flex", alignItems: "center", gap: 4 }}>⚠ {r}</div>
         ))}
       </div>

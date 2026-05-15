@@ -6,9 +6,9 @@ import {
   pumpSignatures,
   enrichedTransactions,
   extractMintCandidates,
-  topHolderInfo,
 } from "./helius";
 import { fetchTokenPair, fetchLatestProfiles } from "./dexscreener";
+import { enrichGems } from "./enrich";
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -35,15 +35,8 @@ export async function scanViaHelius(count: number): Promise<Gem[]> {
     await sleep(180);
   }
 
-  // Enrich top 3 with holder risk
-  for (let i = 0; i < Math.min(gems.length, 3); i++) {
-    const info = await topHolderInfo(gems[i].contractAddress);
-    if (info) {
-      gems[i].holders = info.holders;
-      if (info.topPct > 30) gems[i].redFlags.push(`Top holder ${info.topPct.toFixed(0)}%`);
-    }
-    await sleep(250);
-  }
+  // Enrich top results with on-chain safety + holder data in parallel.
+  await enrichGems(gems.slice(0, 5), 4);
 
   return gems.sort((a, b) => b.score - a.score);
 }
@@ -61,6 +54,7 @@ export async function scanViaDexScreener(count: number): Promise<Gem[]> {
     }
     await sleep(100);
   }
+  await enrichGems(gems.slice(0, 5), 4);
   return gems.sort((a, b) => b.score - a.score);
 }
 

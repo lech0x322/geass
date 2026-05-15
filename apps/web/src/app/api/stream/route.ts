@@ -1,6 +1,7 @@
 import { getHeliusWs, type CreateEvent } from "@/lib/server/heliusWs";
 import { enrichedTransactions } from "@/lib/server/helius";
 import { fetchTokenPair } from "@/lib/server/dexscreener";
+import { enrichGem } from "@/lib/server/enrich";
 import { buildGem } from "@/lib/scoring";
 import { SCORE_MIN_HELIUS, SKIP_MINTS } from "@/lib/env";
 import type { Gem } from "@/lib/types";
@@ -33,7 +34,13 @@ async function gemForMint(mint: string): Promise<Gem | null> {
   }
   if (!pair) return null;
   const g = buildGem(mint, pair, "stream");
-  return g && g.score >= SCORE_MIN_HELIUS ? g : null;
+  if (!g || g.score < SCORE_MIN_HELIUS) return null;
+  try {
+    await enrichGem(g);
+  } catch {
+    // Enrichment is best-effort; emit the gem either way.
+  }
+  return g;
 }
 
 export async function GET(request: Request) {
