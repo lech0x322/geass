@@ -173,6 +173,33 @@ export function App() {
 
   const detecting = stream.detecting;
   const streamConnected = stream.connected;
+  const streamReconnecting = stream.reconnecting;
+  const streamAttempt = stream.attempt;
+  const streamNextRetryAt = stream.nextRetryAt;
+
+  // Tick a "now" value while reconnecting so the countdown updates each second.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!streamReconnecting) return;
+    const id = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(id);
+  }, [streamReconnecting]);
+  const retryInSec = streamNextRetryAt ? Math.max(0, Math.ceil((streamNextRetryAt - now) / 1000)) : 0;
+
+  let statusLabel: string;
+  let statusColor: string;
+  if (streamConnected) {
+    statusLabel = detecting ? "DETECTING" : "LIVE";
+    statusColor = "#10b981";
+  } else if (streamReconnecting) {
+    statusLabel = retryInSec > 0
+      ? `RECONNECTING #${streamAttempt} · ${retryInSec}s`
+      : `RECONNECTING #${streamAttempt}`;
+    statusColor = "#eab308";
+  } else {
+    statusLabel = "OFFLINE";
+    statusColor = "#ef4444";
+  }
 
   return (
     <div style={{ display: "flex", height: "100vh", background: "#09090b", color: "#f4f4f5", fontFamily: "'Inter',system-ui,sans-serif", overflow: "hidden" }}>
@@ -219,9 +246,9 @@ export function App() {
               <h1 style={{ fontSize: 18, fontWeight: 800, color: "#f4f4f5", letterSpacing: ".3px" }}>💎 Gems Detector</h1>
               <span style={{ fontSize: 9, fontWeight: 600, color: "#10b981", background: "#10b98120", border: "1px solid #10b98140", padding: "2px 7px", borderRadius: 10 }}>ALPHA SCANNER</span>
               <div style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: "auto" }}>
-                {detecting && <div className="live-dot" />}
-                <span style={{ fontSize: 9, color: detecting ? "#10b981" : streamConnected ? "#71717a" : "#3f3f46" }}>
-                  {detecting ? "DETECTING" : streamConnected ? "LIVE" : "OFFLINE"}
+                {streamConnected && <div className="live-dot" style={{ background: detecting ? "#10b981" : "#10b98180" }} />}
+                <span style={{ fontSize: 9, color: statusColor, fontWeight: streamReconnecting ? 700 : 500 }}>
+                  {statusLabel}
                 </span>
                 {scanTime && <span style={{ fontSize: 9, color: "#3f3f46" }}>· {scanTime}</span>}
                 {source && <span style={{ fontSize: 9, color: "#27272a" }}>· {source}</span>}
