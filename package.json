@@ -2,18 +2,14 @@
   "name": "geass",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "dev": "turbo run dev",
+    "dev:web": "turbo run dev --filter=@geass/web",
+    "build": "turbo run build",
+    "lint": "turbo run lint"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
-    "vite": "^6.0.0"
-  }
+    "turbo": "^2.3.3"
+  },
+  "packageManager": "pnpm@10.0.0"
 }
