@@ -1,5 +1,6 @@
 import "server-only";
 import { HELIUS_RPC, HELIUS_API, HELIUS_KEY, PUMP_PROG, SKIP_MINTS } from "../env";
+import { cached } from "./cache";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function heliusRpc<T = any>(method: string, params: unknown[]): Promise<T> {
@@ -66,7 +67,7 @@ export function extractMintCandidates(txs: HeliusTx[]): Map<string, number> {
   return counts;
 }
 
-export async function topHolderInfo(mint: string): Promise<{ holders: number; topPct: number } | null> {
+async function topHolderInfoUncached(mint: string): Promise<{ holders: number; topPct: number } | null> {
   try {
     const res = await heliusRpc<{ value: Array<{ uiAmount?: number; amount?: string }> }>(
       "getTokenLargestAccounts",
@@ -81,4 +82,8 @@ export async function topHolderInfo(mint: string): Promise<{ holders: number; to
   } catch {
     return null;
   }
+}
+
+export function topHolderInfo(mint: string): Promise<{ holders: number; topPct: number } | null> {
+  return cached(`helius:holders:${mint}`, 30_000, () => topHolderInfoUncached(mint));
 }

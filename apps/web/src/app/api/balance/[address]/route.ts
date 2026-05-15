@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { heliusRpc } from "@/lib/server/helius";
+import { enforceRateLimit } from "@/lib/server/withRateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ address: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ address: string }> }) {
+  const limited = enforceRateLimit(req, { bucket: "balance", max: 60, windowMs: 60_000 });
+  if (limited) return limited;
   const { address } = await params;
   if (!address || address.length < 32) {
     return NextResponse.json({ error: "Invalid address" }, { status: 400 });

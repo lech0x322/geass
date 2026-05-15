@@ -1,4 +1,5 @@
 import "server-only";
+import { cached } from "./cache";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DexPair = any;
@@ -7,7 +8,7 @@ export interface DexTokenResponse {
   pairs?: DexPair[] | null;
 }
 
-export async function fetchTokenPair(mint: string): Promise<DexPair | null> {
+async function fetchTokenPairUncached(mint: string): Promise<DexPair | null> {
   try {
     const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${mint}`, {
       signal: AbortSignal.timeout(6_000),
@@ -25,7 +26,11 @@ export async function fetchTokenPair(mint: string): Promise<DexPair | null> {
   }
 }
 
-export async function fetchLatestProfiles(): Promise<Array<{ tokenAddress: string }>> {
+export function fetchTokenPair(mint: string): Promise<DexPair | null> {
+  return cached(`dex:pair:${mint}`, 8_000, () => fetchTokenPairUncached(mint));
+}
+
+async function fetchLatestProfilesUncached(): Promise<Array<{ tokenAddress: string }>> {
   try {
     const r = await fetch("https://api.dexscreener.com/token-profiles/latest/v1", {
       signal: AbortSignal.timeout(8_000),
@@ -40,4 +45,8 @@ export async function fetchLatestProfiles(): Promise<Array<{ tokenAddress: strin
   } catch {
     return [];
   }
+}
+
+export function fetchLatestProfiles(): Promise<Array<{ tokenAddress: string }>> {
+  return cached("dex:profiles:latest", 10_000, fetchLatestProfilesUncached);
 }

@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
+import { enforceRateLimit } from "@/lib/server/withRateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const limited = enforceRateLimit(request, { bucket: "ipfs", max: 10, windowMs: 60_000 });
+  if (limited) return limited;
   try {
     const form = await request.formData();
     const upstream = await fetch("https://pump.fun/api/ipfs", {

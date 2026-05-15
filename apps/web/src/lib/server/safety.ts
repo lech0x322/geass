@@ -1,5 +1,6 @@
 import "server-only";
 import { heliusRpc } from "./helius";
+import { cached } from "./cache";
 
 // Pump.fun's global mint authority PDA. Bonding-curve tokens have their
 // mint authority set to this address; once they "graduate" to Raydium it's
@@ -36,7 +37,7 @@ interface ParsedMintAccountInfo {
   } | null;
 }
 
-export async function tokenSafety(mint: string): Promise<MintSafety | null> {
+async function tokenSafetyUncached(mint: string): Promise<MintSafety | null> {
   try {
     const res = await heliusRpc<ParsedMintAccountInfo>("getAccountInfo", [
       mint,
@@ -55,6 +56,11 @@ export async function tokenSafety(mint: string): Promise<MintSafety | null> {
   } catch {
     return null;
   }
+}
+
+// 60s TTL: mint authorities very rarely change after the initial setup.
+export function tokenSafety(mint: string): Promise<MintSafety | null> {
+  return cached(`helius:safety:${mint}`, 60_000, () => tokenSafetyUncached(mint));
 }
 
 export interface SafetyAnalysis {

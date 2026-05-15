@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enforceRateLimit } from "@/lib/server/withRateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +17,10 @@ interface TradeBody {
 }
 
 export async function POST(request: Request) {
+  // Trade endpoint is expensive (pumpportal cost + tx prep) — keep it tight.
+  const limited = enforceRateLimit(request, { bucket: "trade", max: 10, windowMs: 60_000 });
+  if (limited) return limited;
+
   let body: TradeBody;
   try {
     body = await request.json();

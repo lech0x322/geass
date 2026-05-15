@@ -9,6 +9,7 @@ import {
 } from "./helius";
 import { fetchTokenPair, fetchLatestProfiles } from "./dexscreener";
 import { enrichGems } from "./enrich";
+import { cached } from "./cache";
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -87,7 +88,7 @@ export async function scanViaAI(count: number): Promise<Gem[]> {
   return parsed.map(p => ({ ...p, source: "ai" as const, detectedAt: p.detectedAt || now }));
 }
 
-export async function runScan(count = 6): Promise<{ gems: Gem[]; source: string; error?: string }> {
+async function runScanUncached(count: number): Promise<{ gems: Gem[]; source: string; error?: string }> {
   try {
     const gems = await scanViaHelius(count);
     return { gems, source: "HELIUS" };
@@ -109,4 +110,12 @@ export async function runScan(count = 6): Promise<{ gems: Gem[]; source: string;
     }
   }
   return { gems: [], source: "NONE", error: "All scan sources failed" };
+}
+
+/**
+ * Cached scan. TTL is short (5s) so the live view stays fresh while
+ * coalescing the thundering herd: 100 simultaneous clicks = 1 upstream call.
+ */
+export function runScan(count = 6) {
+  return cached(`scan:${count}`, 5_000, () => runScanUncached(count));
 }
