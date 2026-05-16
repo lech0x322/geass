@@ -97,20 +97,47 @@ export function useProStatus(wallet: string | null): ProState {
         lamports: Math.floor(checkout.amountSol * LAMPORTS_PER_SOL),
       }));
       const bytes = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
-      const sig = await signAndSendBytes(bytes);
 
-      // Poll verify (Helius needs a moment to index)
+      // Open SSE BEFORE sending the tx so the Helius webhook can't race us.
+      // When the webhook reports a matching transfer, we verify immediately.
+      const es = typeof EventSource !== "undefined" ? new EventSource(`/api/pro/listen?wallet=${wallet}`) : null;
+      const webhookHit = new Promise<void>((resolve) => {
+        if (!es) return; // never resolves; falls back to polling
+        es.addEventListener("payment", () => resolve());
+      });
+
+      let sig: string;
+      try {
+        sig = await signAndSendBytes(bytes);
+      } catch (e) {
+        es?.close();
+        throw e;
+      }
+
+      // Race the webhook against a 30s ceiling that triggers polling fallback.
+      await Promise.race([webhookHit, new Promise(r => setTimeout(r, 30_000))]);
+      es?.close();
+
+      // Try a single fast verify (webhook fired → Helius has indexed it).
       let verified: ProStatus | null = null;
-      for (let i = 0; i < 12; i++) {
-        await new Promise(r => setTimeout(r, 2_500));
-        try {
-          const v = await proVerify(sig, wallet);
-          if (v.active && v.expiresAt) { verified = v; break; }
-          if (v.error && !v.error.includes("not found") && !v.error.includes("not yet")) {
-            throw new Error(v.error);
+      try {
+        const v = await proVerify(sig, wallet);
+        if (v.active && v.expiresAt) verified = v;
+      } catch { /* fall through to polling */ }
+
+      // Fallback polling if webhook didn't fire or indexer lagged.
+      if (!verified) {
+        for (let i = 0; i < 8; i++) {
+          await new Promise(r => setTimeout(r, 2_500));
+          try {
+            const v = await proVerify(sig, wallet);
+            if (v.active && v.expiresAt) { verified = v; break; }
+            if (v.error && !v.error.includes("not found") && !v.error.includes("not yet")) {
+              throw new Error(v.error);
+            }
+          } catch (e) {
+            if (i === 7) throw e;
           }
-        } catch (e) {
-          if (i === 11) throw e;
         }
       }
       if (!verified || !verified.expiresAt) {
