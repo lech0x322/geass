@@ -3,6 +3,7 @@ import { TIER } from "@/lib/config";
 import { fmtMcap } from "@/lib/utils";
 import type { Gem } from "@/lib/types";
 import { ScoreRing } from "./ScoreRing";
+import { IconCheck, IconZap, IconArrowUpRight } from "./icons";
 
 function BondingCurveBar({ pct, sol }: { pct: number; sol: number }) {
   const clamped = Math.max(0, Math.min(100, pct));
@@ -11,7 +12,7 @@ function BondingCurveBar({ pct, sol }: { pct: number; sol: number }) {
     <div title={`Pump.fun bonding curve · ${sol.toFixed(2)} SOL collected`}>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8, color: "#52525b", letterSpacing: ".8px", marginBottom: 3 }}>
         <span>BONDING CURVE</span>
-        <span style={{ color, fontWeight: 700 }}>{clamped.toFixed(0)}% · {sol.toFixed(1)}◎</span>
+        <span style={{ color, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{clamped.toFixed(0)}% · {sol.toFixed(1)} SOL</span>
       </div>
       <div style={{ height: 4, background: "#18181b", borderRadius: 2, overflow: "hidden" }}>
         <div style={{ width: `${clamped}%`, height: "100%", background: color, transition: "width .4s ease" }} />
@@ -29,7 +30,8 @@ function SafetyBadge({ ok, label, tip }: { ok: boolean; label: string; tip: stri
       padding: "2px 6px", borderRadius: 3, letterSpacing: ".5px",
       display: "inline-flex", alignItems: "center", gap: 3,
     }}>
-      <span style={{ fontSize: 9 }}>{ok ? "✓" : "⚠"}</span>{label}
+      {ok ? <IconCheck size={9} strokeWidth={2.5} /> : <span style={{ fontSize: 10, lineHeight: 1, fontWeight: 700 }}>!</span>}
+      {label}
     </span>
   );
 }
@@ -43,7 +45,7 @@ export function GemCard({ gem, isNew, onSnipe }: { gem: Gem; isNew: boolean; onS
       {isNew && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg,transparent,#10b981,transparent)" }} className="pulse"/>}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 9, background: "linear-gradient(135deg,#dc262630,#7c3aed30)", border: "1px solid #27272a",
+          <div style={{ width: 36, height: 36, borderRadius: 9, background: "linear-gradient(135deg,rgba(239,68,68,.18),rgba(139,92,246,.18))", border: "1px solid #27272a",
             display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: "#f4f4f5" }}>{gem.sym?.[0] || "?"}</div>
           <div>
             <div style={{ fontWeight: 700, fontSize: 13, color: "#f4f4f5", letterSpacing: ".3px" }}>${gem.sym}</div>
@@ -86,34 +88,36 @@ export function GemCard({ gem, isNew, onSnipe }: { gem: Gem; isNew: boolean; onS
         )}
         {gem.bondingCurve?.complete && (
           <span title="Migrated to Raydium"
-            style={{ fontSize: 8, fontWeight: 700, color: "#10b981", background: "#10b98115", border: "1px solid #10b98140", padding: "2px 6px", borderRadius: 3, letterSpacing: ".5px" }}>
-            ✓ RAYDIUM
+            style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 8, fontWeight: 700, color: "#10b981", background: "#10b98115", border: "1px solid #10b98140", padding: "2px 6px", borderRadius: 3, letterSpacing: ".5px" }}>
+            <IconCheck size={9} strokeWidth={2.5} /> RAYDIUM
           </span>
         )}
       </div>
       {gem.bondingCurve && !gem.bondingCurve.complete && (
         <BondingCurveBar pct={gem.bondingCurve.progress} sol={gem.bondingCurve.solCollected} />
       )}
-      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
         {gem.reasons?.slice(0, 3).map((r, i) => (
-          <div key={i} style={{ fontSize: 10, color: "#71717a", display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ color: "#10b981", fontSize: 8 }}>✓</span>{r}
+          <div key={i} style={{ fontSize: 10.5, color: "#a1a1aa", display: "flex", alignItems: "center", gap: 5 }}>
+            <IconCheck size={10} strokeWidth={2.4} style={{ color: "#10b981" }} />{r}
           </div>
         ))}
         {gem.redFlags?.slice(0, 2).map((r, i) => (
-          <div key={i} style={{ fontSize: 10, color: "#f59e0b", display: "flex", alignItems: "center", gap: 4 }}>⚠ {r}</div>
+          <div key={i} style={{ fontSize: 10.5, color: "#f59e0b", display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 10, textAlign: "center", fontWeight: 800, fontSize: 11, lineHeight: 1 }}>!</span>{r}
+          </div>
         ))}
       </div>
       <div style={{ display: "flex", gap: 6 }}>
         <a href={gem.contractAddress ? `https://pump.fun/coin/${gem.contractAddress}` : "#"} target="_blank" rel="noreferrer"
-          style={{ flex: 1, background: "#18181b", border: "1px solid #27272a", color: "#a1a1aa", padding: "7px", borderRadius: 7,
-            fontSize: 10, fontWeight: 600, textDecoration: "none", textAlign: "center", cursor: "pointer" }}>
-          View Pump.fun
+          style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, background: "#18181b", border: "1px solid #27272a", color: "#a1a1aa", padding: "8px", borderRadius: 8,
+            fontSize: 11, fontWeight: 500, textDecoration: "none", cursor: "pointer" }}>
+          View on Pump.fun <IconArrowUpRight size={10} strokeWidth={2} />
         </a>
         <button onClick={() => onSnipe(gem)}
-          style={{ flex: 1, background: "linear-gradient(135deg,#dc2626,#7c3aed)", border: "none", color: "#fff",
-            padding: "7px", borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: ".5px" }}>
-          ⚡ SNIPE
+          style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, background: "linear-gradient(135deg,#ef4444,#8b5cf6)", border: "none", color: "#fff",
+            padding: "8px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer", letterSpacing: ".2px" }}>
+          <IconZap size={11} strokeWidth={2} /> Snipe
         </button>
       </div>
     </div>
