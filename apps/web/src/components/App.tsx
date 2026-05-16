@@ -595,6 +595,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                     <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981" }} />
                     PRO SUBSCRIPTION ACTIVE
                   </div>
+                  {/* (active body below) */}
                   <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginTop: 18 }}>
                     <div>
                       <div style={{ fontSize: 9.5, color: "#52525b", letterSpacing: "1.5px", marginBottom: 6 }}>EXPIRES IN</div>
@@ -612,11 +613,47 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                       </a>
                     </div>
                   </div>
-                  <button onClick={() => pro.refresh()} disabled={pro.loading}
-                    style={{ marginTop: 20, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid #27272a", background: "transparent", color: "#a1a1aa", fontSize: 11, fontWeight: 500, cursor: pro.loading ? "wait" : "pointer" }}>
-                    <IconRefresh size={11} strokeWidth={2} className={pro.loading ? "spin" : undefined} />
-                    {pro.loading ? "Checking…" : "Refresh status"}
+                  <button onClick={() => pro.refresh()} disabled={pro.loading || pro.verifying}
+                    style={{ marginTop: 20, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid #27272a", background: "transparent", color: "#a1a1aa", fontSize: 11, fontWeight: 500, cursor: (pro.loading || pro.verifying) ? "wait" : "pointer" }}>
+                    <IconRefresh size={11} strokeWidth={2} className={(pro.loading || pro.verifying) ? "spin" : undefined} />
+                    {pro.verifying ? "Checking…" : "Refresh status"}
                   </button>
+                </div>
+              ) : pro.pendingSig ? (
+                <div style={{ background: "linear-gradient(180deg,#1a1611,#14110d)", border: "1px solid rgba(245,158,11,.32)", borderRadius: 16, padding: "26px 24px", position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", top: 0, right: 0, left: 0, height: 2, background: "linear-gradient(90deg,#f59e0b,#ef4444)" }} />
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 10.5, fontWeight: 700, color: "#f59e0b", letterSpacing: "1.5px", marginBottom: 6 }}>
+                    <IconRefresh size={11} strokeWidth={2.2} className="spin" />
+                    AWAITING ON-CHAIN CONFIRMATION
+                  </div>
+                  <div style={{ fontSize: 13, color: "#fafafa", lineHeight: 1.6, marginBottom: 16, fontWeight: 500 }}>
+                    Your payment was broadcast to Solana. The indexer just needs a moment to catch up — this usually finishes within a minute. Activation is automatic; no further action required.
+                  </div>
+                  <div style={{ background: "#09090b", border: "1px solid #27272a", borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
+                    <div style={{ fontSize: 9.5, color: "#52525b", letterSpacing: "1.5px", marginBottom: 6 }}>TRANSACTION</div>
+                    <a href={`https://solscan.io/tx/${pro.pendingSig}`} target="_blank" rel="noopener noreferrer"
+                      style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontFamily: "ui-monospace,monospace", color: "#f59e0b", textDecoration: "none", wordBreak: "break-all" }}>
+                      {pro.pendingSig.slice(0, 28)}…
+                      <IconArrowUpRight size={11} strokeWidth={2} />
+                    </a>
+                    {pro.pendingSince && (
+                      <div style={{ fontSize: 10.5, color: "#52525b", marginTop: 6, fontVariantNumeric: "tabular-nums" }}>
+                        Sent {Math.max(1, Math.floor((Date.now() - pro.pendingSince) / 1000))}s ago
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button onClick={() => pro.refresh()} disabled={pro.verifying}
+                      style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "11px",
+                        borderRadius: 9, border: "none", background: "#f59e0b", color: "#1a1208", fontSize: 12.5, fontWeight: 700, cursor: pro.verifying ? "wait" : "pointer", letterSpacing: ".2px" }}>
+                      <IconRefresh size={12} strokeWidth={2.2} className={pro.verifying ? "spin" : undefined} />
+                      {pro.verifying ? "Verifying…" : "Verify now"}
+                    </button>
+                    <button onClick={() => { if (confirm("Discard this pending payment? Your on-chain transaction will not be cancelled — only the local pending record is cleared.")) pro.clearPending(); }}
+                      style={{ padding: "11px 16px", borderRadius: 9, border: "1px solid #27272a", background: "transparent", color: "#71717a", fontSize: 11.5, fontWeight: 500, cursor: "pointer" }}>
+                      Discard
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div style={{ background: "linear-gradient(180deg,#11101a,#0d0c14)", border: "1px solid rgba(139,92,246,.32)", borderRadius: 16, padding: "26px 24px", position: "relative", overflow: "hidden" }}>
@@ -642,9 +679,10 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                       {pro.error}
                     </div>
                   )}
-                  <button onClick={() => pro.pay().catch(() => {/* error surfaced via pro.error */})} disabled={pro.loading}
+                  <button onClick={() => pro.pay().catch(() => {/* error surfaced via pro.error */})} disabled={pro.loading || !!pro.pendingSig}
                     style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 9, padding: "13px",
-                      borderRadius: 10, border: "none", background: "linear-gradient(135deg,#ef4444,#8b5cf6)", color: "#fff", fontSize: 13.5, fontWeight: 600, cursor: pro.loading ? "wait" : "pointer", letterSpacing: ".2px",
+                      borderRadius: 10, border: "none", background: "linear-gradient(135deg,#ef4444,#8b5cf6)", color: "#fff", fontSize: 13.5, fontWeight: 600,
+                      cursor: pro.loading ? "wait" : "pointer", letterSpacing: ".2px", opacity: pro.pendingSig ? .5 : 1,
                       boxShadow: "0 8px 26px -10px rgba(139,92,246,.55)" }}>
                     {pro.loading
                       ? (<><IconRefresh size={13} strokeWidth={2} className="spin" /> Confirming on-chain…</>)
