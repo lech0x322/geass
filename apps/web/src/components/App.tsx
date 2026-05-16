@@ -51,6 +51,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
   // Launch state
   const [ct, setCt]           = useState({ name: "", sym: "", desc: "", img: "", devBuy: "0.5" });
+  const [ctFile, setCtFile]   = useState<File | null>(null);
   const [ctStep, setCtStep]   = useState<"form" | "done">("form");
   const [ctLoad, setCtLoad]   = useState(false);
   const [ctMsg, setCtMsg]     = useState("");
@@ -163,23 +164,21 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
   // ── Token launch ────────────────────────────────────────────
   const launchToken = async () => {
-    if (!ct.name || !ct.sym) { setCtMsg("Fill Name & Symbol"); return; }
+    if (!ct.name.trim() || !ct.sym.trim()) { setCtMsg("Token name and symbol are required."); return; }
+    if (!ctFile && !ct.img.trim()) { setCtMsg("Upload an image file or paste an image URL — pump.fun requires it."); return; }
     setCtLoad(true);
     try {
-      setCtMsg("Uploading metadata...");
+      setCtMsg("Uploading metadata to IPFS…");
       const form = new FormData();
-      form.append("name", ct.name);
-      form.append("symbol", ct.sym.toUpperCase());
-      form.append("description", ct.desc || ct.name);
+      form.append("name", ct.name.trim());
+      form.append("symbol", ct.sym.toUpperCase().trim());
+      form.append("description", (ct.desc || ct.name).trim());
       form.append("showName", "true");
-      if (ct.img) {
-        try {
-          const ir = await fetch(ct.img, { signal: AbortSignal.timeout(8_000) });
-          form.append("file", await ir.blob(), "img.png");
-        } catch { /* image is optional */ }
-      }
+      if (ctFile) form.append("file", ctFile, ctFile.name || "image.png");
+      else if (ct.img) form.append("imageUrl", ct.img.trim());
+
       const meta = await pumpIpfs(form);
-      setCtMsg("Creating on-chain...");
+      setCtMsg("Building on-chain transaction…");
       const bytes = await pumpTradeTx({
         publicKey: wallet,
         action: "create",
@@ -187,14 +186,14 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
         slippage: 10,
         priorityFee: 0.0005,
         pool: "pump",
-        tokenMetadata: { name: ct.name, symbol: ct.sym.toUpperCase(), uri: meta.metadataUri },
+        tokenMetadata: { name: ct.name.trim(), symbol: ct.sym.toUpperCase().trim(), uri: meta.metadataUri },
       });
-      setCtMsg("Sign in Phantom...");
+      setCtMsg("Sign in Phantom…");
       const sig = await signAndSendBytes(bytes);
-      setCtMsg(`✓ Launched! TX: ${sig.slice(0, 18)}...`);
+      setCtMsg(`Launched. TX ${sig.slice(0, 18)}…`);
       setCtStep("done");
     } catch (e) {
-      setCtMsg("Error: " + (e instanceof Error ? e.message : String(e)));
+      setCtMsg(e instanceof Error ? e.message : String(e));
     }
     setCtLoad(false);
   };
@@ -679,9 +678,35 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                       style={{ width: "100%", background: "#09090b", border: "1px solid #27272a", borderRadius: 7, color: "#f4f4f5", padding: "9px 12px", fontSize: 11, outline: "none", resize: "vertical" }} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 4 }}>IMAGE URL</div>
-                    <input value={ct.img} onChange={e => setCt(p => ({ ...p, img: e.target.value }))} placeholder="https://..."
-                      style={{ width: "100%", background: "#09090b", border: "1px solid #27272a", borderRadius: 7, color: "#f4f4f5", padding: "9px 12px", fontSize: 11, outline: "none" }} />
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px" }}>TOKEN IMAGE *</span>
+                      <span style={{ fontSize: 9, color: "#3f3f46" }}>PNG / JPG / GIF · ≤5 MB</span>
+                    </div>
+                    <label style={{ display: "block", cursor: "pointer", background: "#09090b", border: `1px dashed ${ctFile ? "#10b98155" : "#27272a"}`, borderRadius: 8, padding: "14px", textAlign: "center" }}>
+                      <input type="file" accept="image/*" onChange={e => {
+                        const f = e.target.files?.[0] ?? null;
+                        if (f && f.size > 5 * 1024 * 1024) { setCtMsg("Image is larger than 5 MB."); setCtFile(null); return; }
+                        setCtFile(f);
+                        if (f) setCt(p => ({ ...p, img: "" }));
+                        setCtMsg("");
+                      }} style={{ display: "none" }} />
+                      {ctFile ? (
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                          <IconCheck size={13} strokeWidth={2.2} style={{ color: "#10b981" }} />
+                          <span style={{ fontSize: 11.5, color: "#fafafa", fontWeight: 500 }}>{ctFile.name}</span>
+                          <span style={{ fontSize: 10, color: "#52525b" }}>· {(ctFile.size / 1024).toFixed(0)} KB</span>
+                          <button type="button" onClick={(e) => { e.preventDefault(); setCtFile(null); }}
+                            style={{ marginLeft: 4, background: "transparent", border: "none", color: "#52525b", fontSize: 11, cursor: "pointer" }}>remove</button>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 11.5, color: "#71717a" }}>Click to upload an image</div>
+                      )}
+                    </label>
+                    <div style={{ marginTop: 8, fontSize: 9, color: "#3f3f46", letterSpacing: "1px" }}>OR PASTE A PUBLIC URL</div>
+                    <input value={ct.img}
+                      onChange={e => { setCt(p => ({ ...p, img: e.target.value })); if (e.target.value) setCtFile(null); }}
+                      disabled={!!ctFile} placeholder="https://example.com/logo.png"
+                      style={{ width: "100%", marginTop: 4, background: "#09090b", border: "1px solid #27272a", borderRadius: 7, color: "#f4f4f5", padding: "9px 12px", fontSize: 11, outline: "none", opacity: ctFile ? .4 : 1 }} />
                   </div>
                   <div style={{ background: "#111113", border: "1px solid #27272a", borderRadius: 8, padding: 12 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
@@ -690,7 +715,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                     </div>
                     <input type="range" min="0" max="5" step="0.1" value={ct.devBuy} onChange={e => setCt(p => ({ ...p, devBuy: e.target.value }))} style={{ width: "100%" }} />
                   </div>
-                  {ctMsg && <div style={{ fontSize: 10.5, color: ctMsg.startsWith("✓") || ctMsg.includes("Launched") ? "#10b981" : "#f59e0b", textAlign: "center" }}>{ctMsg.replace(/^✓\s*/, "")}</div>}
+                  {ctMsg && <div style={{ fontSize: 11, color: ctMsg.startsWith("Launched") ? "#10b981" : ctMsg.startsWith("Sign") || ctMsg.startsWith("Uploading") || ctMsg.startsWith("Building") ? "#a1a1aa" : "#f59e0b", textAlign: "center", lineHeight: 1.5 }}>{ctMsg}</div>}
                   <button onClick={launchToken} disabled={ctLoad || !ct.name || !ct.sym}
                     style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
                       background: "linear-gradient(135deg,#ef4444,#8b5cf6)", border: "none", color: "#fff", padding: "12px",
@@ -711,7 +736,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   <div style={{ fontSize: 17, fontWeight: 700, color: "#10b981", marginBottom: 6, letterSpacing: "-.3px" }}>Token launched</div>
                   <div style={{ fontSize: 12, color: "#a1a1aa", marginBottom: 4 }}>${ct.sym.toUpperCase()} is live on Pump.fun</div>
                   <div style={{ fontSize: 10.5, color: "#52525b", marginBottom: 20, fontFamily: "ui-monospace,monospace" }}>{ctMsg.replace(/^✓\s*/, "")}</div>
-                  <button onClick={() => { setCtStep("form"); setCt({ name: "", sym: "", desc: "", img: "", devBuy: "0.5" }); setCtMsg(""); }}
+                  <button onClick={() => { setCtStep("form"); setCt({ name: "", sym: "", desc: "", img: "", devBuy: "0.5" }); setCtFile(null); setCtMsg(""); }}
                     style={{ background: "#ef4444", border: "none", color: "#fff", padding: "9px 22px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                     Launch another
                   </button>
