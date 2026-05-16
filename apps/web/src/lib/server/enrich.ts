@@ -2,24 +2,22 @@ import "server-only";
 import { topHolderInfo } from "./helius";
 import { tokenSafety, analyzeSafety } from "./safety";
 import { fetchBondingCurve } from "./bondingCurve";
+import { fetchRecentKolBuyers } from "./kol";
 import type { Gem } from "../types";
+import type { KolBuyer } from "../types";
 
-/**
- * Enriches a gem in-place with on-chain safety data and top-holder risk.
- * Runs both RPC calls in parallel. Safe to call multiple times.
- */
 export async function enrichGem(gem: Gem): Promise<Gem> {
-  const [safety, holders, bc] = await Promise.all([
+  const [safety, holders, bc, kolBuyers] = await Promise.all([
     tokenSafety(gem.contractAddress),
     topHolderInfo(gem.contractAddress),
     fetchBondingCurve(gem.contractAddress),
+    fetchRecentKolBuyers(gem.contractAddress),
   ]);
 
   const analysis = analyzeSafety(safety);
   gem.mintRev = analysis.mintRevoked;
   gem.freezeRev = analysis.freezeRevoked;
 
-  // Reset prior safety-related flags so we don't accumulate duplicates on rescans.
   const safetyFlagPatterns = [/^Mint authority/i, /^Freeze authority/i, /^Could not verify/i];
   gem.redFlags = gem.redFlags.filter((f) => !safetyFlagPatterns.some((p) => p.test(f)));
   for (const f of analysis.flags) gem.redFlags.push(f);
@@ -36,13 +34,23 @@ export async function enrichGem(gem: Gem): Promise<Gem> {
     }
   }
 
+  // Merge KOL buyers (don't overwrite those detected inline from tx)
+  if (kolBuyers.length) {
+    const existing = new Set((gem.kolBuyers || []).map((k: KolBuyer) => k.l || k.label));
+    const fresh = kolBuyers.filter((k) => !existing.has(k.l || k.label));
+    gem.kolBuyers = [...(gem.kolBuyers || []), ...fresh];
+    gem.kol = gem.kolBuyers.length;
+    if (gem.kol > 0 && !gem.reasons.some((r) => r.includes("KOL"))) {
+      gem.reasons.push(`KOL buy: ${gem.kolBuyers.slice(0, 2).map((k) => k.l || k.label).join(", ")}`);
+    }
+  }
+
   if (bc) {
     gem.bondingCurve = {
       progress: bc.progress,
       solCollected: bc.solCollected,
       complete: bc.complete,
     };
-    // Override the rough mc-based estimate with the real on-chain figure.
     gem.bc = bc.progress;
     gem.reasons = gem.reasons.filter((r) => !r.includes("bonding curve") && !r.includes("Graduated"));
     if (bc.complete) {
@@ -68,11 +76,7 @@ export async function enrichGems(gems: Gem[], maxConcurrent = 4): Promise<Gem[]>
         while (queue.length) {
           const g = queue.shift();
           if (!g) break;
-          try {
-            await enrichGem(g);
-          } catch {
-            // swallow per-gem errors; UI shouldn't fail the whole batch
-          }
+          try { await enrichGem(g); } catch {/* swallow per-gem errors */}
         }
       })(),
     );
