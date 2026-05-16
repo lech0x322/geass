@@ -4,6 +4,7 @@ import { tokenSafety, analyzeSafety } from "./safety";
 import { fetchBondingCurve } from "./bondingCurve";
 import { fetchRecentKolBuyers } from "./kol";
 import type { Gem } from "../types";
+import type { KolBuyer } from "../types";
 
 export async function enrichGem(gem: Gem): Promise<Gem> {
   const [safety, holders, bc, kolBuyers] = await Promise.all([
@@ -17,7 +18,6 @@ export async function enrichGem(gem: Gem): Promise<Gem> {
   gem.mintRev = analysis.mintRevoked;
   gem.freezeRev = analysis.freezeRevoked;
 
-  // Reset prior safety-related flags so we don't accumulate duplicates on rescans.
   const safetyFlagPatterns = [/^Mint authority/i, /^Freeze authority/i, /^Could not verify/i];
   gem.redFlags = gem.redFlags.filter((f) => !safetyFlagPatterns.some((p) => p.test(f)));
   for (const f of analysis.flags) gem.redFlags.push(f);
@@ -34,9 +34,9 @@ export async function enrichGem(gem: Gem): Promise<Gem> {
     }
   }
 
-  // Merge KOL buyers (don't overwrite stream-detected ones, just add new)
+  // Merge KOL buyers (don't overwrite those detected inline from tx)
   if (kolBuyers.length) {
-    const existing = new Set((gem.kolBuyers || []).map((k) => k.l || k.label));
+    const existing = new Set((gem.kolBuyers || []).map((k: KolBuyer) => k.l || k.label));
     const fresh = kolBuyers.filter((k) => !existing.has(k.l || k.label));
     gem.kolBuyers = [...(gem.kolBuyers || []), ...fresh];
     gem.kol = gem.kolBuyers.length;
@@ -51,7 +51,6 @@ export async function enrichGem(gem: Gem): Promise<Gem> {
       solCollected: bc.solCollected,
       complete: bc.complete,
     };
-    // Override the rough mc-based estimate with the real on-chain figure.
     gem.bc = bc.progress;
     gem.reasons = gem.reasons.filter((r) => !r.includes("bonding curve") && !r.includes("Graduated"));
     if (bc.complete) {
@@ -77,11 +76,7 @@ export async function enrichGems(gems: Gem[], maxConcurrent = 4): Promise<Gem[]>
         while (queue.length) {
           const g = queue.shift();
           if (!g) break;
-          try {
-            await enrichGem(g);
-          } catch {
-            // swallow per-gem errors; UI shouldn't fail the whole batch
-          }
+          try { await enrichGem(g); } catch {/* swallow per-gem errors */}
         }
       })(),
     );

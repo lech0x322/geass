@@ -8,11 +8,11 @@ import type { Gem } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// Vercel Hobby: 60s max. Pro/Enterprise: set to 300.
+// Vercel Hobby max = 60s; upgrade to Pro for 300s
 export const maxDuration = 60;
 
 const HEARTBEAT_MS = 15_000;
-const DEX_RETRY_DELAY_MS = 4_000;
+const DEX_RETRY_MS = 4_000;
 
 async function processSignature(signature: string): Promise<Gem[]> {
   let txs: Awaited<ReturnType<typeof enrichedTransactions>>;
@@ -34,26 +34,21 @@ async function processSignature(signature: string): Promise<Gem[]> {
   for (const mint of mints) {
     let pair = await fetchTokenPair(mint);
     if (!pair) {
-      await new Promise((r) => setTimeout(r, DEX_RETRY_DELAY_MS));
+      await new Promise((r) => setTimeout(r, DEX_RETRY_MS));
       pair = await fetchTokenPair(mint);
     }
     if (!pair) continue;
-
     const g = buildGem(mint, pair, "stream");
     if (!g || g.score < SCORE_MIN_HELIUS) continue;
 
-    // Detect KOL buyers directly from this transaction's transfers
+    // Detect KOL buyers from this transaction immediately (no extra API call)
     const kolBuyers = detectKolBuyersFromTransfers(tx.tokenTransfers ?? [], mint);
     if (kolBuyers.length) {
       g.kolBuyers = kolBuyers;
       g.kol = kolBuyers.length;
     }
 
-    try {
-      await enrichGem(g);
-    } catch {
-      // best-effort
-    }
+    try { await enrichGem(g); } catch {/* best-effort */}
     gems.push(g);
   }
   return gems;
@@ -79,13 +74,11 @@ export async function GET(request: Request) {
           controller.enqueue(
             encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
           );
-        } catch {
-          closed = true;
-        }
+        } catch { closed = true; }
       };
 
-      // Fresh WebSocket per SSE connection — no globalThis singleton.
-      // This works on Vercel: each invocation owns its own WS lifecycle.
+      // Fresh WebSocket per SSE connection — avoids globalThis singleton
+      // that dies between Vercel cold starts.
       const ws = new WebSocket(`wss://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
 
       const heartbeat = setInterval(() => {
@@ -93,14 +86,12 @@ export async function GET(request: Request) {
       }, HEARTBEAT_MS);
 
       ws.addEventListener("open", () => {
-        ws.send(
-          JSON.stringify({
-            jsonrpc: "2.0",
-            id: nextReqId++,
-            method: "logsSubscribe",
-            params: [{ mentions: [PUMP_PROG] }, { commitment: "processed" }],
-          }),
-        );
+        ws.send(JSON.stringify({
+          jsonrpc: "2.0",
+          id: nextReqId++,
+          method: "logsSubscribe",
+          params: [{ mentions: [PUMP_PROG] }, { commitment: "processed" }],
+        }));
         send("ready", { ts: Date.now(), connected: true });
       });
 
@@ -108,39 +99,27 @@ export async function GET(request: Request) {
         if (closed) return;
         const raw = typeof ev.data === "string" ? ev.data : "";
         if (!raw) return;
-
         let msg: unknown;
         try { msg = JSON.parse(raw); } catch { return; }
-
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const m = msg as any;
-
-        // Subscription confirmation
-        if (m.id && typeof m.result === "number") return;
-
+        if (m.id && typeof m.result === "number") return; // subscription confirm
         if (m.method !== "logsNotification") return;
         const value = m.params?.result?.value;
         if (!value || value.err) return;
-
         const signature: string = value.signature;
         const logs: string[] = value.logs || [];
         if (!signature || seenSigs.has(signature)) return;
-
         seenSigs.add(signature);
         if (seenSigs.size > 2000) {
-          const arr = [...seenSigs];
-          seenSigs.clear();
+          const arr = [...seenSigs]; seenSigs.clear();
           arr.slice(-1000).forEach((s) => seenSigs.add(s));
         }
-
         const isCreate = logs.some((l) => /Instruction:\s*Create\b/i.test(l));
         if (!isCreate || pending.has(signature)) return;
-
         pending.add(signature);
         processSignature(signature)
-          .then((gems) => {
-            if (gems.length) send("gems", { gems, ts: Date.now() });
-          })
+          .then((gems) => { if (gems.length) send("gems", { gems, ts: Date.now() }); })
           .catch(() => {/* swallow */})
           .finally(() => pending.delete(signature));
       });

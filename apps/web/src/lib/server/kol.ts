@@ -8,7 +8,7 @@ export interface KolEntry {
   tier: 1 | 2 | 3;
 }
 
-// Publicly known Solana CT / pump.fun KOL wallets
+// Publicly known Solana CT / pump.fun KOL wallets (owners shared these publicly)
 export const KOL_WALLETS = new Map<string, KolEntry>([
   ["9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM", { label: "Ansem", tier: 1 }],
   ["HNF1us7JFyfEm3MEjyNMBSfKUjDuKTnK4VAqMVmdRH6e", { label: "Hsaka", tier: 1 }],
@@ -27,8 +27,14 @@ export const KOL_WALLETS = new Map<string, KolEntry>([
   ["6Lut3aCNdZQTEAGGNGZdKgCQimxFGHRvdkSgUUkbPfAN", { label: "SolSniper", tier: 3 }],
 ]);
 
+interface TxTransfer {
+  mint?: string;
+  toUserAccount?: string;
+  tokenAmount?: number;
+}
+
 export function detectKolBuyersFromTransfers(
-  transfers: Array<{ mint?: string; toUserAccount?: string; tokenAmount?: number }>,
+  transfers: TxTransfer[],
   targetMint: string,
 ): KolBuyer[] {
   const buyers: KolBuyer[] = [];
@@ -47,7 +53,7 @@ export function detectKolBuyersFromTransfers(
 }
 
 interface HeliusTxLight {
-  tokenTransfers?: Array<{ mint?: string; toUserAccount?: string; tokenAmount?: number }>;
+  tokenTransfers?: TxTransfer[];
 }
 
 async function fetchRecentKolBuyersUncached(mint: string): Promise<KolBuyer[]> {
@@ -58,7 +64,7 @@ async function fetchRecentKolBuyersUncached(mint: string): Promise<KolBuyer[]> {
       { signal: AbortSignal.timeout(8_000), cache: "no-store" },
     );
     if (!res.ok) return [];
-    const txs: HeliusTxLight[] = await res.json();
+    const txs: HeliusTxLight[] = await res.json() as HeliusTxLight[];
     if (!Array.isArray(txs)) return [];
     const buyers: KolBuyer[] = [];
     const seen = new Set<string>();
