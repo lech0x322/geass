@@ -18,16 +18,18 @@ export const TIER: Record<string, { l: string; c: string }> = {
 };
 
 export interface NavItem {
-  id: "gems" | "feed" | "launch";
+  id: "gems" | "feed" | "launch" | "pro";
   icon: string;
   label: string;
   badge?: string;
+  pro?: boolean;
 }
 
 export const NAV: NavItem[] = [
-  { id: "gems",   icon: "💎", label: "Gems Detector", badge: "LIVE" },
-  { id: "feed",   icon: "⚡", label: "Live Feed" },
+  { id: "gems",   icon: "⚡", label: "Alpha Scanner", badge: "LIVE" },
+  { id: "feed",   icon: "📡", label: "Live Feed" },
   { id: "launch", icon: "🚀", label: "Launch" },
+  { id: "pro",    icon: "👑", label: "GEASS Pro", badge: "PRO", pro: true },
 ];
 
 export const toB64 = (arr: Uint8Array): string => {
