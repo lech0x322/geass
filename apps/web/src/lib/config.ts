@@ -17,19 +17,20 @@ export const TIER: Record<string, { l: string; c: string }> = {
   RUGGED: { l: "RUG", c: "#6b7280" },
 };
 
+export type NavId = "gems" | "feed" | "launch" | "pro";
+
 export interface NavItem {
-  id: "gems" | "feed" | "launch" | "pro";
-  icon: string;
+  id: NavId;
   label: string;
   badge?: string;
   pro?: boolean;
 }
 
 export const NAV: NavItem[] = [
-  { id: "gems",   icon: "⚡", label: "Alpha Scanner", badge: "LIVE" },
-  { id: "feed",   icon: "📡", label: "Live Feed" },
-  { id: "launch", icon: "🚀", label: "Launch" },
-  { id: "pro",    icon: "👑", label: "GEASS Pro", badge: "PRO", pro: true },
+  { id: "gems",   label: "Alpha Scanner", badge: "LIVE" },
+  { id: "feed",   label: "Live Feed" },
+  { id: "launch", label: "Launch" },
+  { id: "pro",    label: "GEASS Pro", badge: "PRO", pro: true },
 ];
 
 export const toB64 = (arr: Uint8Array): string => {
