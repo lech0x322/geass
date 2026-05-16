@@ -14,33 +14,34 @@ interface Props {
 }
 
 const CORE_FEATURES = [
-  { Icon: IconScanner,  label: "Alpha Scanner",  tag: "FREE", desc: "Real-time detection of Solana tokens with growth potential. Scored across 20+ on-chain signals via Helius and DexScreener.", color: "#10b981" },
-  { Icon: IconActivity, label: "Live KOL Feed",  tag: "FREE", desc: "Watch exactly what high-performing wallets are buying and selling, the moment it happens on-chain.", color: "#3b82f6" },
-  { Icon: IconRocket,   label: "Token Launch",   tag: "FREE", desc: "Create and deploy tokens directly on Pump.fun in under 60 seconds. End-to-end on-chain via Phantom.", color: "#a855f7" },
+  { Icon: IconActivity, label: "Realtime Trades", tag: "FREE", desc: "Live feed of every buy and sell from tracked high-performing wallets, the moment it lands on-chain. Inspired by the kolscan trade ticker.",   color: "#3b82f6" },
+  { Icon: IconChart,    label: "Token Tracker",   tag: "FREE", desc: "Which tokens are KOLs accumulating right now? Trending tickers with active-wallet counts, recent volume, and last-trade timestamps.",     color: "#10b981" },
+  { Icon: IconRocket,   label: "Token Launch",    tag: "FREE", desc: "Create and deploy tokens directly on Pump.fun in under 60 seconds. End-to-end on-chain via Phantom — no third-party middleman.",         color: "#a855f7" },
 ];
 
 const PRO_FEATURES = [
-  { Icon: IconShield, title: "Insider & Rug Detector",       desc: "Advanced on-chain analysis identifies insider wallets, coordinated buys, and rug patterns before they hit Twitter." },
-  { Icon: IconZap,    title: "Dedicated RPC & Priority",     desc: "Skip the queue. Requests route through dedicated Helius nodes — first to detect, first to execute." },
-  { Icon: IconCpu,    title: "Custom AI Rules & Bots",       desc: "Define your own entry conditions. Automate buys based on score, KOL activity, or bonding-curve progress." },
-  { Icon: IconChart,  title: "Portfolio Analytics & Risk",   desc: "Real-time P&L, exposure by tier, drawdown alerts, and AI-generated risk scores per position." },
+  { Icon: IconScanner, title: "Alpha Scanner",                  desc: "Real-time detection of high-potential Solana tokens. Scored across 20+ on-chain signals via Helius and DexScreener — before they hit the charts." },
+  { Icon: IconShield,  title: "Insider & Rug Detector",         desc: "Advanced on-chain analysis identifies insider wallets, coordinated buys, and rug patterns before they hit Twitter." },
+  { Icon: IconZap,     title: "Dedicated RPC & Priority",       desc: "Skip the queue. Requests route through dedicated Helius nodes — first to detect, first to execute." },
+  { Icon: IconCpu,     title: "Custom AI Rules & Bots",         desc: "Define your own entry conditions. Automate buys based on score, KOL activity, or bonding-curve progress." },
+  { Icon: IconChart,   title: "Portfolio Analytics & Risk",     desc: "Real-time P&L, exposure by tier, drawdown alerts, and AI-generated risk scores per position." },
 ];
 
 const FREE_FEATURES = [
-  "Alpha Scanner — live token detection",
-  "Live KOL Feed — track whale wallets",
+  "Realtime Trades — live KOL transactions",
+  "Token Tracker — coins KOLs are buying",
   "Token Launch on Pump.fun",
-  "Score filtering & tier classification",
-  "Server-sent real-time stream",
+  "Wallet sign-in with Phantom",
+  "Mobile-first dashboard",
 ];
 
 const PRO_BENEFITS = [
   "Everything in Free",
+  "Alpha Scanner — early high-potential detection",
   "Insider & Rug Detector",
   "Dedicated RPC and priority indexing",
   "Custom AI rules and sniping bots",
   "Portfolio analytics and risk tools",
-  "Early access to new features",
 ];
 
 const STATS = [
