@@ -130,7 +130,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
           <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "center", marginBottom: 8 }}>
             <span style={{ fontSize: 18 }}>👑</span>
             <h2 style={{ fontSize: 24, fontWeight: 800 }}>GEASS Pro</h2>
-            <span style={{ fontSize: 9, fontWeight: 700, color: "#a855f7", background: "#a855f720", border: "1px solid #a855f740", padding: "3px 10px", borderRadius: 8 }}>COMING SOON</span>
+            <span style={{ fontSize: 9, fontWeight: 700, color: "#10b981", background: "#10b98120", border: "1px solid #10b98140", padding: "3px 10px", borderRadius: 8 }}>LIVE · 3 SOL/MO</span>
           </div>
           <p style={{ textAlign: "center", fontSize: 12, color: "#52525b", marginBottom: 40 }}>Intelligence + protection + automation for serious traders</p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14 }}>
@@ -171,7 +171,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
             <div style={{ background: "linear-gradient(135deg, #14101f 0%, #111113 100%)", border: "1px solid #7c3aed50", borderRadius: 16, padding: "28px 24px", position: "relative", overflow: "hidden" }}>
               <div style={{ position: "absolute", top: 0, right: 0, left: 0, height: 2, background: "linear-gradient(90deg,#dc2626,#7c3aed)" }} />
               <div style={{ fontSize: 12, fontWeight: 700, color: "#a855f7", letterSpacing: "1px", marginBottom: 8 }}>GEASS PRO</div>
-              <div style={{ fontSize: 36, fontWeight: 900, marginBottom: 4 }}>1 SOL<span style={{ fontSize: 14, color: "#52525b", fontWeight: 400 }}>/mo</span></div>
+              <div style={{ fontSize: 36, fontWeight: 900, marginBottom: 4 }}>3 SOL<span style={{ fontSize: 14, color: "#52525b", fontWeight: 400 }}>/mo</span></div>
               <div style={{ fontSize: 11, color: "#52525b", marginBottom: 24 }}>on-chain · paid in SOL</div>
               <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 10 }}>
                 {["Everything in Free", "Insider & Rug Detector", "Dedicated RPC + Helius Priority", "Custom AI Rules & Sniping Bots", "Portfolio Analytics + Risk Tools", "Early access to new features"].map(f => (
@@ -180,9 +180,9 @@ export function LandingPage({ onConnect, connecting }: Props) {
                   </li>
                 ))}
               </ul>
-              <button disabled
-                style={{ marginTop: 28, width: "100%", padding: "10px", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#dc2626,#7c3aed)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "not-allowed", opacity: 0.7 }}>
-                Coming Soon
+              <button onClick={handleConnect} disabled={connecting}
+                style={{ marginTop: 28, width: "100%", padding: "10px", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#dc2626,#7c3aed)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: connecting ? "wait" : "pointer" }}>
+                {connecting ? "Connecting..." : "Connect & Upgrade →"}
               </button>
             </div>
           </div>

@@ -11,3 +11,9 @@ export const SKIP_MINTS = new Set<string>([WSOL, USDC]);
 export const SCAN_LIMIT = 12;
 export const SCORE_MIN_HELIUS = 50;
 export const SCORE_MIN_DEX = 45;
+
+// GEASS Pro subscription
+export const PRO_TREASURY_WALLET = process.env.PRO_TREASURY_WALLET ?? "";
+export const PRO_PRICE_SOL = Number(process.env.PRO_PRICE_SOL ?? "3");
+export const PRO_DURATION_DAYS = Number(process.env.PRO_DURATION_DAYS ?? "30");
+export const PRO_DURATION_MS = PRO_DURATION_DAYS * 24 * 60 * 60 * 1000;

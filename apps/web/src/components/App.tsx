@@ -6,6 +6,7 @@ import { fmtAge, fmtTok, shortAddr } from "@/lib/utils";
 import { scan, fetchBalance, pumpTradeTx, pumpIpfs } from "@/lib/api";
 import { signAndSendBytes } from "@/lib/wallet";
 import { useGemStream } from "@/lib/useGemStream";
+import { useProStatus } from "@/lib/pro";
 import type { Gem, FeedTrade } from "@/lib/types";
 import { GeassLogo } from "./GeassLogo";
 import { GemCard } from "./GemCard";
@@ -31,6 +32,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [feedTrades, setFeedTrades] = useState<FeedTrade[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const pro = useProStatus(wallet);
 
   // Launch state
   const [ct, setCt]           = useState({ name: "", sym: "", desc: "", img: "", devBuy: "0.5" });
@@ -238,6 +240,12 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
         ))}
       </nav>
       <div style={{ padding: 8, borderTop: "1px solid #18181b", display: "flex", flexDirection: "column", gap: 6 }}>
+        {pro.active && (
+          <div style={{ padding: "5px 10px", background: "linear-gradient(135deg,#dc262615,#7c3aed20)", border: "1px solid #7c3aed40", borderRadius: 7, fontSize: 9, color: "#a855f7", fontWeight: 700, letterSpacing: ".5px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>👑 PRO ACTIVE</span>
+            {pro.expiresAt && <span style={{ fontWeight: 500, opacity: .7 }}>{Math.max(0, Math.ceil((pro.expiresAt - Date.now()) / 86_400_000))}d</span>}
+          </div>
+        )}
         <div style={{ padding: "6px 10px", background: "#10b98110", border: "1px solid #10b98130", borderRadius: 7, fontSize: 9, color: "#10b981" }}>
           ✓ {shortAddr(wallet)}{wBal ? ` · ${wBal}◎` : ""}
         </div>
@@ -496,11 +504,14 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           {/* PRO TAB */}
           {tab === "pro" && (
             <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px", maxWidth: 700 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5" }}>👑 GEASS Pro</h1>
-                <span style={{ fontSize: 8, fontWeight: 700, color: "#a855f7", background: "#a855f720", border: "1px solid #a855f740", padding: "2px 8px", borderRadius: 8 }}>COMING SOON</span>
+                {pro.active
+                  ? <span style={{ fontSize: 8, fontWeight: 700, color: "#10b981", background: "#10b98120", border: "1px solid #10b98140", padding: "2px 8px", borderRadius: 8 }}>● ACTIVE</span>
+                  : <span style={{ fontSize: 8, fontWeight: 700, color: "#a855f7", background: "#a855f720", border: "1px solid #a855f740", padding: "2px 8px", borderRadius: 8 }}>UPGRADE</span>}
               </div>
               <p style={{ fontSize: 11, color: "#52525b", marginBottom: 24 }}>Intelligence + protection + automation for serious traders</p>
+
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2,1fr)", gap: 14, marginBottom: 28 }}>
                 {[
                   { icon: "🔍", title: "Insider & Rug Detector", desc: "Advanced on-chain analysis detects insider wallets, coordinated buys and rug patterns before they hit Twitter." },
@@ -515,17 +526,60 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   </div>
                 ))}
               </div>
-              <div style={{ background: "linear-gradient(135deg,#14101f,#0f0c1a)", border: "1px solid #7c3aed50", borderRadius: 16, padding: "24px 20px", position: "relative", overflow: "hidden" }}>
-                <div style={{ position: "absolute", top: 0, right: 0, left: 0, height: 2, background: "linear-gradient(90deg,#dc2626,#7c3aed)" }} />
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#a855f7", letterSpacing: "1px", marginBottom: 6 }}>GEASS PRO — 1 SOL / month</div>
-                <div style={{ fontSize: 11, color: "#71717a", marginBottom: 18 }}>Paid on-chain in SOL. No credit card. Activate instantly after transaction is confirmed.</div>
-                <div style={{ background: "#09090b", border: "1px solid #27272a", borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontFamily: "monospace", fontSize: 11, color: "#52525b", wordBreak: "break-all" }}>
-                  Payment address will be shown here once Pro launches
+
+              {pro.active ? (
+                <div style={{ background: "linear-gradient(135deg,#0f1f15,#0a1a12)", border: "1px solid #10b98150", borderRadius: 16, padding: "24px 20px", position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", top: 0, right: 0, left: 0, height: 2, background: "linear-gradient(90deg,#10b981,#7c3aed)" }} />
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#10b981", letterSpacing: "1px", marginBottom: 6 }}>● PRO SUBSCRIPTION ACTIVE</div>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, marginTop: 16 }}>
+                    <div>
+                      <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 4 }}>EXPIRES IN</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: "#f4f4f5" }}>
+                        {pro.expiresAt ? `${Math.max(0, Math.ceil((pro.expiresAt - Date.now()) / 86_400_000))} days` : "—"}
+                      </div>
+                      {pro.expiresAt && <div style={{ fontSize: 10, color: "#71717a", marginTop: 2 }}>{new Date(pro.expiresAt).toLocaleDateString()}</div>}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 4 }}>PAYMENT TX</div>
+                      <a href={`https://solscan.io/tx/${pro.signature}`} target="_blank" rel="noopener noreferrer"
+                        style={{ fontSize: 11, fontFamily: "monospace", color: "#a855f7", textDecoration: "none", wordBreak: "break-all" }}>
+                        {pro.signature?.slice(0, 24)}...↗
+                      </a>
+                    </div>
+                  </div>
+                  <button onClick={() => pro.refresh()} disabled={pro.loading}
+                    style={{ marginTop: 18, padding: "7px 14px", borderRadius: 7, border: "1px solid #27272a", background: "transparent", color: "#71717a", fontSize: 10, fontWeight: 600, cursor: pro.loading ? "wait" : "pointer" }}>
+                    {pro.loading ? "Checking..." : "↻ Refresh status"}
+                  </button>
                 </div>
-                <button disabled style={{ width: "100%", padding: 10, borderRadius: 8, border: "none", background: "linear-gradient(135deg,#dc2626,#7c3aed)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "not-allowed", opacity: 0.5 }}>
-                  Coming Soon — Get Notified
-                </button>
-              </div>
+              ) : (
+                <div style={{ background: "linear-gradient(135deg,#14101f,#0f0c1a)", border: "1px solid #7c3aed50", borderRadius: 16, padding: "24px 20px", position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", top: 0, right: 0, left: 0, height: 2, background: "linear-gradient(90deg,#dc2626,#7c3aed)" }} />
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#a855f7", letterSpacing: "1px", marginBottom: 6 }}>GEASS PRO — 3 SOL / month</div>
+                  <div style={{ fontSize: 11, color: "#71717a", marginBottom: 18, lineHeight: 1.6 }}>
+                    Paid on-chain in SOL. No subscription, no credit card. After Phantom confirms the transaction, your account activates automatically — no manual approval needed.
+                  </div>
+                  <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 7, marginBottom: 18 }}>
+                    {["Instant on-chain activation (≈30s)", "30 days of Pro access", "Cancel anytime — just don't renew"].map(l => (
+                      <li key={l} style={{ display: "flex", gap: 8, fontSize: 11, color: "#e2d9f3" }}>
+                        <span style={{ color: "#a855f7" }}>✓</span>{l}
+                      </li>
+                    ))}
+                  </ul>
+                  {pro.error && (
+                    <div style={{ fontSize: 10, color: "#f59e0b", background: "#f59e0b15", border: "1px solid #f59e0b30", borderRadius: 6, padding: "8px 10px", marginBottom: 12, lineHeight: 1.5 }}>
+                      {pro.error}
+                    </div>
+                  )}
+                  <button onClick={() => pro.pay().catch(() => {/* error surfaced via pro.error */})} disabled={pro.loading}
+                    style={{ width: "100%", padding: 12, borderRadius: 8, border: "none", background: "linear-gradient(135deg,#dc2626,#7c3aed)", color: "#fff", fontSize: 13, fontWeight: 800, cursor: pro.loading ? "wait" : "pointer", letterSpacing: ".5px", boxShadow: "0 0 32px #7c3aed30" }}>
+                    {pro.loading ? <span className="pulse">⟳ Confirming on-chain...</span> : "◎ Pay 3 SOL — Activate Pro"}
+                  </button>
+                  <div style={{ marginTop: 10, fontSize: 9, color: "#3f3f46", textAlign: "center" }}>
+                    Phantom will ask you to approve a transfer of exactly 3 SOL.
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </main>
