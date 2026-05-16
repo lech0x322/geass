@@ -54,6 +54,49 @@ export async function pumpTradeTx(payload: {
   return new Uint8Array(await r.arrayBuffer());
 }
 
+export interface ProCheckout {
+  treasury: string;
+  amountSol: number;
+  durationDays: number;
+  blockhash: string;
+  lastValidBlockHeight: number;
+}
+
+export interface ProStatus {
+  active: boolean;
+  signature?: string;
+  wallet?: string;
+  paidAt?: number;
+  expiresAt?: number;
+  lamports?: number;
+  error?: string;
+}
+
+export async function proCheckout(): Promise<ProCheckout> {
+  const r = await fetch("/api/pro/checkout", { cache: "no-store" });
+  if (!r.ok) {
+    let msg = `checkout ${r.status}`;
+    try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+export async function proVerify(signature: string, wallet: string): Promise<ProStatus> {
+  const r = await fetch("/api/pro/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ signature, wallet }),
+    cache: "no-store",
+  });
+  if (!r.ok && r.status !== 200) {
+    let msg = `verify ${r.status}`;
+    try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
 export async function pumpIpfs(form: FormData): Promise<{ metadataUri: string }> {
   const r = await fetch("/api/pump/ipfs", { method: "POST", body: form });
   if (!r.ok) {
