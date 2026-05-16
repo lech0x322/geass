@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { heliusRpc } from "@/lib/server/helius";
+import { ensureProWebhook } from "@/lib/server/heliusWebhook";
 import { enforceRateLimit } from "@/lib/server/withRateLimit";
 import { PRO_TREASURY_WALLET, PRO_PRICE_SOL, PRO_DURATION_DAYS } from "@/lib/env";
 
@@ -13,6 +14,10 @@ export async function GET(req: Request) {
   if (!PRO_TREASURY_WALLET) {
     return NextResponse.json({ error: "PRO_TREASURY_WALLET not configured" }, { status: 503 });
   }
+
+  // Lazy idempotent webhook registration. Doesn't block — failure is logged.
+  void ensureProWebhook(process.env.WEBHOOK_BASE_URL, process.env.HELIUS_WEBHOOK_AUTH);
+
   try {
     const res = await heliusRpc<{ value: { blockhash: string; lastValidBlockHeight: number } }>(
       "getLatestBlockhash",
