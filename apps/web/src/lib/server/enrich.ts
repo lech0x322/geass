@@ -2,17 +2,15 @@ import "server-only";
 import { topHolderInfo } from "./helius";
 import { tokenSafety, analyzeSafety } from "./safety";
 import { fetchBondingCurve } from "./bondingCurve";
+import { fetchRecentKolBuyers } from "./kol";
 import type { Gem } from "../types";
 
-/**
- * Enriches a gem in-place with on-chain safety data and top-holder risk.
- * Runs both RPC calls in parallel. Safe to call multiple times.
- */
 export async function enrichGem(gem: Gem): Promise<Gem> {
-  const [safety, holders, bc] = await Promise.all([
+  const [safety, holders, bc, kolBuyers] = await Promise.all([
     tokenSafety(gem.contractAddress),
     topHolderInfo(gem.contractAddress),
     fetchBondingCurve(gem.contractAddress),
+    fetchRecentKolBuyers(gem.contractAddress),
   ]);
 
   const analysis = analyzeSafety(safety);
@@ -33,6 +31,17 @@ export async function enrichGem(gem: Gem): Promise<Gem> {
     gem.redFlags = gem.redFlags.filter((f) => !/^Top holder/i.test(f));
     if (holders.topPct > 30) {
       gem.redFlags.push(`Top holder ${holders.topPct.toFixed(0)}%`);
+    }
+  }
+
+  // Merge KOL buyers (don't overwrite stream-detected ones, just add new)
+  if (kolBuyers.length) {
+    const existing = new Set((gem.kolBuyers || []).map((k) => k.l || k.label));
+    const fresh = kolBuyers.filter((k) => !existing.has(k.l || k.label));
+    gem.kolBuyers = [...(gem.kolBuyers || []), ...fresh];
+    gem.kol = gem.kolBuyers.length;
+    if (gem.kol > 0 && !gem.reasons.some((r) => r.includes("KOL"))) {
+      gem.reasons.push(`KOL buy: ${gem.kolBuyers.slice(0, 2).map((k) => k.l || k.label).join(", ")}`);
     }
   }
 
