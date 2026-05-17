@@ -1,31 +1,19 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { Keypair, VersionedTransaction } from "@solana/web3.js";
 import { KOLS, NAV, TIER } from "@/lib/config";
-import { fmtAge, fmtTok, fmtMcap, shortAddr } from "@/lib/utils";
-import { scan, fetchBalance, pumpTradeTx, pumpIpfs } from "@/lib/api";
+import { fmtAge, shortAddr } from "@/lib/utils";
+import { scan, fetchBalance, pumpTradeTx, pumpIpfs, fetchPortfolio, type PortfolioResult } from "@/lib/api";
 import { signAndSendBytes } from "@/lib/wallet";
 import { useGemStream } from "@/lib/useGemStream";
 import { useProStatus } from "@/lib/pro";
-import type { Gem, FeedTrade } from "@/lib/types";
+import { useKolFeed } from "@/lib/useKolFeed";
+import { useDexPrices } from "@/lib/useDexPrices";
+import type { Gem } from "@/lib/types";
 import { GeassLogo } from "./GeassLogo";
 import { GemCard } from "./GemCard";
 import { SnipeModal } from "./SnipeModal";
-import {
-  IconScanner, IconActivity, IconRocket, IconSparkle, IconWallet,
-  IconShield, IconZap, IconCpu, IconChart,
-  IconCheck, IconX, IconPlus, IconRefresh, IconMenu,
-  IconArrowUpRight, IconBroadcast, IconHourglass, IconSearch,
-} from "./icons";
-
-import type { NavId } from "@/lib/config";
-const NAV_ICONS: Record<NavId, typeof IconScanner> = {
-  trades: IconBroadcast,
-  tokens: IconChart,
-  launch: IconRocket,
-  gems:   IconScanner,
-  pro:    IconSparkle,
-};
 
 interface Props {
   wallet: string;
@@ -34,7 +22,7 @@ interface Props {
 }
 
 export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
-  const [tab, setTab]         = useState<NavId>("trades");
+  const [tab, setTab]         = useState<"trades" | "launch" | "gems" | "referral" | "pro">("trades");
   const [gems, setGems]       = useState<Gem[]>([]);
   const [loading, setLoading] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
@@ -44,10 +32,22 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [snipeGem, setSnipeGem] = useState<Gem | null>(null);
   const [wBal, setWBal]       = useState<string | null>(initialBalance);
   const [filters, setFilters] = useState({ minScore: 0, tiers: [] as string[], hasKol: false, noFlags: false });
-  const [feedTrades, setFeedTrades] = useState<FeedTrade[]>([]);
+  const feedTrades = useKolFeed();
+  const gemMints = useMemo(() => gems.map(g => g.contractAddress).filter(Boolean), [gems]);
+  const dexPrices = useDexPrices(gemMints);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const pro = useProStatus(wallet);
+  const [portfolio, setPortfolio] = useState<PortfolioResult | null>(null);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
+  const [portfolioErr, setPortfolioErr] = useState("");
+
+  // Referral state
+  const refCode = wallet.slice(0, 8);
+  const [refLink, setRefLink] = useState("");
+  const [refCopied, setRefCopied] = useState(false);
+  const [refStats, setRefStats] = useState<{ clicks: number; referrals: number } | null>(null);
+  const freeMonths = refStats ? Math.floor(refStats.referrals / 3) : 0;
 
   // Launch state
   const [ct, setCt]           = useState({ name: "", sym: "", desc: "", img: "", devBuy: "0.5" });
@@ -104,7 +104,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
   // ── Manual scan ─────────────────────────────────────────────
   const doScan = useCallback(async () => {
-    setLoading(true); setScanMsg("Scanning Solana…");
+    setLoading(true); setScanMsg("⚡ Scanning Solana...");
     try {
       const res = await scan(6);
       if (res.gems.length) {
@@ -130,26 +130,6 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
   useEffect(() => { doScan(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
-  // ── Simulated KOL feed (visual) ─────────────────────────────
-  useEffect(() => {
-    if (!gems.length) return;
-    const iv = setInterval(() => {
-      const k = KOLS[Math.floor(Math.random() * KOLS.length)];
-      const g = gems[Math.floor(Math.random() * gems.length)];
-      if (!g) return;
-      const trade: FeedTrade = {
-        id: Date.now() + Math.random(),
-        kol: k.name, kolC: k.c,
-        type: Math.random() > 0.3 ? "buy" : "sell",
-        sym: g.sym,
-        sol: (Math.random() * 4 + 0.1).toFixed(3),
-        tokAmt: fmtTok(Math.random() * 1e7),
-        ago: Math.floor(Math.random() * 60),
-      };
-      setFeedTrades(prev => [trade, ...prev].slice(0, 40));
-    }, 3000);
-    return () => clearInterval(iv);
-  }, [gems]);
 
   // ── Filtered gems ───────────────────────────────────────────
   const filtered = useMemo(() => gems.filter(g => {
@@ -164,39 +144,88 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
   // ── Token launch ────────────────────────────────────────────
   const launchToken = async () => {
-    if (!ct.name.trim() || !ct.sym.trim()) { setCtMsg("Token name and symbol are required."); return; }
-    if (!ctFile && !ct.img.trim()) { setCtMsg("Upload an image file or paste an image URL — pump.fun requires it."); return; }
+    if (!ct.name || !ct.sym) { setCtMsg("Fill Name & Symbol"); return; }
     setCtLoad(true);
     try {
-      setCtMsg("Uploading metadata to IPFS…");
+      setCtMsg("Uploading metadata...");
       const form = new FormData();
-      form.append("name", ct.name.trim());
-      form.append("symbol", ct.sym.toUpperCase().trim());
-      form.append("description", (ct.desc || ct.name).trim());
+      form.append("name", ct.name);
+      form.append("symbol", ct.sym.toUpperCase());
+      form.append("description", ct.desc || ct.name);
       form.append("showName", "true");
-      if (ctFile) form.append("file", ctFile, ctFile.name || "image.png");
-      else if (ct.img) form.append("imageUrl", ct.img.trim());
-
+      if (ctFile) {
+        form.append("file", ctFile, ctFile.name);
+      } else if (ct.img) {
+        // Server fetches the URL to avoid CORS issues
+        form.append("imageUrl", ct.img);
+      }
       const meta = await pumpIpfs(form);
-      setCtMsg("Building on-chain transaction…");
+      setCtMsg("Creating on-chain...");
+      const mintKp = Keypair.generate();
       const bytes = await pumpTradeTx({
         publicKey: wallet,
         action: "create",
+        mint: mintKp.publicKey.toBase58(),
         amount: parseFloat(ct.devBuy) || 0,
         slippage: 10,
         priorityFee: 0.0005,
         pool: "pump",
-        tokenMetadata: { name: ct.name.trim(), symbol: ct.sym.toUpperCase().trim(), uri: meta.metadataUri },
+        tokenMetadata: { name: ct.name, symbol: ct.sym.toUpperCase(), uri: meta.metadataUri },
       });
-      setCtMsg("Sign in Phantom…");
-      const sig = await signAndSendBytes(bytes);
-      setCtMsg(`Launched. TX ${sig.slice(0, 18)}…`);
+      // Pre-sign with the mint keypair; Phantom will add the wallet signature
+      const tx = VersionedTransaction.deserialize(bytes);
+      tx.sign([mintKp]);
+      setCtMsg("Sign in Phantom...");
+      const sig = await signAndSendBytes(tx.serialize());
+      setCtMsg(`✓ Launched! TX: ${sig.slice(0, 18)}...`);
       setCtStep("done");
     } catch (e) {
-      setCtMsg(e instanceof Error ? e.message : String(e));
+      setCtMsg("Error: " + (e instanceof Error ? e.message : String(e)));
     }
     setCtLoad(false);
   };
+
+  // ── Referral setup ──────────────────────────────────────────
+  useEffect(() => {
+    setRefLink(`${window.location.origin}/?ref=${refCode}`);
+    // Store ?ref= from URL if we were referred
+    const params = new URLSearchParams(window.location.search);
+    const inRef = params.get("ref");
+    if (inRef && inRef !== refCode && /^[1-9A-HJ-NP-Za-km-z]{6,10}$/.test(inRef)) {
+      try { localStorage.setItem("geass_ref", inRef); } catch {}
+      fetch("/api/referral/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: inRef }),
+      }).catch(() => {});
+      const u = new URL(window.location.href);
+      u.searchParams.delete("ref");
+      window.history.replaceState({}, "", u.toString());
+    }
+    // Load own stats
+    fetch(`/api/referral/track?code=${refCode}`)
+      .then(r => r.json())
+      .then(d => setRefStats(d as { clicks: number; referrals: number }))
+      .catch(() => {});
+  }, [refCode]);
+
+  const copyRefLink = () => {
+    navigator.clipboard.writeText(refLink).catch(() => {});
+    setRefCopied(true);
+    setTimeout(() => setRefCopied(false), 2000);
+  };
+
+  // ── Portfolio ───────────────────────────────────────────────
+  const loadPortfolio = useCallback(async () => {
+    setPortfolioLoading(true); setPortfolioErr("");
+    try { setPortfolio(await fetchPortfolio(wallet)); }
+    catch (e) { setPortfolioErr(e instanceof Error ? e.message : String(e)); }
+    setPortfolioLoading(false);
+  }, [wallet]);
+
+  useEffect(() => {
+    if (tab === "pro" && pro.active && !portfolio && !portfolioLoading) loadPortfolio();
+  }, [tab, pro.active]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Stream status ───────────────────────────────────────────
   const detecting = stream.detecting;
@@ -229,64 +258,57 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   // ── Sidebar content ─────────────────────────────────────────
   const sidebarContent = (
     <>
-      <div style={{ height: 60, display: "flex", alignItems: "center", padding: "0 16px", borderBottom: "1px solid #1c1c1f", gap: 10 }}>
-        <GeassLogo size={26} />
-        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-          <span style={{ fontWeight: 700, fontSize: 12, color: "#fafafa", letterSpacing: "2px" }}>GEASS</span>
-          <span style={{ fontSize: 8, color: "#3f3f46", letterSpacing: "2.5px", marginTop: 2 }}>ALPHA RECON</span>
+      <div style={{ height: 56, display: "flex", alignItems: "center", padding: "0 14px", borderBottom: "1px solid #18181b", gap: 8 }}>
+        <GeassLogo size={28} />
+        <div>
+          <span style={{ fontWeight: 800, fontSize: 13, color: "#f4f4f5", letterSpacing: "1.5px" }}>GEASS</span>
+          <div style={{ fontSize: 8, color: "#3f3f46", letterSpacing: "2px", marginTop: -1 }}>ALPHA RECON</div>
         </div>
         {isMobile && (
-          <button onClick={() => setSidebarOpen(false)}
-            style={{ marginLeft: "auto", display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, background: "transparent", border: "1px solid #27272a", borderRadius: 8, color: "#a1a1aa", cursor: "pointer" }}
-            aria-label="Close menu">
-            <IconX size={14} />
-          </button>
+          <button onClick={() => setSidebarOpen(false)} style={{ marginLeft: "auto", background: "transparent", border: "none", color: "#52525b", fontSize: 18, cursor: "pointer", lineHeight: 1 }}>✕</button>
         )}
       </div>
-      <nav style={{ flex: 1, padding: "10px 8px", overflowY: "auto" }}>
-        {NAV.map(n => {
-          const Icon = NAV_ICONS[n.id];
-          const active = tab === n.id;
-          const locked = n.requiresPro && !pro.active;
-          const accent = n.pro ? "#8b5cf6" : "#ef4444";
-          const badgeCol = locked ? "#8b5cf6" : n.pro ? "#8b5cf6" : "#10b981";
-          return (
-            <button key={n.id} onClick={() => { setTab(n.id as typeof tab); setSidebarOpen(false); }}
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8,
-                border: `1px solid ${active ? accent + "33" : "transparent"}`,
-                background: active ? accent + "10" : "transparent",
-                color: active ? accent : locked ? "#6d4aab" : "#a1a1aa",
-                cursor: "pointer", marginBottom: 2, fontSize: 12.5, fontWeight: active ? 600 : 500, textAlign: "left",
-                transition: "background .15s ease, color .15s ease" }}>
-              <Icon size={15} strokeWidth={1.7} />
-              <span style={{ flex: 1 }}>{n.label}</span>
-              {n.badge && <span style={{ fontSize: 8, fontWeight: 700, color: badgeCol, background: badgeCol + "1a", border: `1px solid ${badgeCol}40`, padding: "1px 6px", borderRadius: 999, letterSpacing: "1px" }}>{n.badge}</span>}
-            </button>
-          );
-        })}
+      <nav style={{ flex: 1, padding: "8px 6px", overflowY: "auto" }}>
+        {NAV.map(n => (
+          <button key={n.id} onClick={() => { setTab(n.id as typeof tab); setSidebarOpen(false); }}
+            style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 10px", borderRadius: 8,
+              border: `1px solid ${tab === n.id ? (n.pro ? "#7c3aed40" : "#dc262640") : "transparent"}`,
+              background: tab === n.id ? (n.pro ? "#7c3aed12" : "#dc262612") : "transparent",
+              color: tab === n.id ? (n.pro ? "#a855f7" : "#ef4444") : n.pro ? "#6d4aab" : "#52525b",
+              cursor: "pointer", marginBottom: 2, fontSize: 11, fontWeight: tab === n.id ? 700 : 500, textAlign: "left" }}>
+            <span style={{ flex: 1 }}>{n.label}</span>
+            {n.badge && (
+              <span style={{ fontSize: 7, fontWeight: 700,
+                color: n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981",
+                background: (n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981") + "20",
+                border: `1px solid ${(n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981") + "40"}`,
+                padding: "1px 5px", borderRadius: 8 }}>
+                {n.badge}
+              </span>
+            )}
+          </button>
+        ))}
       </nav>
-      <div style={{ padding: 10, borderTop: "1px solid #1c1c1f", display: "flex", flexDirection: "column", gap: 7 }}>
+      <div style={{ padding: 8, borderTop: "1px solid #18181b", display: "flex", flexDirection: "column", gap: 6 }}>
         {pro.active && (
-          <div style={{ padding: "7px 11px", background: "linear-gradient(135deg, rgba(239,68,68,.08), rgba(139,92,246,.12))", border: "1px solid rgba(139,92,246,.32)", borderRadius: 8, fontSize: 10, color: "#c4b5fd", fontWeight: 600, letterSpacing: ".5px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconSparkle size={11} strokeWidth={2} /> PRO ACTIVE</span>
-            {pro.expiresAt && <span style={{ fontWeight: 500, opacity: .75, fontVariantNumeric: "tabular-nums" }}>{Math.max(0, Math.ceil((pro.expiresAt - Date.now()) / 86_400_000))}d</span>}
+          <div style={{ padding: "5px 10px", background: "linear-gradient(135deg,#dc262615,#7c3aed20)", border: "1px solid #7c3aed40", borderRadius: 7, fontSize: 9, color: "#a855f7", fontWeight: 700, letterSpacing: ".5px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>👑 PRO ACTIVE</span>
+            {pro.expiresAt && <span style={{ fontWeight: 500, opacity: .7 }}>{Math.max(0, Math.ceil((pro.expiresAt - Date.now()) / 86_400_000))}d</span>}
           </div>
         )}
-        <div style={{ padding: "8px 11px", background: "rgba(16,185,129,.06)", border: "1px solid rgba(16,185,129,.22)", borderRadius: 8, fontSize: 10, color: "#10b981", display: "flex", alignItems: "center", gap: 7, fontVariantNumeric: "tabular-nums" }}>
-          <IconWallet size={11} strokeWidth={1.8} />
-          <span style={{ flex: 1, fontFamily: "ui-monospace,monospace" }}>{shortAddr(wallet)}</span>
-          {wBal && <span style={{ color: "#71717a", fontWeight: 600 }}>{wBal} SOL</span>}
+        <div style={{ padding: "6px 10px", background: "#10b98110", border: "1px solid #10b98130", borderRadius: 7, fontSize: 9, color: "#10b981" }}>
+          ✓ {shortAddr(wallet)}{wBal ? ` · ${wBal}◎` : ""}
         </div>
         <button onClick={onDisconnect}
-          style={{ width: "100%", padding: "7px 10px", borderRadius: 7, border: "1px solid #27272a", background: "transparent", color: "#71717a", fontSize: 10, fontWeight: 500, cursor: "pointer", letterSpacing: ".3px" }}>
-          Disconnect wallet
+          style={{ width: "100%", padding: "6px 8px", borderRadius: 7, border: "1px solid #27272a", background: "transparent", color: "#52525b", fontSize: 9, fontWeight: 600, cursor: "pointer" }}>
+          Disconnect
         </button>
       </div>
     </>
   );
 
   return (
-    <div style={{ display: "flex", height: "100dvh", background: "#09090b", color: "#fafafa", fontFamily: "'Inter',ui-sans-serif,system-ui,sans-serif", overflow: "hidden", position: "relative", WebkitFontSmoothing: "antialiased" }}>
+    <div style={{ display: "flex", height: "100dvh", background: "#09090b", color: "#f4f4f5", fontFamily: "'Inter',system-ui,sans-serif", overflow: "hidden", position: "relative" }}>
 
       {/* Mobile overlay backdrop */}
       {isMobile && sidebarOpen && (
@@ -313,16 +335,13 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Mobile top bar */}
         {isMobile && (
-          <div style={{ height: 52, background: "#0c0c0e", borderBottom: "1px solid #1c1c1f", display: "flex", alignItems: "center", padding: "0 14px", gap: 12, flexShrink: 0 }}>
-            <button onClick={() => setSidebarOpen(true)} aria-label="Open menu"
-              style={{ background: "transparent", border: "1px solid #27272a", color: "#a1a1aa", width: 34, height: 34, borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <IconMenu size={15} />
-            </button>
+          <div style={{ height: 50, background: "#0c0c0e", borderBottom: "1px solid #18181b", display: "flex", alignItems: "center", padding: "0 14px", gap: 10, flexShrink: 0 }}>
+            <button onClick={() => setSidebarOpen(true)} style={{ background: "transparent", border: "1px solid #27272a", color: "#a1a1aa", width: 32, height: 32, borderRadius: 7, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>☰</button>
             <GeassLogo size={22} />
-            <span style={{ fontWeight: 700, fontSize: 12, letterSpacing: "2px" }}>GEASS</span>
-            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontWeight: 800, fontSize: 12, letterSpacing: "1.5px" }}>GEASS</span>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 5 }}>
               {streamConnected && <div className="live-dot" style={{ background: statusColor }} />}
-              <span style={{ fontSize: 9, color: statusColor, fontWeight: 600, letterSpacing: ".5px" }}>{statusLabel}</span>
+              <span style={{ fontSize: 8, color: statusColor, fontWeight: 600 }}>{statusLabel}</span>
             </div>
           </div>
         )}
@@ -330,66 +349,19 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
         <main style={{ flex: 1, overflow: "auto" }}>
           {snipeGem && <SnipeModal gem={snipeGem} wallet={wallet} onClose={() => setSnipeGem(null)} />}
 
-          {/* ALPHA SCANNER TAB — Pro-gated */}
-          {tab === "gems" && !pro.active && (
-            <div style={{ padding: isMobile ? "14px 14px 80px" : "20px 24px", maxWidth: 620 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 4 }}>
-                <IconScanner size={18} strokeWidth={1.7} style={{ color: "#a78bfa" }} />
-                <h1 style={{ fontSize: isMobile ? 15 : 19, fontWeight: 700, color: "#fafafa", letterSpacing: "-.3px" }}>Alpha Scanner</h1>
-                <span style={{ fontSize: 9, fontWeight: 700, color: "#a78bfa", background: "rgba(139,92,246,.1)", border: "1px solid rgba(139,92,246,.32)", padding: "3px 10px", borderRadius: 999, letterSpacing: "1px" }}>PRO</span>
-              </div>
-              <p style={{ fontSize: 11.5, color: "#52525b", marginBottom: 22, letterSpacing: ".1px" }}>
-                AI-scored real-time detection of high-potential Solana tokens — available to Pro members.
-              </p>
-              <div style={{ background: "linear-gradient(180deg,#11101a,#0d0c14)", border: "1px solid rgba(139,92,246,.32)", borderRadius: 16, padding: "28px 26px", position: "relative", overflow: "hidden" }}>
-                <div style={{ position: "absolute", top: 0, right: 0, left: 0, height: 2, background: "linear-gradient(90deg,#ef4444,#8b5cf6)" }} />
-                <div style={{ display: "inline-flex", padding: 12, borderRadius: 12, background: "rgba(139,92,246,.12)", border: "1px solid rgba(139,92,246,.32)", color: "#c4b5fd", marginBottom: 16 }}>
-                  <IconSparkle size={20} strokeWidth={1.8} />
-                </div>
-                <h2 style={{ fontSize: 18, fontWeight: 700, color: "#fafafa", letterSpacing: "-.4px", marginBottom: 8 }}>Unlock Alpha Scanner</h2>
-                <p style={{ fontSize: 12.5, color: "#a1a1aa", lineHeight: 1.65, marginBottom: 18 }}>
-                  Real-time detection of Solana tokens with growth potential. Scored across 20+ on-chain signals via Helius and DexScreener. Surfaces tokens before they hit the charts.
-                </p>
-                <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 9, marginBottom: 22 }}>
-                  {[
-                    "Live SSE stream of high-score tokens",
-                    "20+ on-chain signal classifiers (KOL, liquidity, holder distribution, mint/freeze)",
-                    "Tier classification: S / A / B / C",
-                    "One-click Snipe via Pump.fun (Phantom signs)",
-                  ].map(l => (
-                    <li key={l} style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 12, color: "#e9e4f8" }}>
-                      <IconCheck size={13} strokeWidth={2.2} style={{ color: "#a78bfa" }} />
-                      {l}
-                    </li>
-                  ))}
-                </ul>
-                <button onClick={() => setTab("pro")}
-                  style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 9, padding: "13px",
-                    borderRadius: 10, border: "none", background: "linear-gradient(135deg,#ef4444,#8b5cf6)", color: "#fff", fontSize: 13.5, fontWeight: 600, cursor: "pointer", letterSpacing: ".2px",
-                    boxShadow: "0 8px 26px -10px rgba(139,92,246,.55)" }}>
-                  <IconSparkle size={13} strokeWidth={2} />
-                  Upgrade to Pro — 3 SOL/mo
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ALPHA SCANNER TAB — full content for Pro members */}
-          {tab === "gems" && pro.active && (
+          {/* ALPHA SCANNER TAB */}
+          {tab === "gems" && (
             <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                  <IconScanner size={18} strokeWidth={1.7} style={{ color: "#ef4444" }} />
-                  <h1 style={{ fontSize: isMobile ? 15 : 19, fontWeight: 700, color: "#fafafa", letterSpacing: "-.3px" }}>Alpha Scanner</h1>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 5, marginLeft: "auto" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 5, flexWrap: "wrap" }}>
+                <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", letterSpacing: ".3px" }}>⚡ Alpha Scanner</h1>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: "auto" }}>
                   {streamConnected && <div className="live-dot" style={{ background: detecting ? "#10b981" : "#10b98180" }} />}
-                  <span style={{ fontSize: 9, color: statusColor, fontWeight: streamReconnecting ? 700 : 600, letterSpacing: ".5px" }}>{statusLabel}</span>
-                  {scanTime && <span style={{ fontSize: 9, color: "#3f3f46", fontVariantNumeric: "tabular-nums" }}>· {scanTime}</span>}
-                  {source && <span style={{ fontSize: 9, color: "#27272a", letterSpacing: ".5px" }}>· {source}</span>}
+                  <span style={{ fontSize: 9, color: statusColor, fontWeight: streamReconnecting ? 700 : 500 }}>{statusLabel}</span>
+                  {scanTime && <span style={{ fontSize: 9, color: "#3f3f46" }}>· {scanTime}</span>}
+                  {source && <span style={{ fontSize: 9, color: "#27272a" }}>· {source}</span>}
                 </div>
               </div>
-              {!isMobile && <p style={{ fontSize: 11.5, color: "#52525b", marginBottom: 18, letterSpacing: ".1px" }}>Real-time detection · Helius pump.fun + DexScreener · Server-side scan with SSE push</p>}
+              {!isMobile && <p style={{ fontSize: 11, color: "#3f3f46", marginBottom: 16 }}>Real-time detection · Helius pump.fun + DexScreener · Server-side scan, SSE push</p>}
 
               {/* Filters */}
               <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 10, padding: isMobile ? "10px 12px" : "12px 14px", marginBottom: 14 }}>
@@ -410,22 +382,18 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                       })}
                     </div>
                   </div>
-                  {([["hasKol", "Has KOL"], ["noFlags", "Safe only"]] as [keyof typeof filters, string][]).map(([k, l]) => (
+                  {([["hasKol", "Has KOL"], ["noFlags", "Safe Only"]] as [keyof typeof filters, string][]).map(([k, l]) => (
                     <button key={k} onClick={() => setFilters(f => ({ ...f, [k]: !f[k] }))}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 7, fontSize: 10, fontWeight: 600, cursor: "pointer",
-                        border: `1px solid ${filters[k] ? "#ef4444" : "#27272a"}`,
-                        background: filters[k] ? "rgba(239,68,68,.08)" : "transparent",
-                        color: filters[k] ? "#ef4444" : "#71717a", letterSpacing: ".2px" }}>
-                      {filters[k] ? <IconCheck size={11} strokeWidth={2.2} /> : <IconPlus size={11} strokeWidth={2.2} />}
-                      {l}
+                      style={{ padding: "5px 10px", borderRadius: 6, fontSize: 9, fontWeight: 600, cursor: "pointer",
+                        border: `1px solid ${filters[k] ? "#dc2626" : "#27272a"}`,
+                        background: filters[k] ? "#dc262612" : "transparent",
+                        color: filters[k] ? "#ef4444" : "#52525b" }}>
+                      {filters[k] ? "✓" : "+"} {l}
                     </button>
                   ))}
                   <button onClick={doScan} disabled={loading}
-                    style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: loading ? "wait" : "pointer",
-                      background: loading ? "#1a1a1d" : "#ef4444",
-                      color: "#fff", border: "none", letterSpacing: ".3px" }}>
-                    <IconRefresh size={12} strokeWidth={2} className={loading ? "spin" : undefined} />
-                    {loading ? "Scanning…" : "Scan now"}
+                    style={{ marginLeft: "auto", padding: "6px 14px", borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: loading ? "wait" : "pointer", background: loading ? "#111" : "#dc2626", color: "#fff", border: "none", letterSpacing: ".5px" }}>
+                    {loading ? <span className="pulse">⟳ Scanning...</span> : "⟳ SCAN NOW"}
                   </button>
                 </div>
               </div>
@@ -450,214 +418,85 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
               {/* Grid */}
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
                 {loading && !gems.length && (
-                  <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "56px 20px" }}>
-                    <IconRefresh size={26} strokeWidth={1.6} style={{ color: "#ef4444" }} className="spin" />
-                    <div className="pulse" style={{ fontSize: 11, color: "rgba(239,68,68,.6)", marginTop: 12, letterSpacing: "2px", fontWeight: 600 }}>SCANNING SOLANA…</div>
+                  <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "50px 20px" }}>
+                    <div style={{ fontSize: 18, color: "#dc2626", display: "inline-block" }} className="spin">⊗</div>
+                    <div className="pulse" style={{ fontSize: 11, color: "#dc262680", marginTop: 10, letterSpacing: "2px" }}>SCANNING SOLANA MATRIX...</div>
                   </div>
                 )}
-                {filtered.map(g => <GemCard key={g.id} gem={g} isNew={newIds.has(g.id)} onSnipe={setSnipeGem} />)}
+                {filtered.map(g => <GemCard key={g.id} gem={g} isNew={newIds.has(g.id)} onSnipe={setSnipeGem} dex={dexPrices[g.contractAddress]} />)}
                 {!loading && gems.length > 0 && filtered.length === 0 && (
-                  <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 48, color: "#52525b" }}>
-                    <IconSearch size={26} strokeWidth={1.5} style={{ color: "#3f3f46", marginBottom: 10 }} />
-                    <div style={{ fontSize: 12.5 }}>No gems match your filters. Try lowering the minimum score.</div>
+                  <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: "#3f3f46" }}>
+                    <div style={{ fontSize: 24, marginBottom: 6 }}>🔍</div>
+                    <div style={{ fontSize: 12 }}>No gems match filters — try lowering Min Score</div>
                   </div>
                 )}
                 {!loading && !gems.length && (
-                  <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 48, color: "#52525b" }}>
-                    <IconHourglass size={26} strokeWidth={1.5} style={{ color: "#3f3f46", marginBottom: 10 }} />
-                    <div style={{ fontSize: 12.5 }}>Waiting for the first signals from pump.fun.</div>
+                  <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: "#3f3f46" }}>
+                    <div style={{ fontSize: 24, marginBottom: 6 }}>⏳</div>
+                    <div style={{ fontSize: 12 }}>Waiting for the first signals from pump.fun...</div>
                   </div>
                 )}
               </div>
             </div>
           )}
 
-          {/* REALTIME TRADES TAB */}
+          {/* LIVE FEED TAB */}
           {tab === "trades" && (
-            <div style={{ padding: isMobile ? "14px 14px 80px" : "20px 24px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                  <IconBroadcast size={18} strokeWidth={1.7} style={{ color: "#3b82f6" }} />
-                  <h1 style={{ fontSize: isMobile ? 15 : 19, fontWeight: 700, color: "#fafafa", letterSpacing: "-.3px" }}>Realtime Trades</h1>
-                </div>
-                <div style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                  <div className="live-dot" />
-                  <span style={{ fontSize: 9, color: "#10b981", fontWeight: 600, letterSpacing: ".5px" }}>LIVE · {feedTrades.length}</span>
-                </div>
+            <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5" }}>📡 Live KOL Feed</h1>
+                <div className="live-dot" /><span style={{ fontSize: 9, color: "#10b981", fontWeight: 600 }}>LIVE</span>
               </div>
-              <p style={{ fontSize: 11.5, color: "#52525b", marginBottom: 18, letterSpacing: ".1px" }}>
-                Live ticker of every buy and sell from tracked high-performing wallets.
-              </p>
-
-              <div style={{ background: "#0c0c0e", border: "1px solid #1c1c1f", borderRadius: 12, overflow: "hidden" }}>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "70px 1fr 60px 50px" : "100px 1fr 1fr 100px 70px",
-                  fontSize: 9.5, color: "#52525b", letterSpacing: "1.5px", padding: "10px 14px", borderBottom: "1px solid #1c1c1f", fontWeight: 600 }}>
-                  <span>WALLET</span>
-                  <span>{isMobile ? "TRADE" : "SIDE · AMOUNT"}</span>
-                  {!isMobile && <span>TOKEN</span>}
-                  <span style={{ textAlign: "right" }}>{isMobile ? "TKN" : "SOL"}</span>
-                  <span style={{ textAlign: "right" }}>AGO</span>
-                </div>
-                <div style={{ maxHeight: "calc(100dvh - 220px)", overflowY: "auto" }}>
-                  {feedTrades.length === 0 ? (
-                    <div style={{ padding: "48px 16px", textAlign: "center", color: "#52525b" }}>
-                      <IconBroadcast size={26} strokeWidth={1.5} style={{ color: "#3f3f46", marginBottom: 10 }} />
-                      <div style={{ fontSize: 12.5 }}>Waiting for the first trade…</div>
-                    </div>
-                  ) : feedTrades.map(t => {
-                    const isBuy = t.type === "buy";
-                    return (
-                      <div key={t.id} style={{ display: "grid", gridTemplateColumns: isMobile ? "70px 1fr 60px 50px" : "100px 1fr 1fr 100px 70px",
-                        gap: 8, alignItems: "center", padding: "9px 14px", borderBottom: "1px solid #111", fontSize: 11.5 }}>
-                        <span style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
-                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: t.kolC, flexShrink: 0 }} />
-                          <span style={{ color: "#fafafa", fontWeight: 500, fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.kol}</span>
-                        </span>
-                        <span style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
-                          <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 7px", borderRadius: 4,
-                            background: isBuy ? "rgba(16,185,129,.1)" : "rgba(239,68,68,.1)",
-                            color: isBuy ? "#10b981" : "#ef4444", fontWeight: 600, fontSize: 10, letterSpacing: ".3px" }}>
-                            {isBuy ? "BUY" : "SELL"}
-                          </span>
-                          {!isMobile && (
-                            <span style={{ color: "#a1a1aa", fontVariantNumeric: "tabular-nums" }}>
-                              {t.tokAmt} <span style={{ color: isBuy ? "#10b981" : "#ef4444", fontWeight: 600 }}>${t.sym}</span>
-                            </span>
-                          )}
-                          {isMobile && <span style={{ color: isBuy ? "#10b981" : "#ef4444", fontWeight: 600, fontSize: 10 }}>${t.sym}</span>}
-                        </span>
-                        {!isMobile && (
-                          <span style={{ color: "#71717a", fontFamily: "ui-monospace,monospace", fontSize: 11 }}>{t.sym}</span>
-                        )}
-                        <span style={{ textAlign: "right", color: "#fafafa", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-                          {isMobile ? t.tokAmt : `${t.sol}`}
-                        </span>
-                        <span style={{ textAlign: "right", color: "#52525b", fontVariantNumeric: "tabular-nums" }}>{fmtAge(t.ago)}</span>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill,minmax(260px,1fr))", gap: 10 }}>
+                {KOLS.map(k => {
+                  const kTrades = feedTrades.filter(t => t.kol === k.name).slice(0, 6);
+                  return (
+                    <div key={k.name} style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 10, overflow: "hidden" }}>
+                      <div style={{ padding: "10px 12px", borderBottom: "1px solid #18181b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                          <div style={{ width: 26, height: 26, borderRadius: "50%", background: k.c + "25", border: `1px solid ${k.c}50`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: k.c }}>{k.name[0]}</div>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: 11, color: "#f4f4f5" }}>{k.name}</div>
+                            {k.tw && <div style={{ fontSize: 8, color: "#3f3f46" }}>@{k.tw}</div>}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: k.pnl.startsWith("+") ? "#10b981" : "#ef4444" }}>{k.pnl}</div>
+                          <div style={{ fontSize: 8, color: "#3f3f46" }}>Win {k.wr}%</div>
+                        </div>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(auto-fit,minmax(140px,1fr))", gap: 10, marginTop: 16 }}>
-                {KOLS.slice(0, isMobile ? 4 : 6).map(k => (
-                  <div key={k.name} style={{ background: "#0c0c0e", border: "1px solid #1c1c1f", borderRadius: 9, padding: "10px 12px", display: "flex", alignItems: "center", gap: 9 }}>
-                    <div style={{ width: 24, height: 24, borderRadius: "50%", background: k.c + "1f", border: `1px solid ${k.c}45`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: k.c, flexShrink: 0 }}>{k.name[0]}</div>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "#fafafa", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{k.name}</div>
-                      <div style={{ fontSize: 9, color: k.pnl.startsWith("+") ? "#10b981" : "#ef4444", fontVariantNumeric: "tabular-nums" }}>{k.pnl} · {k.wr}% wr</div>
+                      <div style={{ maxHeight: 160, overflowY: "auto" }}>
+                        {kTrades.length === 0
+                          ? <div style={{ padding: 14, textAlign: "center", fontSize: 9, color: "#27272a" }}>Waiting...</div>
+                          : kTrades.map(t => (
+                            <div key={t.id} style={{ display: "grid", gridTemplateColumns: "30px 1fr 1fr 24px", gap: 3, padding: "4px 10px", borderBottom: "1px solid #111", alignItems: "center", fontSize: 9 }}>
+                              <span style={{ fontWeight: 700, color: t.type === "buy" ? "#10b981" : "#ef4444" }}>{t.type === "buy" ? "Buy" : "Sell"}</span>
+                              {t.type === "buy"
+                                ? <><span style={{ color: "#d4d4d8", fontWeight: 600 }}>{t.sol} <span style={{ color: "#52525b" }}>Sol</span></span><span style={{ color: "#f4f4f5" }}>{t.tokAmt} <span style={{ color: "#10b981", fontWeight: 700 }}>{t.sym}</span></span></>
+                                : <><span style={{ color: "#f4f4f5" }}>{t.tokAmt} <span style={{ color: "#ef4444", fontWeight: 700 }}>{t.sym}</span></span><span style={{ color: "#d4d4d8", fontWeight: 600 }}>{t.sol} <span style={{ color: "#52525b" }}>Sol</span></span></>
+                              }
+                              <span style={{ color: "#3f3f46", textAlign: "right" }}>{fmtAge(t.ago)}</span>
+                            </div>
+                          ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* TOKEN TRACKER TAB */}
-          {tab === "tokens" && (() => {
-            type Agg = { sym: string; name: string; mcap: number; trades: number; kols: Set<string>; volume: number; lastAgo: number; buys: number; sells: number };
-            const map = new Map<string, Agg>();
-            for (const t of feedTrades) {
-              const g = gems.find(x => x.sym === t.sym);
-              const a: Agg = map.get(t.sym) ?? { sym: t.sym, name: g?.name ?? t.sym, mcap: g?.mcap ?? 0, trades: 0, kols: new Set(), volume: 0, lastAgo: Infinity, buys: 0, sells: 0 };
-              a.trades++;
-              a.kols.add(t.kol);
-              a.volume += parseFloat(t.sol);
-              a.lastAgo = Math.min(a.lastAgo, t.ago);
-              if (t.type === "buy") a.buys++; else a.sells++;
-              map.set(t.sym, a);
-            }
-            const tokens = [...map.values()].sort((a, b) => b.trades - a.trades || a.lastAgo - b.lastAgo);
-
-            return (
-              <div style={{ padding: isMobile ? "14px 14px 80px" : "20px 24px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                    <IconChart size={18} strokeWidth={1.7} style={{ color: "#10b981" }} />
-                    <h1 style={{ fontSize: isMobile ? 15 : 19, fontWeight: 700, color: "#fafafa", letterSpacing: "-.3px" }}>Token Tracker</h1>
-                  </div>
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                    <div className="live-dot" />
-                    <span style={{ fontSize: 9, color: "#10b981", fontWeight: 600, letterSpacing: ".5px" }}>{tokens.length} TOKENS</span>
-                  </div>
-                </div>
-                <p style={{ fontSize: 11.5, color: "#52525b", marginBottom: 18, letterSpacing: ".1px" }}>
-                  Which tickers KOL wallets are actively trading. Ranked by recent activity.
-                </p>
-
-                <div style={{ background: "#0c0c0e", border: "1px solid #1c1c1f", borderRadius: 12, overflow: "hidden" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 50px 60px" : "1fr 90px 80px 90px 70px",
-                    fontSize: 9.5, color: "#52525b", letterSpacing: "1.5px", padding: "10px 14px", borderBottom: "1px solid #1c1c1f", fontWeight: 600 }}>
-                    <span>TOKEN</span>
-                    {!isMobile && <span style={{ textAlign: "right" }}>MCAP</span>}
-                    {!isMobile && <span style={{ textAlign: "right" }}>VOLUME</span>}
-                    <span style={{ textAlign: "right" }}>KOLS</span>
-                    <span style={{ textAlign: "right" }}>{isMobile ? "BUY/SELL" : "B / S"}</span>
-                  </div>
-                  <div style={{ maxHeight: "calc(100dvh - 220px)", overflowY: "auto" }}>
-                    {tokens.length === 0 ? (
-                      <div style={{ padding: "48px 16px", textAlign: "center", color: "#52525b" }}>
-                        <IconChart size={26} strokeWidth={1.5} style={{ color: "#3f3f46", marginBottom: 10 }} />
-                        <div style={{ fontSize: 12.5 }}>No tokens being tracked yet — waiting for KOL activity.</div>
-                      </div>
-                    ) : tokens.map(t => {
-                      const buyPct = t.trades > 0 ? (t.buys / t.trades) * 100 : 0;
-                      return (
-                        <div key={t.sym} style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 50px 60px" : "1fr 90px 80px 90px 70px",
-                          gap: 10, alignItems: "center", padding: "11px 14px", borderBottom: "1px solid #111", fontSize: 11.5 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
-                            <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg,rgba(239,68,68,.18),rgba(139,92,246,.18))", border: "1px solid #27272a",
-                              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10.5, fontWeight: 700, color: "#fafafa", flexShrink: 0 }}>{t.sym[0]}</div>
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                              <div style={{ fontSize: 12, fontWeight: 600, color: "#fafafa" }}>${t.sym}</div>
-                              <div style={{ fontSize: 10, color: "#52525b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name} · {fmtAge(t.lastAgo)}</div>
-                            </div>
-                          </div>
-                          {!isMobile && (
-                            <span style={{ textAlign: "right", color: "#a1a1aa", fontVariantNumeric: "tabular-nums", fontSize: 11 }}>
-                              {t.mcap > 0 ? fmtMcap(t.mcap) : "—"}
-                            </span>
-                          )}
-                          {!isMobile && (
-                            <span style={{ textAlign: "right", color: "#fafafa", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-                              {t.volume.toFixed(2)}
-                            </span>
-                          )}
-                          <span style={{ textAlign: "right", color: "#a78bfa", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-                            {t.kols.size}
-                          </span>
-                          <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: 10.5 }}>
-                            <span style={{ color: "#10b981", fontWeight: 600 }}>{t.buys}</span>
-                            <span style={{ color: "#3f3f46" }}> / </span>
-                            <span style={{ color: "#ef4444", fontWeight: 600 }}>{t.sells}</span>
-                            {!isMobile && <div style={{ height: 3, marginTop: 4, background: "#27272a", borderRadius: 2, overflow: "hidden" }}>
-                              <div style={{ width: `${buyPct}%`, height: "100%", background: "#10b981" }} />
-                            </div>}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
           {/* LAUNCH TAB */}
           {tab === "launch" && (
-            <div style={{ padding: isMobile ? "14px 14px 80px" : "20px 24px", maxWidth: 540 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 4 }}>
-                <IconRocket size={18} strokeWidth={1.7} style={{ color: "#a855f7" }} />
-                <h1 style={{ fontSize: isMobile ? 15 : 19, fontWeight: 700, color: "#fafafa", letterSpacing: "-.3px" }}>Launch Token</h1>
-              </div>
-              <p style={{ fontSize: 11.5, color: "#52525b", marginBottom: 18, letterSpacing: ".1px" }}>Create and launch on Pump.fun — end-to-end on-chain via Phantom.</p>
-              <div style={{ display: "flex", alignItems: "center", padding: "10px 14px", marginBottom: 16, background: "#0c0c0e", border: "1px solid rgba(16,185,129,.22)", borderRadius: 10, gap: 10 }}>
-                <IconCheck size={13} strokeWidth={2.2} style={{ color: "#10b981" }} />
+            <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px", maxWidth: 500 }}>
+              <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", marginBottom: 4 }}>🚀 Launch Token</h1>
+              <p style={{ fontSize: 11, color: "#3f3f46", marginBottom: 16 }}>Create & launch on Pump.fun · 100% on-chain via Phantom</p>
+              <div style={{ display: "flex", alignItems: "center", padding: "8px 12px", marginBottom: 14, background: "#111113", border: "1px solid #10b98130", borderRadius: 8 }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, color: "#10b981", fontWeight: 600, fontFamily: "ui-monospace,monospace" }}>{wallet.slice(0, 6)}…{wallet.slice(-4)}</div>
-                  {wBal && <div style={{ fontSize: 10, color: "#52525b", marginTop: 1, fontVariantNumeric: "tabular-nums" }}>{wBal} SOL</div>}
+                  <div style={{ fontSize: 10, color: "#10b981", fontWeight: 600 }}>✓ {wallet.slice(0, 16)}...</div>
+                  {wBal && <div style={{ fontSize: 9, color: "#3f3f46" }}>{wBal} SOL</div>}
                 </div>
-                <span style={{ fontSize: 9, color: "rgba(16,185,129,.55)", letterSpacing: ".5px" }}>CONNECTED</span>
+                <span style={{ fontSize: 9, color: "#10b98180" }}>Connected</span>
               </div>
               {ctStep === "form" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -678,35 +517,17 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                       style={{ width: "100%", background: "#09090b", border: "1px solid #27272a", borderRadius: 7, color: "#f4f4f5", padding: "9px 12px", fontSize: 11, outline: "none", resize: "vertical" }} />
                   </div>
                   <div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                      <span style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px" }}>TOKEN IMAGE *</span>
-                      <span style={{ fontSize: 9, color: "#3f3f46" }}>PNG / JPG / GIF · ≤5 MB</span>
-                    </div>
-                    <label style={{ display: "block", cursor: "pointer", background: "#09090b", border: `1px dashed ${ctFile ? "#10b98155" : "#27272a"}`, borderRadius: 8, padding: "14px", textAlign: "center" }}>
-                      <input type="file" accept="image/*" onChange={e => {
-                        const f = e.target.files?.[0] ?? null;
-                        if (f && f.size > 5 * 1024 * 1024) { setCtMsg("Image is larger than 5 MB."); setCtFile(null); return; }
-                        setCtFile(f);
-                        if (f) setCt(p => ({ ...p, img: "" }));
-                        setCtMsg("");
-                      }} style={{ display: "none" }} />
-                      {ctFile ? (
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                          <IconCheck size={13} strokeWidth={2.2} style={{ color: "#10b981" }} />
-                          <span style={{ fontSize: 11.5, color: "#fafafa", fontWeight: 500 }}>{ctFile.name}</span>
-                          <span style={{ fontSize: 10, color: "#52525b" }}>· {(ctFile.size / 1024).toFixed(0)} KB</span>
-                          <button type="button" onClick={(e) => { e.preventDefault(); setCtFile(null); }}
-                            style={{ marginLeft: 4, background: "transparent", border: "none", color: "#52525b", fontSize: 11, cursor: "pointer" }}>remove</button>
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: 11.5, color: "#71717a" }}>Click to upload an image</div>
-                      )}
+                    <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 4 }}>IMAGE</div>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "9px 12px", background: "#09090b", border: `1px solid ${ctFile ? "#10b981" : "#27272a"}`, borderRadius: 7 }}>
+                      <input type="file" accept="image/*" style={{ display: "none" }}
+                        onChange={e => { setCtFile(e.target.files?.[0] ?? null); setCt(p => ({ ...p, img: "" })); }} />
+                      <span style={{ fontSize: 11, color: ctFile ? "#10b981" : "#52525b" }}>{ctFile ? ctFile.name : "Upload file..."}</span>
+                      {ctFile && <button onClick={e => { e.preventDefault(); setCtFile(null); }} style={{ marginLeft: "auto", background: "transparent", border: "none", color: "#52525b", cursor: "pointer", fontSize: 12, lineHeight: 1 }}>✕</button>}
                     </label>
-                    <div style={{ marginTop: 8, fontSize: 9, color: "#3f3f46", letterSpacing: "1px" }}>OR PASTE A PUBLIC URL</div>
-                    <input value={ct.img}
-                      onChange={e => { setCt(p => ({ ...p, img: e.target.value })); if (e.target.value) setCtFile(null); }}
-                      disabled={!!ctFile} placeholder="https://example.com/logo.png"
-                      style={{ width: "100%", marginTop: 4, background: "#09090b", border: "1px solid #27272a", borderRadius: 7, color: "#f4f4f5", padding: "9px 12px", fontSize: 11, outline: "none", opacity: ctFile ? .4 : 1 }} />
+                    {!ctFile && (
+                      <input value={ct.img} onChange={e => setCt(p => ({ ...p, img: e.target.value }))} placeholder="or paste image URL..."
+                        style={{ width: "100%", marginTop: 6, background: "#09090b", border: "1px solid #27272a", borderRadius: 7, color: "#f4f4f5", padding: "9px 12px", fontSize: 11, outline: "none" }} />
+                    )}
                   </div>
                   <div style={{ background: "#111113", border: "1px solid #27272a", borderRadius: 8, padding: 12 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
@@ -715,171 +536,267 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                     </div>
                     <input type="range" min="0" max="5" step="0.1" value={ct.devBuy} onChange={e => setCt(p => ({ ...p, devBuy: e.target.value }))} style={{ width: "100%" }} />
                   </div>
-                  {ctMsg && <div style={{ fontSize: 11, color: ctMsg.startsWith("Launched") ? "#10b981" : ctMsg.startsWith("Sign") || ctMsg.startsWith("Uploading") || ctMsg.startsWith("Building") ? "#a1a1aa" : "#f59e0b", textAlign: "center", lineHeight: 1.5 }}>{ctMsg}</div>}
+                  {ctMsg && <div style={{ fontSize: 10, color: ctMsg.startsWith("✓") ? "#10b981" : "#f59e0b", textAlign: "center" }}>{ctMsg}</div>}
                   <button onClick={launchToken} disabled={ctLoad || !ct.name || !ct.sym}
-                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
-                      background: "linear-gradient(135deg,#ef4444,#8b5cf6)", border: "none", color: "#fff", padding: "12px",
-                      borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: ctLoad ? "wait" : "pointer", letterSpacing: ".2px",
-                      opacity: (!ct.name || !ct.sym) ? 0.4 : 1,
-                      boxShadow: "0 8px 24px -10px rgba(239,68,68,.6)" }}>
-                    {ctLoad
-                      ? (<><IconRefresh size={13} strokeWidth={2} className="spin" /> Processing…</>)
-                      : (<><IconRocket size={13} strokeWidth={2} /> Launch on-chain</>)}
+                    style={{ background: "linear-gradient(135deg,#dc2626,#7c3aed)", border: "none", color: "#fff", padding: 11,
+                      borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: ctLoad ? "wait" : "pointer", letterSpacing: ".5px", opacity: (!ct.name || !ct.sym) ? 0.4 : 1 }}>
+                    {ctLoad ? <span className="pulse">⟳ Processing...</span> : "⚡ LAUNCH ON-CHAIN"}
                   </button>
                 </div>
               )}
               {ctStep === "done" && (
-                <div style={{ textAlign: "center", padding: "36px 24px", background: "#0c0c0e", border: "1px solid rgba(16,185,129,.32)", borderRadius: 14 }}>
-                  <div style={{ display: "inline-flex", padding: 14, background: "rgba(16,185,129,.1)", border: "1px solid rgba(16,185,129,.3)", borderRadius: 14, color: "#10b981", marginBottom: 14 }}>
-                    <IconCheck size={28} strokeWidth={2.2} />
-                  </div>
-                  <div style={{ fontSize: 17, fontWeight: 700, color: "#10b981", marginBottom: 6, letterSpacing: "-.3px" }}>Token launched</div>
-                  <div style={{ fontSize: 12, color: "#a1a1aa", marginBottom: 4 }}>${ct.sym.toUpperCase()} is live on Pump.fun</div>
-                  <div style={{ fontSize: 10.5, color: "#52525b", marginBottom: 20, fontFamily: "ui-monospace,monospace" }}>{ctMsg.replace(/^✓\s*/, "")}</div>
-                  <button onClick={() => { setCtStep("form"); setCt({ name: "", sym: "", desc: "", img: "", devBuy: "0.5" }); setCtFile(null); setCtMsg(""); }}
-                    style={{ background: "#ef4444", border: "none", color: "#fff", padding: "9px 22px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                    Launch another
+                <div style={{ textAlign: "center", padding: "30px 20px", background: "#111113", border: "1px solid #10b98130", borderRadius: 12 }}>
+                  <div style={{ fontSize: 48, marginBottom: 10 }}>🚀</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: "#10b981", marginBottom: 6 }}>Token Launched!</div>
+                  <div style={{ fontSize: 11, color: "#52525b", marginBottom: 4 }}>${ct.sym.toUpperCase()} is live on Pump.fun</div>
+                  <div style={{ fontSize: 10, color: "#3f3f46", marginBottom: 16 }}>{ctMsg}</div>
+                  <button onClick={() => { setCtStep("form"); setCt({ name: "", sym: "", desc: "", img: "", devBuy: "0.5" }); setCtMsg(""); setCtFile(null); }}
+                    style={{ background: "#dc2626", border: "none", color: "#fff", padding: "8px 20px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                    Launch Another
                   </button>
                 </div>
               )}
             </div>
           )}
 
-          {/* PRO TAB */}
-          {tab === "pro" && (
-            <div style={{ padding: isMobile ? "14px 14px 80px" : "20px 24px", maxWidth: 720 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                  <IconSparkle size={18} strokeWidth={1.7} style={{ color: "#a78bfa" }} />
-                  <h1 style={{ fontSize: isMobile ? 15 : 19, fontWeight: 700, color: "#fafafa", letterSpacing: "-.3px" }}>GEASS Pro</h1>
-                </div>
-                {pro.active
-                  ? <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 9, fontWeight: 700, color: "#10b981", background: "rgba(16,185,129,.1)", border: "1px solid rgba(16,185,129,.3)", padding: "3px 10px", borderRadius: 999, letterSpacing: "1px" }}>
-                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981" }} /> ACTIVE
-                    </span>
-                  : <span style={{ fontSize: 9, fontWeight: 700, color: "#a78bfa", background: "rgba(139,92,246,.1)", border: "1px solid rgba(139,92,246,.32)", padding: "3px 10px", borderRadius: 999, letterSpacing: "1px" }}>UPGRADE</span>}
-              </div>
-              <p style={{ fontSize: 11.5, color: "#52525b", marginBottom: 26, letterSpacing: ".1px" }}>Intelligence, protection, and automation for serious traders.</p>
+          {/* REFERRAL TAB */}
+          {tab === "referral" && (
+            <div style={{ padding: isMobile ? "14px 14px 80px" : "24px 28px", maxWidth: 680 }}>
 
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2,1fr)", gap: 12, marginBottom: 28 }}>
-                {[
-                  { Icon: IconScanner, title: "Alpha Scanner",                desc: "Real-time detection of high-potential Solana tokens — scored across 20+ on-chain signals via Helius and DexScreener." },
-                  { Icon: IconShield,  title: "Insider & Rug Detector",       desc: "Advanced on-chain analysis identifies insider wallets, coordinated buys, and rug patterns before they surface on Twitter." },
-                  { Icon: IconZap,     title: "Dedicated RPC & Priority",     desc: "Skip the queue. Requests route through dedicated Helius nodes — first to detect, first to execute." },
-                  { Icon: IconCpu,     title: "Custom AI Rules & Bots",       desc: "Define your own entry conditions. Automate buys based on score, KOL activity, bonding-curve progress." },
-                  { Icon: IconChart,   title: "Portfolio Analytics & Risk",   desc: "Real-time P&L, exposure by tier, drawdown alerts, and AI-generated risk scores per position." },
-                ].map(f => (
-                  <div key={f.title} style={{ background: "linear-gradient(180deg,#11101a,#0d0c14)", border: "1px solid rgba(139,92,246,.18)", borderRadius: 12, padding: "18px 18px" }}>
-                    <div style={{ display: "inline-flex", padding: 8, borderRadius: 9, background: "rgba(139,92,246,.12)", border: "1px solid rgba(139,92,246,.28)", color: "#c4b5fd", marginBottom: 12 }}>
-                      <f.Icon size={16} strokeWidth={1.8} />
+              {/* Hero card */}
+              <div style={{ position: "relative", background: "linear-gradient(135deg,#12101e,#0d1520)", border: "1px solid #7c3aed50", borderRadius: 18, padding: isMobile ? "22px 18px" : "32px 28px", marginBottom: 20, overflow: "hidden" }}>
+                <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg,#dc2626,#7c3aed,#10b981)" }} />
+                <div style={{ position: "absolute", right: -30, bottom: -30, width: 180, height: 180, background: "#7c3aed08", borderRadius: "50%", border: "1px solid #7c3aed15" }} />
+
+                <div style={{ fontSize: 8, fontWeight: 700, color: "#10b981", letterSpacing: "2.5px", marginBottom: 10 }}>GEASS REFERRAL PROGRAM</div>
+                <h1 style={{ fontSize: isMobile ? 22 : 30, fontWeight: 900, color: "#f4f4f5", marginBottom: 8, lineHeight: 1.1 }}>
+                  Invite traders.<br />
+                  <span style={{ background: "linear-gradient(90deg,#a855f7,#dc2626)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Earn free Pro access.</span>
+                </h1>
+                <p style={{ fontSize: 12, color: "#71717a", lineHeight: 1.7, maxWidth: 440, marginBottom: 24 }}>
+                  Share your link. Friends get <strong style={{ color: "#10b981" }}>10% off</strong> their first month — and you earn <strong style={{ color: "#a855f7" }}>1 free month</strong> for every 3 paid referrals.
+                </p>
+
+                {/* Conditions pills */}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
+                  {[
+                    { l: "Friend saves", v: "10% — 2.7 SOL/mo", c: "#10b981" },
+                    { l: "You earn", v: "1 free month / 3 refs", c: "#a855f7" },
+                    { l: "Payout", v: "Automatic, on-chain", c: "#eab308" },
+                  ].map(p => (
+                    <div key={p.l} style={{ background: p.c + "12", border: `1px solid ${p.c}35`, borderRadius: 10, padding: "8px 14px" }}>
+                      <div style={{ fontSize: 8, color: p.c, letterSpacing: "1px", fontWeight: 700, marginBottom: 2 }}>{p.l}</div>
+                      <div style={{ fontSize: 11, color: "#e2d9f3", fontWeight: 600 }}>{p.v}</div>
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#e9e4f8", marginBottom: 5 }}>{f.title}</div>
-                    <div style={{ fontSize: 11.5, color: "#71717a", lineHeight: 1.65 }}>{f.desc}</div>
+                  ))}
+                </div>
+
+                {/* Referral link */}
+                <div>
+                  <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 6 }}>YOUR UNIQUE REFERRAL LINK</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <div style={{ flex: 1, background: "#09090b", border: "1px solid #7c3aed50", borderRadius: 9, padding: "11px 14px", fontFamily: "monospace", fontSize: isMobile ? 9 : 11, color: "#a855f7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {refLink || `https://geass.app/?ref=${refCode}`}
+                    </div>
+                    <button onClick={copyRefLink}
+                      style={{ padding: "0 18px", borderRadius: 9, border: "none", fontWeight: 700, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap",
+                        background: refCopied ? "#10b981" : "linear-gradient(135deg,#7c3aed,#a855f7)",
+                        color: "#fff", transition: "background .2s" }}>
+                      {refCopied ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats row */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 20 }}>
+                {[
+                  { l: "Link Clicks",    v: refStats?.clicks    ?? "—", c: "#3b82f6" },
+                  { l: "Paid Referrals", v: refStats?.referrals ?? "—", c: "#a855f7" },
+                  { l: "Free Months",    v: freeMonths || "—",          c: "#10b981" },
+                ].map(s => (
+                  <div key={s.l} style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 12, padding: "14px 16px", textAlign: "center" }}>
+                    <div style={{ fontSize: isMobile ? 20 : 26, fontWeight: 900, color: s.c, marginBottom: 4 }}>{s.v}</div>
+                    <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px" }}>{s.l}</div>
                   </div>
                 ))}
               </div>
 
-              {pro.active ? (
-                <div style={{ background: "linear-gradient(180deg,#0e1812,#0a1410)", border: "1px solid rgba(16,185,129,.32)", borderRadius: 16, padding: "24px 22px", position: "relative", overflow: "hidden" }}>
-                  <div style={{ position: "absolute", top: 0, right: 0, left: 0, height: 2, background: "linear-gradient(90deg,#10b981,#8b5cf6)" }} />
-                  <div style={{ fontSize: 10.5, fontWeight: 700, color: "#10b981", letterSpacing: "1.5px", marginBottom: 4, display: "inline-flex", alignItems: "center", gap: 7 }}>
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981" }} />
-                    PRO SUBSCRIPTION ACTIVE
+              {/* Share buttons */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+                <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`I've been using GEASS — the sharpest Solana alpha intel tool out there. Join using my link and get 10% off Pro:\n${refLink || `https://geass.app/?ref=${refCode}`}`)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 9, border: "1px solid #1d9bf030", background: "#1d9bf012", color: "#1d9bf0", textDecoration: "none", fontSize: 11, fontWeight: 700 }}>
+                  Share on X (Twitter)
+                </a>
+                <a href={`https://t.me/share/url?url=${encodeURIComponent(refLink || `https://geass.app/?ref=${refCode}`)}&text=${encodeURIComponent("Join GEASS — real-time Solana alpha intel. Use my link for 10% off Pro:")}`}
+                  target="_blank" rel="noopener noreferrer"
+                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 9, border: "1px solid #24a1de30", background: "#24a1de12", color: "#24a1de", textDecoration: "none", fontSize: 11, fontWeight: 700 }}>
+                  Share on Telegram
+                </a>
+                <button onClick={copyRefLink}
+                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 9, border: "1px solid #27272a", background: "transparent", color: "#71717a", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                  {refCopied ? "Copied to clipboard!" : "Copy link"}
+                </button>
+              </div>
+
+              {/* How it works */}
+              <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 20px" }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "#52525b", letterSpacing: "1.5px", marginBottom: 14 }}>HOW IT WORKS</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {[
+                    { n: "01", t: "Share your link", d: "Send your unique link to traders, Crypto Twitter, or Telegram groups." },
+                    { n: "02", t: "Friend joins & upgrades", d: "They connect Phantom and pay 2.7 SOL (10% off). Activation is instant." },
+                    { n: "03", t: "You earn free Pro", d: "Every 3 paid referrals give you 1 free month added to your account." },
+                  ].map(s => (
+                    <div key={s.n} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#7c3aed18", border: "1px solid #7c3aed40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "#a855f7", flexShrink: 0 }}>{s.n}</div>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#e2d9f3", marginBottom: 2 }}>{s.t}</div>
+                        <div style={{ fontSize: 10, color: "#52525b", lineHeight: 1.6 }}>{s.d}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* PRO TAB */}
+          {tab === "pro" && (
+            <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px", maxWidth: 700 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+                <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5" }}>👑 GEASS Pro</h1>
+                {pro.active
+                  ? <span style={{ fontSize: 8, fontWeight: 700, color: "#10b981", background: "#10b98120", border: "1px solid #10b98140", padding: "2px 8px", borderRadius: 8 }}>● ACTIVE</span>
+                  : <span style={{ fontSize: 8, fontWeight: 700, color: "#a855f7", background: "#a855f720", border: "1px solid #a855f740", padding: "2px 8px", borderRadius: 8 }}>UPGRADE</span>}
+              </div>
+              <p style={{ fontSize: 11, color: "#52525b", marginBottom: 24 }}>Intelligence + protection + automation for serious traders</p>
+
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2,1fr)", gap: 14, marginBottom: 28 }}>
+                {[
+                  { icon: "🔍", title: "Insider & Rug Detector", desc: "Advanced on-chain analysis detects insider wallets, coordinated buys and rug patterns before they hit Twitter." },
+                  { icon: "⚡", title: "Dedicated RPC + Helius Priority", desc: "Skip the queue. Your requests go through dedicated Helius nodes — first to detect, first to snipe." },
+                  { icon: "🤖", title: "Custom AI Rules & Sniping Bots", desc: "Define your own entry conditions. Automate buys based on score, KOL activity, bonding curve progress." },
+                  { icon: "📊", title: "Portfolio Analytics + Risk Tools", desc: "Real-time P&L, exposure by tier, drawdown alerts, and AI-generated risk scores per position." },
+                ].map(f => (
+                  <div key={f.title} style={{ background: "linear-gradient(135deg,#14101f,#111113)", border: "1px solid #7c3aed30", borderRadius: 14, padding: "18px 16px" }}>
+                    <div style={{ fontSize: 22, marginBottom: 8 }}>{f.icon}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#e2d9f3", marginBottom: 5 }}>{f.title}</div>
+                    <div style={{ fontSize: 10, color: "#71717a", lineHeight: 1.6 }}>{f.desc}</div>
                   </div>
-                  {/* (active body below) */}
-                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginTop: 18 }}>
+                ))}
+              </div>
+
+              {/* Portfolio Analytics — Pro only */}
+              {pro.active && (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#a855f7", letterSpacing: "1px" }}>PORTFOLIO ANALYTICS</span>
+                    <button onClick={loadPortfolio} disabled={portfolioLoading}
+                      style={{ fontSize: 9, padding: "3px 8px", borderRadius: 5, border: "1px solid #27272a", background: "transparent", color: "#52525b", cursor: portfolioLoading ? "wait" : "pointer" }}>
+                      {portfolioLoading ? "Loading..." : "↻ Refresh"}
+                    </button>
+                  </div>
+                  {portfolioErr && <div style={{ fontSize: 10, color: "#ef4444", marginBottom: 8 }}>{portfolioErr}</div>}
+                  {portfolio && (
+                    <>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 10 }}>
+                        {[
+                          { l: "SOL Balance", v: `${portfolio.sol.toFixed(4)} SOL`, c: "#10b981" },
+                          { l: "Tokens", v: String(portfolio.holdings.length), c: "#a855f7" },
+                          { l: "USD Value", v: portfolio.totalUsd !== null ? `$${portfolio.totalUsd.toFixed(2)}` : "—", c: "#eab308" },
+                        ].map(s => (
+                          <div key={s.l} style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 8, padding: "10px 12px" }}>
+                            <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 3 }}>{s.l}</div>
+                            <div style={{ fontSize: 13, fontWeight: 800, color: s.c }}>{s.v}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {portfolio.holdings.length > 0 && (
+                        <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 10, overflow: "hidden" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "6px 12px", borderBottom: "1px solid #18181b" }}>
+                            {["TOKEN", "AMOUNT", "VALUE"].map(h => (
+                              <span key={h} style={{ fontSize: 8, color: "#3f3f46", letterSpacing: "1px", fontWeight: 700 }}>{h}</span>
+                            ))}
+                          </div>
+                          {portfolio.holdings.slice(0, 15).map(h => (
+                            <div key={h.mint} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "7px 12px", borderBottom: "1px solid #0f0f0f", alignItems: "center" }}>
+                              <div>
+                                <div style={{ fontSize: 10, fontWeight: 700, color: "#f4f4f5" }}>{h.symbol}</div>
+                                <div style={{ fontSize: 8, color: "#3f3f46", fontFamily: "monospace" }}>{h.mint.slice(0, 8)}…</div>
+                              </div>
+                              <span style={{ fontSize: 10, color: "#d4d4d8" }}>
+                                {h.amount >= 1e6 ? `${(h.amount / 1e6).toFixed(2)}M` : h.amount >= 1e3 ? `${(h.amount / 1e3).toFixed(1)}k` : h.amount.toFixed(2)}
+                              </span>
+                              <span style={{ fontSize: 10, color: h.usdValue !== null ? "#eab308" : "#3f3f46" }}>
+                                {h.usdValue !== null ? `$${h.usdValue.toFixed(2)}` : "—"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {portfolio.holdings.length === 0 && (
+                        <div style={{ textAlign: "center", padding: "20px", color: "#3f3f46", fontSize: 11 }}>No token holdings found</div>
+                      )}
+                    </>
+                  )}
+                  {!portfolio && !portfolioLoading && !portfolioErr && (
+                    <div style={{ textAlign: "center", padding: "20px", color: "#3f3f46", fontSize: 11 }}>Loading portfolio...</div>
+                  )}
+                </div>
+              )}
+
+              {pro.active ? (
+                <div style={{ background: "linear-gradient(135deg,#0f1f15,#0a1a12)", border: "1px solid #10b98150", borderRadius: 16, padding: "24px 20px", position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", top: 0, right: 0, left: 0, height: 2, background: "linear-gradient(90deg,#10b981,#7c3aed)" }} />
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#10b981", letterSpacing: "1px", marginBottom: 6 }}>● PRO SUBSCRIPTION ACTIVE</div>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, marginTop: 16 }}>
                     <div>
-                      <div style={{ fontSize: 9.5, color: "#52525b", letterSpacing: "1.5px", marginBottom: 6 }}>EXPIRES IN</div>
-                      <div style={{ fontSize: 22, fontWeight: 700, color: "#fafafa", letterSpacing: "-.5px", fontVariantNumeric: "tabular-nums" }}>
+                      <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 4 }}>EXPIRES IN</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: "#f4f4f5" }}>
                         {pro.expiresAt ? `${Math.max(0, Math.ceil((pro.expiresAt - Date.now()) / 86_400_000))} days` : "—"}
                       </div>
-                      {pro.expiresAt && <div style={{ fontSize: 11, color: "#71717a", marginTop: 3 }}>{new Date(pro.expiresAt).toLocaleDateString()}</div>}
+                      {pro.expiresAt && <div style={{ fontSize: 10, color: "#71717a", marginTop: 2 }}>{new Date(pro.expiresAt).toLocaleDateString()}</div>}
                     </div>
                     <div>
-                      <div style={{ fontSize: 9.5, color: "#52525b", letterSpacing: "1.5px", marginBottom: 6 }}>PAYMENT TX</div>
+                      <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 4 }}>PAYMENT TX</div>
                       <a href={`https://solscan.io/tx/${pro.signature}`} target="_blank" rel="noopener noreferrer"
-                        style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontFamily: "ui-monospace,monospace", color: "#a78bfa", textDecoration: "none", wordBreak: "break-all" }}>
-                        {pro.signature?.slice(0, 22)}…
-                        <IconArrowUpRight size={11} strokeWidth={2} />
+                        style={{ fontSize: 11, fontFamily: "monospace", color: "#a855f7", textDecoration: "none", wordBreak: "break-all" }}>
+                        {pro.signature?.slice(0, 24)}...↗
                       </a>
                     </div>
                   </div>
-                  <button onClick={() => pro.refresh()} disabled={pro.loading || pro.verifying}
-                    style={{ marginTop: 20, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid #27272a", background: "transparent", color: "#a1a1aa", fontSize: 11, fontWeight: 500, cursor: (pro.loading || pro.verifying) ? "wait" : "pointer" }}>
-                    <IconRefresh size={11} strokeWidth={2} className={(pro.loading || pro.verifying) ? "spin" : undefined} />
-                    {pro.verifying ? "Checking…" : "Refresh status"}
+                  <button onClick={() => pro.refresh()} disabled={pro.loading}
+                    style={{ marginTop: 18, padding: "7px 14px", borderRadius: 7, border: "1px solid #27272a", background: "transparent", color: "#71717a", fontSize: 10, fontWeight: 600, cursor: pro.loading ? "wait" : "pointer" }}>
+                    {pro.loading ? "Checking..." : "↻ Refresh status"}
                   </button>
                 </div>
-              ) : pro.pendingSig ? (
-                <div style={{ background: "linear-gradient(180deg,#1a1611,#14110d)", border: "1px solid rgba(245,158,11,.32)", borderRadius: 16, padding: "26px 24px", position: "relative", overflow: "hidden" }}>
-                  <div style={{ position: "absolute", top: 0, right: 0, left: 0, height: 2, background: "linear-gradient(90deg,#f59e0b,#ef4444)" }} />
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 10.5, fontWeight: 700, color: "#f59e0b", letterSpacing: "1.5px", marginBottom: 6 }}>
-                    <IconRefresh size={11} strokeWidth={2.2} className="spin" />
-                    AWAITING ON-CHAIN CONFIRMATION
-                  </div>
-                  <div style={{ fontSize: 13, color: "#fafafa", lineHeight: 1.6, marginBottom: 16, fontWeight: 500 }}>
-                    Your payment was broadcast to Solana. The indexer just needs a moment to catch up — this usually finishes within a minute. Activation is automatic; no further action required.
-                  </div>
-                  <div style={{ background: "#09090b", border: "1px solid #27272a", borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
-                    <div style={{ fontSize: 9.5, color: "#52525b", letterSpacing: "1.5px", marginBottom: 6 }}>TRANSACTION</div>
-                    <a href={`https://solscan.io/tx/${pro.pendingSig}`} target="_blank" rel="noopener noreferrer"
-                      style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontFamily: "ui-monospace,monospace", color: "#f59e0b", textDecoration: "none", wordBreak: "break-all" }}>
-                      {pro.pendingSig.slice(0, 28)}…
-                      <IconArrowUpRight size={11} strokeWidth={2} />
-                    </a>
-                    {pro.pendingSince && (
-                      <div style={{ fontSize: 10.5, color: "#52525b", marginTop: 6, fontVariantNumeric: "tabular-nums" }}>
-                        Sent {Math.max(1, Math.floor((Date.now() - pro.pendingSince) / 1000))}s ago
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button onClick={() => pro.refresh()} disabled={pro.verifying}
-                      style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "11px",
-                        borderRadius: 9, border: "none", background: "#f59e0b", color: "#1a1208", fontSize: 12.5, fontWeight: 700, cursor: pro.verifying ? "wait" : "pointer", letterSpacing: ".2px" }}>
-                      <IconRefresh size={12} strokeWidth={2.2} className={pro.verifying ? "spin" : undefined} />
-                      {pro.verifying ? "Verifying…" : "Verify now"}
-                    </button>
-                    <button onClick={() => { if (confirm("Discard this pending payment? Your on-chain transaction will not be cancelled — only the local pending record is cleared.")) pro.clearPending(); }}
-                      style={{ padding: "11px 16px", borderRadius: 9, border: "1px solid #27272a", background: "transparent", color: "#71717a", fontSize: 11.5, fontWeight: 500, cursor: "pointer" }}>
-                      Discard
-                    </button>
-                  </div>
-                </div>
               ) : (
-                <div style={{ background: "linear-gradient(180deg,#11101a,#0d0c14)", border: "1px solid rgba(139,92,246,.32)", borderRadius: 16, padding: "26px 24px", position: "relative", overflow: "hidden" }}>
-                  <div style={{ position: "absolute", top: 0, right: 0, left: 0, height: 2, background: "linear-gradient(90deg,#ef4444,#8b5cf6)" }} />
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#a78bfa", letterSpacing: "1.5px" }}>GEASS PRO</div>
-                    <div style={{ fontSize: 26, fontWeight: 700, color: "#fafafa", letterSpacing: "-.8px", fontVariantNumeric: "tabular-nums" }}>3 SOL</div>
-                    <div style={{ fontSize: 12, color: "#52525b", fontWeight: 500 }}>/ month</div>
+                <div style={{ background: "linear-gradient(135deg,#14101f,#0f0c1a)", border: "1px solid #7c3aed50", borderRadius: 16, padding: "24px 20px", position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", top: 0, right: 0, left: 0, height: 2, background: "linear-gradient(90deg,#dc2626,#7c3aed)" }} />
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#a855f7", letterSpacing: "1px", marginBottom: 6 }}>GEASS PRO — 3 SOL / month</div>
+                  <div style={{ fontSize: 11, color: "#71717a", marginBottom: 18, lineHeight: 1.6 }}>
+                    Paid on-chain in SOL. No subscription, no credit card. After Phantom confirms the transaction, your account activates automatically — no manual approval needed.
                   </div>
-                  <div style={{ fontSize: 12, color: "#71717a", marginBottom: 22, lineHeight: 1.65 }}>
-                    Paid on-chain in SOL. No subscription billing, no credit card. After Phantom confirms the transaction, your account activates automatically.
-                  </div>
-                  <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 9, marginBottom: 22 }}>
-                    {["Instant on-chain activation (≈2–5 s with webhook)", "30 days of Pro access", "Cancel anytime — just don't renew"].map(l => (
-                      <li key={l} style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 12, color: "#e9e4f8" }}>
-                        <IconCheck size={13} strokeWidth={2.2} style={{ color: "#a78bfa" }} />
-                        {l}
+                  <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 7, marginBottom: 18 }}>
+                    {["Instant on-chain activation (≈30s)", "30 days of Pro access", "Cancel anytime — just don't renew"].map(l => (
+                      <li key={l} style={{ display: "flex", gap: 8, fontSize: 11, color: "#e2d9f3" }}>
+                        <span style={{ color: "#a855f7" }}>✓</span>{l}
                       </li>
                     ))}
                   </ul>
                   {pro.error && (
-                    <div style={{ fontSize: 11, color: "#f59e0b", background: "rgba(245,158,11,.08)", border: "1px solid rgba(245,158,11,.24)", borderRadius: 7, padding: "9px 12px", marginBottom: 14, lineHeight: 1.5 }}>
+                    <div style={{ fontSize: 10, color: "#f59e0b", background: "#f59e0b15", border: "1px solid #f59e0b30", borderRadius: 6, padding: "8px 10px", marginBottom: 12, lineHeight: 1.5 }}>
                       {pro.error}
                     </div>
                   )}
-                  <button onClick={() => pro.pay().catch(() => {/* error surfaced via pro.error */})} disabled={pro.loading || !!pro.pendingSig}
-                    style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 9, padding: "13px",
-                      borderRadius: 10, border: "none", background: "linear-gradient(135deg,#ef4444,#8b5cf6)", color: "#fff", fontSize: 13.5, fontWeight: 600,
-                      cursor: pro.loading ? "wait" : "pointer", letterSpacing: ".2px", opacity: pro.pendingSig ? .5 : 1,
-                      boxShadow: "0 8px 26px -10px rgba(139,92,246,.55)" }}>
-                    {pro.loading
-                      ? (<><IconRefresh size={13} strokeWidth={2} className="spin" /> Confirming on-chain…</>)
-                      : (<><IconWallet size={13} strokeWidth={2} /> Pay 3 SOL — activate Pro</>)}
+                  <button onClick={() => pro.pay().catch(() => {/* error surfaced via pro.error */})} disabled={pro.loading}
+                    style={{ width: "100%", padding: 12, borderRadius: 8, border: "none", background: "linear-gradient(135deg,#dc2626,#7c3aed)", color: "#fff", fontSize: 13, fontWeight: 800, cursor: pro.loading ? "wait" : "pointer", letterSpacing: ".5px", boxShadow: "0 0 32px #7c3aed30" }}>
+                    {pro.loading ? <span className="pulse">⟳ Confirming on-chain...</span> : "◎ Pay 3 SOL — Activate Pro"}
                   </button>
-                  <div style={{ marginTop: 12, fontSize: 10.5, color: "#52525b", textAlign: "center" }}>
+                  <div style={{ marginTop: 10, fontSize: 9, color: "#3f3f46", textAlign: "center" }}>
                     Phantom will ask you to approve a transfer of exactly 3 SOL.
                   </div>
                 </div>
@@ -890,23 +807,17 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
         {/* Mobile bottom tab bar */}
         {isMobile && (
-          <nav style={{ height: 58, background: "#0c0c0e", borderTop: "1px solid #1c1c1f", display: "flex", alignItems: "stretch", flexShrink: 0 }}>
-            {NAV.map(n => {
-              const Icon = NAV_ICONS[n.id];
-              const active = tab === n.id;
-              const accent = n.pro ? "#a78bfa" : "#ef4444";
-              return (
-                <button key={n.id} onClick={() => setTab(n.id as typeof tab)}
-                  style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
-                    background: "transparent", border: "none", cursor: "pointer",
-                    color: active ? accent : "#52525b",
-                    borderTop: active ? `2px solid ${accent}` : "2px solid transparent",
-                  }}>
-                  <Icon size={17} strokeWidth={1.7} />
-                  <span style={{ fontSize: 9, fontWeight: active ? 600 : 500, letterSpacing: ".2px" }}>{n.label}</span>
-                </button>
-              );
-            })}
+          <nav style={{ height: 56, background: "#0c0c0e", borderTop: "1px solid #18181b", display: "flex", alignItems: "stretch", flexShrink: 0 }}>
+            {NAV.map(n => (
+              <button key={n.id} onClick={() => setTab(n.id as typeof tab)}
+                style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
+                  background: "transparent", border: "none", cursor: "pointer",
+                  color: tab === n.id ? (n.pro ? "#a855f7" : "#ef4444") : "#3f3f46",
+                  borderTop: tab === n.id ? `2px solid ${n.pro ? "#a855f7" : "#ef4444"}` : "2px solid transparent",
+                }}>
+                <span style={{ fontSize: 8, fontWeight: tab === n.id ? 700 : 400 }}>{n.label}</span>
+              </button>
+            ))}
           </nav>
         )}
       </div>

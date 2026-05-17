@@ -6,113 +6,78 @@ import { proCheckout, proVerify, type ProStatus } from "./api";
 import { signAndSendBytes } from "./wallet";
 
 const STORAGE_PREFIX = "geass_pro_";
-const PENDING_PREFIX = "geass_pro_pending_";
-const PENDING_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24h
+const storeKey = (wallet: string) => `${STORAGE_PREFIX}${wallet}`;
 
-const storeKey   = (wallet: string) => `${STORAGE_PREFIX}${wallet}`;
-const pendingKey = (wallet: string) => `${PENDING_PREFIX}${wallet}`;
-
-interface StoredPro { signature: string; paidAt: number; expiresAt: number; }
-interface PendingPay { signature: string; sentAt: number; }
-
-function safeGet<T>(k: string): T | null {
-  try { const raw = localStorage.getItem(k); return raw ? JSON.parse(raw) as T : null; } catch { return null; }
+interface StoredPro {
+  signature: string;
+  paidAt: number;
+  expiresAt: number;
 }
-function safeSet(k: string, v: unknown) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* noop */ } }
-function safeDel(k: string) { try { localStorage.removeItem(k); } catch { /* noop */ } }
+
+function loadStored(wallet: string): StoredPro | null {
+  try {
+    const raw = localStorage.getItem(storeKey(wallet));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredPro;
+    if (!parsed?.signature || !parsed?.expiresAt) return null;
+    return parsed;
+  } catch { return null; }
+}
+
+function saveStored(wallet: string, s: StoredPro) {
+  try { localStorage.setItem(storeKey(wallet), JSON.stringify(s)); } catch { /* noop */ }
+}
+
+function clearStored(wallet: string) {
+  try { localStorage.removeItem(storeKey(wallet)); } catch { /* noop */ }
+}
 
 export interface ProState {
   active: boolean;
   expiresAt: number | null;
   signature: string | null;
-  pendingSig: string | null;     // Tx broadcast, awaiting on-chain confirmation
-  pendingSince: number | null;
   loading: boolean;
-  verifying: boolean;            // True while refresh() polls a pending sig
   error: string;
   pay: () => Promise<void>;
   refresh: () => Promise<void>;
-  clearPending: () => void;
 }
 
 export function useProStatus(wallet: string | null): ProState {
   const [active, setActive] = useState(false);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
-  const [pendingSig, setPendingSig] = useState<string | null>(null);
-  const [pendingSince, setPendingSince] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
-  const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState("");
 
-  /**
-   * Attempts to confirm a known signature. Returns the verified status on
-   * success, null otherwise. Never throws — callers handle null.
-   */
-  const tryVerify = useCallback(async (sig: string, w: string): Promise<ProStatus | null> => {
-    try {
-      const v = await proVerify(sig, w);
-      return v.active && v.expiresAt ? v : null;
-    } catch { return null; }
-  }, []);
-
-  /**
-   * Reconciles state with storage + chain. Promotes pending → active when the
-   * tx finally indexes; clears expired Pro entries.
-   */
+  // Re-verify a stored signature with the backend (defends against stale localStorage).
   const refresh = useCallback(async () => {
     if (!wallet) return;
-    setError("");
-
-    const stored = safeGet<StoredPro>(storeKey(wallet));
-    const pending = safeGet<PendingPay>(pendingKey(wallet));
-
-    // Re-verify confirmed Pro (defends against tampered localStorage).
-    if (stored) {
-      setVerifying(true);
-      const v = await tryVerify(stored.signature, wallet);
-      setVerifying(false);
-      if (v && v.expiresAt) {
+    const stored = loadStored(wallet);
+    if (!stored) {
+      setActive(false); setExpiresAt(null); setSignature(null);
+      return;
+    }
+    setLoading(true);
+    try {
+      const r = await proVerify(stored.signature, wallet);
+      if (r.active && r.expiresAt) {
         setActive(true);
-        setExpiresAt(v.expiresAt);
-        setSignature(v.signature || stored.signature);
-        safeSet(storeKey(wallet), { signature: stored.signature, paidAt: v.paidAt ?? stored.paidAt, expiresAt: v.expiresAt });
+        setExpiresAt(r.expiresAt);
+        setSignature(r.signature || stored.signature);
+        saveStored(wallet, { signature: r.signature || stored.signature, paidAt: r.paidAt ?? stored.paidAt, expiresAt: r.expiresAt });
       } else {
         setActive(false);
         setExpiresAt(stored.expiresAt);
         setSignature(stored.signature);
-        if (stored.expiresAt < Date.now()) safeDel(storeKey(wallet));
+        if (r.error) setError(r.error);
+        if (stored.expiresAt < Date.now()) clearStored(wallet);
       }
-    } else {
-      setActive(false); setExpiresAt(null); setSignature(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
     }
-
-    // Check for a pending payment and try to promote it.
-    if (pending && Date.now() - pending.sentAt < PENDING_MAX_AGE_MS) {
-      setPendingSig(pending.signature);
-      setPendingSince(pending.sentAt);
-      setVerifying(true);
-      const v = await tryVerify(pending.signature, wallet);
-      setVerifying(false);
-      if (v && v.expiresAt) {
-        safeSet(storeKey(wallet), { signature: pending.signature, paidAt: v.paidAt ?? Date.now(), expiresAt: v.expiresAt });
-        safeDel(pendingKey(wallet));
-        setActive(true);
-        setExpiresAt(v.expiresAt);
-        setSignature(pending.signature);
-        setPendingSig(null);
-        setPendingSince(null);
-      }
-    } else if (pending) {
-      // Pending expired — discard.
-      safeDel(pendingKey(wallet));
-      setPendingSig(null);
-      setPendingSince(null);
-    } else {
-      setPendingSig(null);
-      setPendingSince(null);
-    }
-  }, [wallet, tryVerify]);
+  }, [wallet]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -120,7 +85,8 @@ export function useProStatus(wallet: string | null): ProState {
     if (!wallet) throw new Error("No wallet");
     setLoading(true); setError("");
     try {
-      const checkout = await proCheckout();
+      const storedRef = typeof window !== "undefined" ? (localStorage.getItem("geass_ref") ?? undefined) : undefined;
+      const checkout = await proCheckout(storedRef);
       const tx = new Transaction({
         feePayer: new PublicKey(wallet),
         blockhash: checkout.blockhash,
@@ -132,79 +98,40 @@ export function useProStatus(wallet: string | null): ProState {
         lamports: Math.floor(checkout.amountSol * LAMPORTS_PER_SOL),
       }));
       const bytes = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
+      const sig = await signAndSendBytes(bytes);
 
-      // Open SSE before signing so the Helius webhook can short-circuit polling.
-      const es = typeof EventSource !== "undefined" ? new EventSource(`/api/pro/listen?wallet=${wallet}`) : null;
-      let webhookFired = false;
-      es?.addEventListener("payment", () => { webhookFired = true; });
-
-      let sig: string;
-      try {
-        sig = await signAndSendBytes(bytes);
-      } catch (e) {
-        es?.close();
-        throw e;
-      }
-
-      // Persist the signature IMMEDIATELY so a tab reload / late indexer
-      // doesn't lose the payment. refresh() will promote it once confirmed.
-      safeSet(pendingKey(wallet), { signature: sig, sentAt: Date.now() } satisfies PendingPay);
-      setPendingSig(sig);
-      setPendingSince(Date.now());
-
-      // Poll every 2s for up to 90s. If the webhook fires mid-wait, the next
-      // poll picks it up immediately.
-      const MAX_ATTEMPTS = 45;
+      // Poll verify (Helius needs a moment to index)
       let verified: ProStatus | null = null;
-      for (let i = 0; i < MAX_ATTEMPTS; i++) {
-        await new Promise(r => setTimeout(r, webhookFired ? 200 : 2_000));
-        const v = await tryVerify(sig, wallet);
-        if (v && v.expiresAt) { verified = v; break; }
-        // If the webhook fired but the very next verify lost the race, give
-        // it one quick extra attempt before going back to the slow interval.
-        if (webhookFired && !v) {
-          await new Promise(r => setTimeout(r, 800));
-          const v2 = await tryVerify(sig, wallet);
-          if (v2 && v2.expiresAt) { verified = v2; break; }
+      for (let i = 0; i < 12; i++) {
+        await new Promise(r => setTimeout(r, 2_500));
+        try {
+          const v = await proVerify(sig, wallet);
+          if (v.active && v.expiresAt) { verified = v; break; }
+          if (v.error && !v.error.includes("not found") && !v.error.includes("not yet")) {
+            throw new Error(v.error);
+          }
+        } catch (e) {
+          if (i === 11) throw e;
         }
       }
-      es?.close();
-
       if (!verified || !verified.expiresAt) {
-        // Don't error out — the tx is on-chain, it just hasn't been indexed
-        // by Helius yet. Leave it as pending; the user can hit "Verify now"
-        // or come back later and refresh() will promote it.
-        setError(`Payment broadcast — waiting for the indexer to catch up. We saved your signature; use "Verify now" in a moment.`);
-        return;
+        throw new Error("Payment sent but not confirmed on-chain yet. Click 'Refresh status' in a moment.");
       }
-
-      // Promote pending → confirmed.
-      safeSet(storeKey(wallet), {
+      saveStored(wallet, {
         signature: sig,
         paidAt: verified.paidAt ?? Date.now(),
         expiresAt: verified.expiresAt,
-      } satisfies StoredPro);
-      safeDel(pendingKey(wallet));
+      });
       setActive(true);
       setExpiresAt(verified.expiresAt);
       setSignature(sig);
-      setPendingSig(null);
-      setPendingSince(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       throw e;
     } finally {
       setLoading(false);
     }
-  }, [wallet, tryVerify]);
-
-  const clearPending = useCallback(() => {
-    if (!wallet) return;
-    safeDel(pendingKey(wallet));
-    setPendingSig(null);
-    setPendingSince(null);
-    setError("");
   }, [wallet]);
 
-  return { active, expiresAt, signature, pendingSig, pendingSince, loading, verifying, error, pay, refresh, clearPending };
+  return { active, expiresAt, signature, loading, error, pay, refresh };
 }

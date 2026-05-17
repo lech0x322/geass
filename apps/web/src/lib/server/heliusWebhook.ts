@@ -1,5 +1,6 @@
 import "server-only";
 import { HELIUS_KEY, HELIUS_API, PRO_TREASURY_WALLET } from "../env";
+import { KOLS } from "../config";
 
 export interface HeliusWebhook {
   webhookID: string;
@@ -31,7 +32,7 @@ export async function createWebhook(opts: {
     body: JSON.stringify({
       webhookURL: opts.webhookURL,
       accountAddresses: opts.accountAddresses,
-      transactionTypes: ["TRANSFER"],
+      transactionTypes: ["TRANSFER", "SWAP"],
       webhookType: "enhanced",
       authHeader: opts.authHeader,
     }),
@@ -41,18 +42,17 @@ export async function createWebhook(opts: {
   return r.json();
 }
 
-// Lazy idempotent registration. Runs at most once per process (then caches the
-// result). Safe to call from request handlers — failure is non-fatal.
-let registrationPromise: Promise<void> | null = null;
+// Lazy idempotent registration for the Pro treasury webhook.
+let proRegistrationPromise: Promise<void> | null = null;
 
 export function ensureProWebhook(baseUrl: string | undefined, authHeader: string | undefined): Promise<void> {
-  if (registrationPromise) return registrationPromise;
+  if (proRegistrationPromise) return proRegistrationPromise;
   if (!baseUrl || !PRO_TREASURY_WALLET || !HELIUS_KEY) {
-    registrationPromise = Promise.resolve();
-    return registrationPromise;
+    proRegistrationPromise = Promise.resolve();
+    return proRegistrationPromise;
   }
   const url = `${baseUrl.replace(/\/$/, "")}/api/pro/webhook`;
-  registrationPromise = (async () => {
+  proRegistrationPromise = (async () => {
     try {
       const existing = await listWebhooks();
       const match = existing.find(w =>
@@ -66,10 +66,37 @@ export function ensureProWebhook(baseUrl: string | undefined, authHeader: string
       });
       console.log("[pro] registered Helius webhook ->", url);
     } catch (e) {
-      // Reset so a later call can retry (e.g. transient Helius outage).
-      registrationPromise = null;
+      proRegistrationPromise = null;
       console.warn("[pro] webhook registration failed:", e instanceof Error ? e.message : e);
     }
   })();
-  return registrationPromise;
+  return proRegistrationPromise;
+}
+
+// Lazy idempotent registration for the KOL feed webhook.
+let kolRegistrationPromise: Promise<void> | null = null;
+
+export function ensureKolWebhook(baseUrl: string | undefined, authHeader: string | undefined): Promise<void> {
+  if (kolRegistrationPromise) return kolRegistrationPromise;
+  if (!baseUrl || !HELIUS_KEY) {
+    kolRegistrationPromise = Promise.resolve();
+    return kolRegistrationPromise;
+  }
+  const url = `${baseUrl.replace(/\/$/, "")}/api/feed/webhook`;
+  const kolAddrs = KOLS.map(k => k.addr);
+  kolRegistrationPromise = (async () => {
+    try {
+      const existing = await listWebhooks();
+      const match = existing.find(w =>
+        w.webhookURL === url && kolAddrs.every(a => w.accountAddresses?.includes(a)),
+      );
+      if (match) return;
+      await createWebhook({ webhookURL: url, accountAddresses: kolAddrs, authHeader });
+      console.log("[kol] registered Helius webhook ->", url);
+    } catch (e) {
+      kolRegistrationPromise = null;
+      console.warn("[kol] webhook registration failed:", e instanceof Error ? e.message : e);
+    }
+  })();
+  return kolRegistrationPromise;
 }

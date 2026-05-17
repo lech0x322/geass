@@ -41,7 +41,7 @@ export interface Gem {
 }
 
 export interface FeedTrade {
-  id: number;
+  id: string;
   kol: string;
   kolC: string;
   type: "buy" | "sell";
@@ -49,4 +49,6 @@ export interface FeedTrade {
   sol: string;
   tokAmt: string;
   ago: number;
+  ts?: number;   // ms since epoch
+  mint?: string; // token mint address
 }

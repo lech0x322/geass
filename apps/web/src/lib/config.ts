@@ -17,24 +17,22 @@ export const TIER: Record<string, { l: string; c: string }> = {
   RUGGED: { l: "RUG", c: "#6b7280" },
 };
 
-export type NavId = "trades" | "tokens" | "launch" | "gems" | "pro";
+export type NavId = "trades" | "launch" | "gems" | "referral" | "pro";
 
 export interface NavItem {
   id: NavId;
   label: string;
   badge?: string;
-  /** Visual: render in the Pro purple theme. */
+  /** Render in Pro purple theme */
   pro?: boolean;
-  /** Gate: tab content shows an upgrade prompt unless Pro is active. */
-  requiresPro?: boolean;
 }
 
 export const NAV: NavItem[] = [
-  { id: "trades", label: "Realtime Trades", badge: "LIVE" },
-  { id: "tokens", label: "Token Tracker" },
-  { id: "launch", label: "Launch" },
-  { id: "gems",   label: "Alpha Scanner", badge: "PRO", pro: true, requiresPro: true },
-  { id: "pro",    label: "GEASS Pro", pro: true },
+  { id: "trades",   label: "Realtime Trades", badge: "LIVE" },
+  { id: "launch",   label: "Launch" },
+  { id: "gems",     label: "Alpha Scanner",   badge: "PRO",  pro: true },
+  { id: "referral", label: "Referral",        badge: "NEW" },
+  { id: "pro",      label: "GEASS Pro",       pro: true },
 ];
 
 export const toB64 = (arr: Uint8Array): string => {

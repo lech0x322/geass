@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { heliusRpc } from "@/lib/server/helius";
-import { ensureProWebhook } from "@/lib/server/heliusWebhook";
 import { enforceRateLimit } from "@/lib/server/withRateLimit";
 import { PRO_TREASURY_WALLET, PRO_PRICE_SOL, PRO_DURATION_DAYS } from "@/lib/env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const CODE_RE = /^[1-9A-HJ-NP-Za-km-z]{6,10}$/;
+const REFERRAL_DISCOUNT = 0.10; // 10 %
 
 export async function GET(req: Request) {
   const limited = enforceRateLimit(req, { bucket: "pro_checkout", max: 30, windowMs: 60_000 });
@@ -15,8 +17,12 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "PRO_TREASURY_WALLET not configured" }, { status: 503 });
   }
 
-  // Lazy idempotent webhook registration. Doesn't block — failure is logged.
-  void ensureProWebhook(process.env.WEBHOOK_BASE_URL, process.env.HELIUS_WEBHOOK_AUTH);
+  const url = new URL(req.url);
+  const ref = (url.searchParams.get("ref") ?? "").trim();
+  const hasRef = CODE_RE.test(ref);
+  const amountSol = hasRef
+    ? Math.round(PRO_PRICE_SOL * (1 - REFERRAL_DISCOUNT) * 1000) / 1000
+    : PRO_PRICE_SOL;
 
   try {
     const res = await heliusRpc<{ value: { blockhash: string; lastValidBlockHeight: number } }>(
@@ -27,10 +33,11 @@ export async function GET(req: Request) {
     if (!bh?.blockhash) throw new Error("no blockhash");
     return NextResponse.json({
       treasury: PRO_TREASURY_WALLET,
-      amountSol: PRO_PRICE_SOL,
+      amountSol,
       durationDays: PRO_DURATION_DAYS,
       blockhash: bh.blockhash,
       lastValidBlockHeight: bh.lastValidBlockHeight,
+      ref: hasRef ? ref : null,
     });
   } catch (e) {
     return NextResponse.json(

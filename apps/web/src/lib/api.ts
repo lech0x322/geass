@@ -1,6 +1,34 @@
 // Client-side API — calls Next.js proxy routes only. No external URLs, no keys.
 import type { Gem } from "./types";
 
+export interface DexTokenInfo {
+  mint: string;
+  priceUsd: number | null;
+  priceNative: number | null;
+  vol24h: number;
+  vol1h: number;
+  liqUsd: number;
+  priceChange1h: number;
+  priceChange24h: number;
+  buys1h: number;
+  sells1h: number;
+  mcap: number | null;
+  dexUrl: string | null;
+}
+
+export async function fetchDex(mint: string): Promise<DexTokenInfo> {
+  const r = await fetch(`/api/dex?mint=${encodeURIComponent(mint)}`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`dex ${r.status}`);
+  return r.json();
+}
+
+export async function fetchDexBatch(mints: string[]): Promise<Record<string, DexTokenInfo>> {
+  if (!mints.length) return {};
+  const r = await fetch(`/api/dex?mints=${mints.map(encodeURIComponent).join(",")}`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`dex batch ${r.status}`);
+  return r.json();
+}
+
 export interface ScanResult {
   gems: Gem[];
   source: string;
@@ -72,8 +100,9 @@ export interface ProStatus {
   error?: string;
 }
 
-export async function proCheckout(): Promise<ProCheckout> {
-  const r = await fetch("/api/pro/checkout", { cache: "no-store" });
+export async function proCheckout(ref?: string): Promise<ProCheckout> {
+  const qs = ref ? `?ref=${encodeURIComponent(ref)}` : "";
+  const r = await fetch(`/api/pro/checkout${qs}`, { cache: "no-store" });
   if (!r.ok) {
     let msg = `checkout ${r.status}`;
     try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
@@ -91,6 +120,32 @@ export async function proVerify(signature: string, wallet: string): Promise<ProS
   });
   if (!r.ok && r.status !== 200) {
     let msg = `verify ${r.status}`;
+    try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+export interface HoldingRow {
+  mint: string;
+  symbol: string;
+  amount: number;
+  decimals: number;
+  usdValue: number | null;
+  priceUsd: number | null;
+}
+
+export interface PortfolioResult {
+  sol: number;
+  solUsd: number | null;
+  holdings: HoldingRow[];
+  totalUsd: number | null;
+}
+
+export async function fetchPortfolio(wallet: string): Promise<PortfolioResult> {
+  const r = await fetch(`/api/portfolio?wallet=${encodeURIComponent(wallet)}`, { cache: "no-store" });
+  if (!r.ok) {
+    let msg = `portfolio ${r.status}`;
     try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
     throw new Error(msg);
   }
