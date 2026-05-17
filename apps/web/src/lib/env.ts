@@ -17,3 +17,7 @@ export const PRO_TREASURY_WALLET = process.env.PRO_TREASURY_WALLET ?? "";
 export const PRO_PRICE_SOL = Number(process.env.PRO_PRICE_SOL ?? "3");
 export const PRO_DURATION_DAYS = Number(process.env.PRO_DURATION_DAYS ?? "30");
 export const PRO_DURATION_MS = PRO_DURATION_DAYS * 24 * 60 * 60 * 1000;
+
+// Helius webhooks
+export const HELIUS_WEBHOOK_AUTH = process.env.HELIUS_WEBHOOK_AUTH ?? "";
+export const WEBHOOK_BASE_URL = process.env.WEBHOOK_BASE_URL ?? "";

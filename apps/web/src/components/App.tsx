@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { Keypair, VersionedTransaction } from "@solana/web3.js";
 import { KOLS, NAV, TIER } from "@/lib/config";
-import { fmtAge, fmtTok, shortAddr } from "@/lib/utils";
+import { fmtAge, shortAddr } from "@/lib/utils";
 import { scan, fetchBalance, pumpTradeTx, pumpIpfs } from "@/lib/api";
 import { signAndSendBytes } from "@/lib/wallet";
 import { useGemStream } from "@/lib/useGemStream";
 import { useProStatus } from "@/lib/pro";
-import type { Gem, FeedTrade } from "@/lib/types";
+import { useKolFeed } from "@/lib/useKolFeed";
+import type { Gem } from "@/lib/types";
 import { GeassLogo } from "./GeassLogo";
 import { GemCard } from "./GemCard";
 import { SnipeModal } from "./SnipeModal";
@@ -19,7 +21,7 @@ interface Props {
 }
 
 export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
-  const [tab, setTab]         = useState<"gems" | "feed" | "launch" | "pro">("gems");
+  const [tab, setTab]         = useState<"gems" | "trades" | "launch" | "pro">("gems");
   const [gems, setGems]       = useState<Gem[]>([]);
   const [loading, setLoading] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
@@ -29,7 +31,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [snipeGem, setSnipeGem] = useState<Gem | null>(null);
   const [wBal, setWBal]       = useState<string | null>(initialBalance);
   const [filters, setFilters] = useState({ minScore: 0, tiers: [] as string[], hasKol: false, noFlags: false });
-  const [feedTrades, setFeedTrades] = useState<FeedTrade[]>([]);
+  const feedTrades = useKolFeed();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const pro = useProStatus(wallet);
@@ -114,26 +116,6 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
   useEffect(() => { doScan(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
-  // ── Simulated KOL feed (visual) ─────────────────────────────
-  useEffect(() => {
-    if (!gems.length) return;
-    const iv = setInterval(() => {
-      const k = KOLS[Math.floor(Math.random() * KOLS.length)];
-      const g = gems[Math.floor(Math.random() * gems.length)];
-      if (!g) return;
-      const trade: FeedTrade = {
-        id: Date.now() + Math.random(),
-        kol: k.name, kolC: k.c,
-        type: Math.random() > 0.3 ? "buy" : "sell",
-        sym: g.sym,
-        sol: (Math.random() * 4 + 0.1).toFixed(3),
-        tokAmt: fmtTok(Math.random() * 1e7),
-        ago: Math.floor(Math.random() * 60),
-      };
-      setFeedTrades(prev => [trade, ...prev].slice(0, 40));
-    }, 3000);
-    return () => clearInterval(iv);
-  }, [gems]);
 
   // ── Filtered gems ───────────────────────────────────────────
   const filtered = useMemo(() => gems.filter(g => {
@@ -165,17 +147,22 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
       }
       const meta = await pumpIpfs(form);
       setCtMsg("Creating on-chain...");
+      const mintKp = Keypair.generate();
       const bytes = await pumpTradeTx({
         publicKey: wallet,
         action: "create",
+        mint: mintKp.publicKey.toBase58(),
         amount: parseFloat(ct.devBuy) || 0,
         slippage: 10,
         priorityFee: 0.0005,
         pool: "pump",
         tokenMetadata: { name: ct.name, symbol: ct.sym.toUpperCase(), uri: meta.metadataUri },
       });
+      // Pre-sign with the mint keypair; Phantom will add the wallet signature
+      const tx = VersionedTransaction.deserialize(bytes);
+      tx.sign([mintKp]);
       setCtMsg("Sign in Phantom...");
-      const sig = await signAndSendBytes(bytes);
+      const sig = await signAndSendBytes(tx.serialize());
       setCtMsg(`✓ Launched! TX: ${sig.slice(0, 18)}...`);
       setCtStep("done");
     } catch (e) {
@@ -391,7 +378,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           )}
 
           {/* LIVE FEED TAB */}
-          {tab === "feed" && (
+          {tab === "trades" && (
             <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5" }}>📡 Live KOL Feed</h1>
