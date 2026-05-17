@@ -2,6 +2,7 @@
 import { TIER } from "@/lib/config";
 import { fmtMcap } from "@/lib/utils";
 import type { Gem } from "@/lib/types";
+import type { DexTokenInfo } from "@/lib/api";
 import { ScoreRing } from "./ScoreRing";
 
 function BondingCurveBar({ pct, sol }: { pct: number; sol: number }) {
@@ -34,13 +35,39 @@ function SafetyBadge({ ok, label, tip }: { ok: boolean; label: string; tip: stri
   );
 }
 
-export function GemCard({ gem, isNew, onSnipe }: { gem: Gem; isNew: boolean; onSnipe: (g: Gem) => void }) {
+function fmtUsd(n: number): string {
+  if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
+  if (n >= 1e3) return `$${(n / 1e3).toFixed(1)}k`;
+  return `$${n.toFixed(2)}`;
+}
+
+function PriceChange({ pct }: { pct: number }) {
+  const pos = pct >= 0;
+  return (
+    <span style={{ fontSize: 9, fontWeight: 700, color: pos ? "#10b981" : "#ef4444" }}>
+      {pos ? "+" : ""}{pct.toFixed(1)}%
+    </span>
+  );
+}
+
+export function GemCard({ gem, isNew, onSnipe, dex }: {
+  gem: Gem;
+  isNew: boolean;
+  onSnipe: (g: Gem) => void;
+  dex?: DexTokenInfo | null;
+}) {
   const tier = TIER[gem.tier] || TIER.C_TIER;
+  const hasDex = dex && dex.priceUsd !== null;
+  const mcap = hasDex && dex.mcap ? fmtMcap(dex.mcap) : fmtMcap(gem.mcap);
+  const dexLink = hasDex && dex.dexUrl ? dex.dexUrl : null;
+
   return (
     <div className={isNew ? "gem-new" : ""}
       style={{ background: "#111113", border: `1px solid ${isNew ? "#10b98150" : "#1e1e21"}`,
         borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 10, position: "relative", overflow: "hidden" }}>
       {isNew && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg,transparent,#10b981,transparent)" }} className="pulse"/>}
+
+      {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 36, height: 36, borderRadius: 9, background: "linear-gradient(135deg,#dc262630,#7c3aed30)", border: "1px solid #27272a",
@@ -55,14 +82,62 @@ export function GemCard({ gem, isNew, onSnipe }: { gem: Gem; isNew: boolean; onS
           <span style={{ fontSize: 9, fontWeight: 700, color: tier.c, background: tier.c + "18", padding: "2px 7px", borderRadius: 4, border: `1px solid ${tier.c}30` }}>{tier.l}</span>
         </div>
       </div>
+
+      {/* Live DEX price strip */}
+      {hasDex && (
+        <div style={{ background: "#09090b", border: "1px solid #1e1e21", borderRadius: 7, padding: "7px 10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 8, color: "#52525b", letterSpacing: ".8px", marginBottom: 1 }}>PRICE · DEX LIVE</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#f4f4f5" }}>
+              ${dex.priceUsd! < 0.001 ? dex.priceUsd!.toExponential(2) : dex.priceUsd!.toFixed(dex.priceUsd! < 0.01 ? 6 : 4)}
+            </div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 8, color: "#52525b", letterSpacing: ".8px", marginBottom: 2 }}>1H</div>
+            <PriceChange pct={dex.priceChange1h} />
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 8, color: "#52525b", letterSpacing: ".8px", marginBottom: 2 }}>VOL 24H</div>
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#d4d4d8" }}>{fmtUsd(dex.vol24h)}</span>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 8, color: "#52525b", letterSpacing: ".8px", marginBottom: 2 }}>LIQ</div>
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#d4d4d8" }}>{fmtUsd(dex.liqUsd)}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Stats row */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>
-        {([["MCAP", fmtMcap(gem.mcap)], ["X POT", `${gem.xPotential}x`], ["KOL", gem.kol > 0 ? `${gem.kol} ✓` : "—"]] as [string, string][]).map(([l, v]) => (
+        {([
+          ["MCAP", mcap],
+          ["X POT", `${gem.xPotential}x`],
+          ["KOL", gem.kol > 0 ? `${gem.kol} ✓` : "—"],
+        ] as [string, string][]).map(([l, v]) => (
           <div key={l} style={{ background: "#09090b", borderRadius: 6, padding: "5px 7px" }}>
             <div style={{ fontSize: 8, color: "#3f3f46", letterSpacing: ".8px" }}>{l}</div>
             <div style={{ fontSize: 11, fontWeight: 700, color: l === "KOL" && gem.kol > 0 ? "#10b981" : "#d4d4d8", marginTop: 1 }}>{v}</div>
           </div>
         ))}
       </div>
+
+      {/* Buy pressure from DEX txn data */}
+      {hasDex && (dex.buys1h + dex.sells1h) > 0 && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8, color: "#52525b", letterSpacing: ".8px", marginBottom: 3 }}>
+            <span>BUY PRESSURE · 1H</span>
+            <span style={{ color: dex.buys1h > dex.sells1h ? "#10b981" : "#ef4444", fontWeight: 700 }}>
+              {dex.buys1h}B / {dex.sells1h}S
+            </span>
+          </div>
+          <div style={{ height: 4, background: "#18181b", borderRadius: 2, overflow: "hidden", display: "flex" }}>
+            <div style={{ width: `${(dex.buys1h / (dex.buys1h + dex.sells1h)) * 100}%`, background: "#10b981", transition: "width .4s" }} />
+            <div style={{ flex: 1, background: "#ef4444" }} />
+          </div>
+        </div>
+      )}
+
+      {/* KOL buyers */}
       {gem.kolBuyers?.length > 0 && (
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {gem.kolBuyers.slice(0, 3).map((k, i) => (
@@ -75,6 +150,8 @@ export function GemCard({ gem, isNew, onSnipe }: { gem: Gem; isNew: boolean; onS
           ))}
         </div>
       )}
+
+      {/* Safety badges */}
       <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
         <SafetyBadge ok={gem.mintRev} label="MINT" tip={gem.mintRev ? "Mint authority revoked" : "Mint authority active"} />
         <SafetyBadge ok={gem.freezeRev} label="FREEZE" tip={gem.freezeRev ? "Freeze authority revoked" : "Freeze authority active"} />
@@ -91,9 +168,13 @@ export function GemCard({ gem, isNew, onSnipe }: { gem: Gem; isNew: boolean; onS
           </span>
         )}
       </div>
+
+      {/* Bonding curve */}
       {gem.bondingCurve && !gem.bondingCurve.complete && (
         <BondingCurveBar pct={gem.bondingCurve.progress} sol={gem.bondingCurve.solCollected} />
       )}
+
+      {/* Signals */}
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {gem.reasons?.slice(0, 3).map((r, i) => (
           <div key={i} style={{ fontSize: 10, color: "#71717a", display: "flex", alignItems: "center", gap: 4 }}>
@@ -104,12 +185,22 @@ export function GemCard({ gem, isNew, onSnipe }: { gem: Gem; isNew: boolean; onS
           <div key={i} style={{ fontSize: 10, color: "#f59e0b", display: "flex", alignItems: "center", gap: 4 }}>⚠ {r}</div>
         ))}
       </div>
+
+      {/* Actions */}
       <div style={{ display: "flex", gap: 6 }}>
-        <a href={gem.contractAddress ? `https://pump.fun/coin/${gem.contractAddress}` : "#"} target="_blank" rel="noreferrer"
-          style={{ flex: 1, background: "#18181b", border: "1px solid #27272a", color: "#a1a1aa", padding: "7px", borderRadius: 7,
-            fontSize: 10, fontWeight: 600, textDecoration: "none", textAlign: "center", cursor: "pointer" }}>
-          View Pump.fun
-        </a>
+        {dexLink ? (
+          <a href={dexLink} target="_blank" rel="noreferrer"
+            style={{ flex: 1, background: "#18181b", border: "1px solid #27272a", color: "#a1a1aa", padding: "7px", borderRadius: 7,
+              fontSize: 10, fontWeight: 600, textDecoration: "none", textAlign: "center" }}>
+            View DEX
+          </a>
+        ) : (
+          <a href={gem.contractAddress ? `https://pump.fun/coin/${gem.contractAddress}` : "#"} target="_blank" rel="noreferrer"
+            style={{ flex: 1, background: "#18181b", border: "1px solid #27272a", color: "#a1a1aa", padding: "7px", borderRadius: 7,
+              fontSize: 10, fontWeight: 600, textDecoration: "none", textAlign: "center" }}>
+            View Pump.fun
+          </a>
+        )}
         <button onClick={() => onSnipe(gem)}
           style={{ flex: 1, background: "linear-gradient(135deg,#dc2626,#7c3aed)", border: "none", color: "#fff",
             padding: "7px", borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: ".5px" }}>
