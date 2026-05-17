@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Keypair, VersionedTransaction } from "@solana/web3.js";
 import { KOLS, NAV, TIER } from "@/lib/config";
 import { fmtAge, shortAddr } from "@/lib/utils";
-import { scan, fetchBalance, pumpTradeTx, pumpIpfs, fetchPortfolio, type PortfolioResult } from "@/lib/api";
+import { scan, fetchBalance, pumpTradeTx, pumpIpfs, fetchPortfolio, autoSnipe, type PortfolioResult, type AutoSnipeResult } from "@/lib/api";
 import { signAndSendBytes } from "@/lib/wallet";
 import { useGemStream } from "@/lib/useGemStream";
 import { useProStatus } from "@/lib/pro";
@@ -21,7 +21,7 @@ interface Props {
 }
 
 export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
-  const [tab, setTab]         = useState<"trades" | "launch" | "gems" | "referral" | "pro">("trades");
+  const [tab, setTab]         = useState<"trades" | "launch" | "gems" | "autosnipe" | "referral" | "pro">("trades");
   const [gems, setGems]       = useState<Gem[]>([]);
   const [loading, setLoading] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
@@ -38,6 +38,14 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [portfolio, setPortfolio] = useState<PortfolioResult | null>(null);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [portfolioErr, setPortfolioErr] = useState("");
+
+  // Auto-snipe state
+  const [asEnabled, setAsEnabled]         = useState(false);
+  const [asAmount, setAsAmount]           = useState("0.01");
+  const [asMinScore, setAsMinScore]       = useState(75);
+  const [asMethod, setAsMethod]           = useState<"api" | "local">("api");
+  const [asLog, setAsLog]                 = useState<{ mint: string; sym: string; sig?: string; err?: string; ts: number }[]>([]);
+  const asSniped = useRef<Set<string>>(new Set());
 
   // Referral state
   const refCode = wallet.slice(0, 8);
@@ -70,11 +78,19 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   // ── Real-time SSE stream ────────────────────────────────────
   const stream = useGemStream(true);
 
+  // Keep latest auto-snipe settings in a ref so the stream callback always sees current values
+  const asRef = useRef({ enabled: false, amount: "0.01", minScore: 75, method: "api" as "api" | "local" });
+  useEffect(() => {
+    asRef.current = { enabled: asEnabled, amount: asAmount, minScore: asMinScore, method: asMethod };
+  }, [asEnabled, asAmount, asMinScore, asMethod]);
+
   useEffect(() => {
     if (!stream.newGems.length) return;
+    let freshGems: typeof stream.newGems = [];
     setGems(prev => {
       const known = new Set(prev.map(g => g.id));
       const fresh = stream.newGems.filter(g => !known.has(g.id));
+      freshGems = fresh;
       if (!fresh.length) return prev;
       const next = [...fresh, ...prev].slice(0, 24);
       setNewIds(ids => {
@@ -89,6 +105,25 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
       return next;
     });
     stream.clear();
+    // Auto-snipe newly detected gems if enabled
+    const cfg = asRef.current;
+    if (cfg.enabled && freshGems.length) {
+      const amt = parseFloat(cfg.amount);
+      if (Number.isFinite(amt) && amt > 0) {
+        freshGems
+          .filter(g => g.score >= cfg.minScore && !asSniped.current.has(g.contractAddress))
+          .forEach(g => {
+            asSniped.current.add(g.contractAddress);
+            autoSnipe({ mint: g.contractAddress, amount: amt, method: cfg.method })
+              .then((res: AutoSnipeResult) => {
+                setAsLog(l => [{ mint: g.contractAddress, sym: g.sym, sig: res.signature, ts: Date.now() }, ...l].slice(0, 50));
+              })
+              .catch((err: Error) => {
+                setAsLog(l => [{ mint: g.contractAddress, sym: g.sym, err: err.message, ts: Date.now() }, ...l].slice(0, 50));
+              });
+          });
+      }
+    }
   }, [stream.newGems]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Refresh balance ─────────────────────────────────────────
@@ -553,6 +588,124 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   </button>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* AUTO-SNIPE TAB */}
+          {tab === "autosnipe" && (
+            <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px", maxWidth: 560 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
+                <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5" }}>⚡ Auto-Snipe</h1>
+                <span style={{ fontSize: 8, fontWeight: 700, color: asEnabled ? "#10b981" : "#ef4444", background: asEnabled ? "#10b98120" : "#ef444420", border: `1px solid ${asEnabled ? "#10b98140" : "#ef444440"}`, padding: "2px 8px", borderRadius: 8 }}>
+                  {asEnabled ? "● ACTIVE" : "○ PAUSED"}
+                </span>
+              </div>
+              <p style={{ fontSize: 11, color: "#52525b", marginBottom: 20 }}>
+                Server wallet buys automatically when a gem hits your score threshold.
+              </p>
+
+              {/* Config card */}
+              <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 16px", marginBottom: 16, display: "flex", flexDirection: "column", gap: 16 }}>
+
+                {/* Enable toggle */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#e2d9f3" }}>Enable Auto-Snipe</div>
+                    <div style={{ fontSize: 10, color: "#52525b" }}>Fires on every new gem above Min Score</div>
+                  </div>
+                  <button onClick={() => setAsEnabled(v => !v)}
+                    style={{ width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", position: "relative",
+                      background: asEnabled ? "#10b981" : "#27272a", transition: "background .2s" }}>
+                    <span style={{ position: "absolute", top: 2, left: asEnabled ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
+                  </button>
+                </div>
+
+                {/* Method selector */}
+                <div>
+                  <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 8 }}>EXECUTION METHOD</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {([["api", "API Key", "PumpPortal signs & sends — simplest"], ["local", "Local Sign", "Server keypair signs via RPC — more control"]] as [string, string, string][]).map(([v, l, d]) => (
+                      <button key={v} onClick={() => setAsMethod(v as "api" | "local")}
+                        style={{ flex: 1, padding: "9px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left",
+                          border: `1px solid ${asMethod === v ? "#a855f7" : "#27272a"}`,
+                          background: asMethod === v ? "#a855f712" : "transparent" }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: asMethod === v ? "#a855f7" : "#71717a" }}>{l}</div>
+                        <div style={{ fontSize: 9, color: "#52525b", marginTop: 1 }}>{d}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Amount */}
+                <div>
+                  <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+                    <span>AMOUNT PER SNIPE (SOL)</span>
+                    <span style={{ color: "#eab308", fontWeight: 700 }}>{asAmount} SOL</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
+                    {["0.01", "0.05", "0.1", "0.5"].map(v => (
+                      <button key={v} onClick={() => setAsAmount(v)}
+                        style={{ flex: 1, padding: "6px", borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: "pointer",
+                          border: `1px solid ${asAmount === v ? "#eab308" : "#27272a"}`,
+                          background: asAmount === v ? "#eab30812" : "transparent",
+                          color: asAmount === v ? "#eab308" : "#71717a" }}>{v}</button>
+                    ))}
+                  </div>
+                  <input type="number" value={asAmount} step="0.01" min="0.001" onChange={e => setAsAmount(e.target.value)}
+                    style={{ width: "100%", background: "#09090b", border: "1px solid #27272a", borderRadius: 7, color: "#f4f4f5", padding: "8px 12px", fontSize: 13, outline: "none" }} />
+                </div>
+
+                {/* Min Score */}
+                <div>
+                  <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+                    <span>MIN SCORE THRESHOLD</span>
+                    <span style={{ color: "#10b981", fontWeight: 700 }}>{asMinScore}</span>
+                  </div>
+                  <input type="range" min={50} max={95} step={5} value={asMinScore}
+                    onChange={e => setAsMinScore(+e.target.value)} style={{ width: "100%" }} />
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8, color: "#3f3f46", marginTop: 2 }}>
+                    <span>50 — aggressive</span><span>95 — ultra-safe</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Wallet info */}
+              <div style={{ background: "#0c0c0e", border: "1px solid #1c1c1f", borderRadius: 10, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 3 }}>GEASS SERVER WALLET</div>
+                  <div style={{ fontFamily: "monospace", fontSize: 10, color: "#a1a1aa" }}>4a9RCjw2vFtNVCrb…knN</div>
+                </div>
+                <a href="https://solscan.io/account/4a9RCjw2vFtNVCrbZcEZ2poCKCYhamSEr8zmboqjoknN" target="_blank" rel="noopener noreferrer"
+                  style={{ fontSize: 10, color: "#a855f7", textDecoration: "none" }}>View ↗</a>
+              </div>
+
+              {/* Log */}
+              <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 12, overflow: "hidden" }}>
+                <div style={{ padding: "10px 14px", borderBottom: "1px solid #18181b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: "#52525b", letterSpacing: "1.5px" }}>SNIPE LOG</span>
+                  {asLog.length > 0 && (
+                    <button onClick={() => setAsLog([])} style={{ fontSize: 9, background: "transparent", border: "none", color: "#3f3f46", cursor: "pointer" }}>Clear</button>
+                  )}
+                </div>
+                {asLog.length === 0
+                  ? <div style={{ padding: "24px", textAlign: "center", fontSize: 10, color: "#27272a" }}>No snipes yet — {asEnabled ? "waiting for gems…" : "enable auto-snipe above"}</div>
+                  : asLog.map((entry, i) => (
+                    <div key={i} style={{ padding: "8px 14px", borderBottom: "1px solid #0f0f0f", display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: entry.err ? "#ef4444" : "#10b981" }}>
+                          {entry.err ? "✗" : "✓"} ${entry.sym}
+                        </div>
+                        <div style={{ fontSize: 8, color: "#3f3f46", fontFamily: "monospace" }}>
+                          {entry.err ? entry.err.slice(0, 60) : entry.sig?.slice(0, 24) + "…"}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 8, color: "#3f3f46" }}>
+                        {new Date(entry.ts).toLocaleTimeString()}
+                      </div>
+                    </div>
+                  ))
+                }
+              </div>
             </div>
           )}
 
