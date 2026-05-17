@@ -9,7 +9,6 @@ import { signAndSendBytes } from "@/lib/wallet";
 import { useGemStream } from "@/lib/useGemStream";
 import { useProStatus } from "@/lib/pro";
 import { useKolFeed } from "@/lib/useKolFeed";
-import { useDexPrices } from "@/lib/useDexPrices";
 import type { Gem } from "@/lib/types";
 import { GeassLogo } from "./GeassLogo";
 import { GemCard } from "./GemCard";
@@ -33,8 +32,6 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [wBal, setWBal]       = useState<string | null>(initialBalance);
   const [filters, setFilters] = useState({ minScore: 0, tiers: [] as string[], hasKol: false, noFlags: false });
   const feedTrades = useKolFeed();
-  const gemMints = useMemo(() => gems.map(g => g.contractAddress).filter(Boolean), [gems]);
-  const dexPrices = useDexPrices(gemMints);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const pro = useProStatus(wallet);
@@ -423,7 +420,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                     <div className="pulse" style={{ fontSize: 11, color: "#dc262680", marginTop: 10, letterSpacing: "2px" }}>SCANNING SOLANA MATRIX...</div>
                   </div>
                 )}
-                {filtered.map(g => <GemCard key={g.id} gem={g} isNew={newIds.has(g.id)} onSnipe={setSnipeGem} dex={dexPrices[g.contractAddress]} />)}
+                {filtered.map(g => <GemCard key={g.id} gem={g} isNew={newIds.has(g.id)} onSnipe={setSnipeGem} />)}
                 {!loading && gems.length > 0 && filtered.length === 0 && (
                   <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: "#3f3f46" }}>
                     <div style={{ fontSize: 24, marginBottom: 6 }}>🔍</div>

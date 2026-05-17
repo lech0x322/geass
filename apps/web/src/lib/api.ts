@@ -1,34 +1,6 @@
 // Client-side API — calls Next.js proxy routes only. No external URLs, no keys.
 import type { Gem } from "./types";
 
-export interface DexTokenInfo {
-  mint: string;
-  priceUsd: number | null;
-  priceNative: number | null;
-  vol24h: number;
-  vol1h: number;
-  liqUsd: number;
-  priceChange1h: number;
-  priceChange24h: number;
-  buys1h: number;
-  sells1h: number;
-  mcap: number | null;
-  dexUrl: string | null;
-}
-
-export async function fetchDex(mint: string): Promise<DexTokenInfo> {
-  const r = await fetch(`/api/dex?mint=${encodeURIComponent(mint)}`, { cache: "no-store" });
-  if (!r.ok) throw new Error(`dex ${r.status}`);
-  return r.json();
-}
-
-export async function fetchDexBatch(mints: string[]): Promise<Record<string, DexTokenInfo>> {
-  if (!mints.length) return {};
-  const r = await fetch(`/api/dex?mints=${mints.map(encodeURIComponent).join(",")}`, { cache: "no-store" });
-  if (!r.ok) throw new Error(`dex batch ${r.status}`);
-  return r.json();
-}
-
 export interface ScanResult {
   gems: Gem[];
   source: string;
