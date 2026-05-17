@@ -17,7 +17,7 @@ export const TIER: Record<string, { l: string; c: string }> = {
   RUGGED: { l: "RUG", c: "#6b7280" },
 };
 
-export type NavId = "trades" | "launch" | "gems" | "referral" | "pro";
+export type NavId = "trades" | "launch" | "gems" | "referral" | "pro" | "autosnipe";
 
 export interface NavItem {
   id: NavId;
@@ -28,11 +28,12 @@ export interface NavItem {
 }
 
 export const NAV: NavItem[] = [
-  { id: "trades",   label: "Realtime Trades", badge: "LIVE" },
-  { id: "launch",   label: "Launch" },
-  { id: "gems",     label: "Alpha Scanner",   badge: "PRO",  pro: true },
-  { id: "referral", label: "Referral",        badge: "NEW" },
-  { id: "pro",      label: "GEASS Pro",       pro: true },
+  { id: "trades",    label: "Realtime Trades",  badge: "LIVE" },
+  { id: "launch",    label: "Launch" },
+  { id: "gems",      label: "Alpha Scanner",    badge: "PRO",  pro: true },
+  { id: "autosnipe", label: "Auto-Snipe",       badge: "NEW",  pro: true },
+  { id: "referral",  label: "Referral",         badge: "NEW" },
+  { id: "pro",       label: "GEASS Pro",        pro: true },
 ];
 
 export const toB64 = (arr: Uint8Array): string => {
