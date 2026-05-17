@@ -36,7 +36,8 @@ async function verifyTx(signature: string, wallet: string): Promise<{ ok: true; 
   if (!tx) return { ok: false, error: "Transaction not found or not yet confirmed" };
   if (tx.meta?.err) return { ok: false, error: "Transaction failed on-chain" };
 
-  const minLamports = Math.floor(PRO_PRICE_SOL * 1e9);
+  // Accept ≥ 90 % of full price to allow the referral discount
+  const minLamports = Math.floor(PRO_PRICE_SOL * 0.9 * 1e9);
   const blockTime = tx.blockTime ?? Math.floor(Date.now() / 1000);
 
   // 1) Look for an explicit SystemProgram.transfer instruction (most reliable)

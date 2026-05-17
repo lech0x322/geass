@@ -85,7 +85,8 @@ export function useProStatus(wallet: string | null): ProState {
     if (!wallet) throw new Error("No wallet");
     setLoading(true); setError("");
     try {
-      const checkout = await proCheckout();
+      const storedRef = typeof window !== "undefined" ? (localStorage.getItem("geass_ref") ?? undefined) : undefined;
+      const checkout = await proCheckout(storedRef);
       const tx = new Transaction({
         feePayer: new PublicKey(wallet),
         blockhash: checkout.blockhash,

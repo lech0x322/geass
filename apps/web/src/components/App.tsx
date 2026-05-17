@@ -21,7 +21,7 @@ interface Props {
 }
 
 export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
-  const [tab, setTab]         = useState<"gems" | "trades" | "launch" | "pro">("gems");
+  const [tab, setTab]         = useState<"trades" | "launch" | "gems" | "referral" | "pro">("trades");
   const [gems, setGems]       = useState<Gem[]>([]);
   const [loading, setLoading] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
@@ -38,6 +38,13 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [portfolio, setPortfolio] = useState<PortfolioResult | null>(null);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [portfolioErr, setPortfolioErr] = useState("");
+
+  // Referral state
+  const refCode = wallet.slice(0, 8);
+  const [refLink, setRefLink] = useState("");
+  const [refCopied, setRefCopied] = useState(false);
+  const [refStats, setRefStats] = useState<{ clicks: number; referrals: number } | null>(null);
+  const freeMonths = refStats ? Math.floor(refStats.referrals / 3) : 0;
 
   // Launch state
   const [ct, setCt]           = useState({ name: "", sym: "", desc: "", img: "", devBuy: "0.5" });
@@ -175,6 +182,36 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     setCtLoad(false);
   };
 
+  // ── Referral setup ──────────────────────────────────────────
+  useEffect(() => {
+    setRefLink(`${window.location.origin}/?ref=${refCode}`);
+    // Store ?ref= from URL if we were referred
+    const params = new URLSearchParams(window.location.search);
+    const inRef = params.get("ref");
+    if (inRef && inRef !== refCode && /^[1-9A-HJ-NP-Za-km-z]{6,10}$/.test(inRef)) {
+      try { localStorage.setItem("geass_ref", inRef); } catch {}
+      fetch("/api/referral/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: inRef }),
+      }).catch(() => {});
+      const u = new URL(window.location.href);
+      u.searchParams.delete("ref");
+      window.history.replaceState({}, "", u.toString());
+    }
+    // Load own stats
+    fetch(`/api/referral/track?code=${refCode}`)
+      .then(r => r.json())
+      .then(d => setRefStats(d as { clicks: number; referrals: number }))
+      .catch(() => {});
+  }, [refCode]);
+
+  const copyRefLink = () => {
+    navigator.clipboard.writeText(refLink).catch(() => {});
+    setRefCopied(true);
+    setTimeout(() => setRefCopied(false), 2000);
+  };
+
   // ── Portfolio ───────────────────────────────────────────────
   const loadPortfolio = useCallback(async () => {
     setPortfolioLoading(true); setPortfolioErr("");
@@ -236,9 +273,16 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
               background: tab === n.id ? (n.pro ? "#7c3aed12" : "#dc262612") : "transparent",
               color: tab === n.id ? (n.pro ? "#a855f7" : "#ef4444") : n.pro ? "#6d4aab" : "#52525b",
               cursor: "pointer", marginBottom: 2, fontSize: 11, fontWeight: tab === n.id ? 700 : 500, textAlign: "left" }}>
-            <span style={{ fontSize: 14 }}>{n.icon}</span>
             <span style={{ flex: 1 }}>{n.label}</span>
-            {n.badge && <span style={{ fontSize: 7, fontWeight: 700, color: n.pro ? "#a855f7" : "#10b981", background: (n.pro ? "#a855f7" : "#10b981") + "20", border: `1px solid ${(n.pro ? "#a855f7" : "#10b981") + "40"}`, padding: "1px 5px", borderRadius: 8 }}>{n.badge}</span>}
+            {n.badge && (
+              <span style={{ fontSize: 7, fontWeight: 700,
+                color: n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981",
+                background: (n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981") + "20",
+                border: `1px solid ${(n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981") + "40"}`,
+                padding: "1px 5px", borderRadius: 8 }}>
+                {n.badge}
+              </span>
+            )}
           </button>
         ))}
       </nav>
@@ -512,6 +556,110 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
             </div>
           )}
 
+          {/* REFERRAL TAB */}
+          {tab === "referral" && (
+            <div style={{ padding: isMobile ? "14px 14px 80px" : "24px 28px", maxWidth: 680 }}>
+
+              {/* Hero card */}
+              <div style={{ position: "relative", background: "linear-gradient(135deg,#12101e,#0d1520)", border: "1px solid #7c3aed50", borderRadius: 18, padding: isMobile ? "22px 18px" : "32px 28px", marginBottom: 20, overflow: "hidden" }}>
+                <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg,#dc2626,#7c3aed,#10b981)" }} />
+                <div style={{ position: "absolute", right: -30, bottom: -30, width: 180, height: 180, background: "#7c3aed08", borderRadius: "50%", border: "1px solid #7c3aed15" }} />
+
+                <div style={{ fontSize: 8, fontWeight: 700, color: "#10b981", letterSpacing: "2.5px", marginBottom: 10 }}>GEASS REFERRAL PROGRAM</div>
+                <h1 style={{ fontSize: isMobile ? 22 : 30, fontWeight: 900, color: "#f4f4f5", marginBottom: 8, lineHeight: 1.1 }}>
+                  Invite traders.<br />
+                  <span style={{ background: "linear-gradient(90deg,#a855f7,#dc2626)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Earn free Pro access.</span>
+                </h1>
+                <p style={{ fontSize: 12, color: "#71717a", lineHeight: 1.7, maxWidth: 440, marginBottom: 24 }}>
+                  Share your link. Friends get <strong style={{ color: "#10b981" }}>10% off</strong> their first month — and you earn <strong style={{ color: "#a855f7" }}>1 free month</strong> for every 3 paid referrals.
+                </p>
+
+                {/* Conditions pills */}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
+                  {[
+                    { l: "Friend saves", v: "10% — 2.7 SOL/mo", c: "#10b981" },
+                    { l: "You earn", v: "1 free month / 3 refs", c: "#a855f7" },
+                    { l: "Payout", v: "Automatic, on-chain", c: "#eab308" },
+                  ].map(p => (
+                    <div key={p.l} style={{ background: p.c + "12", border: `1px solid ${p.c}35`, borderRadius: 10, padding: "8px 14px" }}>
+                      <div style={{ fontSize: 8, color: p.c, letterSpacing: "1px", fontWeight: 700, marginBottom: 2 }}>{p.l}</div>
+                      <div style={{ fontSize: 11, color: "#e2d9f3", fontWeight: 600 }}>{p.v}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Referral link */}
+                <div>
+                  <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 6 }}>YOUR UNIQUE REFERRAL LINK</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <div style={{ flex: 1, background: "#09090b", border: "1px solid #7c3aed50", borderRadius: 9, padding: "11px 14px", fontFamily: "monospace", fontSize: isMobile ? 9 : 11, color: "#a855f7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {refLink || `https://geass.app/?ref=${refCode}`}
+                    </div>
+                    <button onClick={copyRefLink}
+                      style={{ padding: "0 18px", borderRadius: 9, border: "none", fontWeight: 700, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap",
+                        background: refCopied ? "#10b981" : "linear-gradient(135deg,#7c3aed,#a855f7)",
+                        color: "#fff", transition: "background .2s" }}>
+                      {refCopied ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats row */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 20 }}>
+                {[
+                  { l: "Link Clicks",    v: refStats?.clicks    ?? "—", c: "#3b82f6" },
+                  { l: "Paid Referrals", v: refStats?.referrals ?? "—", c: "#a855f7" },
+                  { l: "Free Months",    v: freeMonths || "—",          c: "#10b981" },
+                ].map(s => (
+                  <div key={s.l} style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 12, padding: "14px 16px", textAlign: "center" }}>
+                    <div style={{ fontSize: isMobile ? 20 : 26, fontWeight: 900, color: s.c, marginBottom: 4 }}>{s.v}</div>
+                    <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px" }}>{s.l}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Share buttons */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+                <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`I've been using GEASS — the sharpest Solana alpha intel tool out there. Join using my link and get 10% off Pro:\n${refLink || `https://geass.app/?ref=${refCode}`}`)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 9, border: "1px solid #1d9bf030", background: "#1d9bf012", color: "#1d9bf0", textDecoration: "none", fontSize: 11, fontWeight: 700 }}>
+                  Share on X (Twitter)
+                </a>
+                <a href={`https://t.me/share/url?url=${encodeURIComponent(refLink || `https://geass.app/?ref=${refCode}`)}&text=${encodeURIComponent("Join GEASS — real-time Solana alpha intel. Use my link for 10% off Pro:")}`}
+                  target="_blank" rel="noopener noreferrer"
+                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 9, border: "1px solid #24a1de30", background: "#24a1de12", color: "#24a1de", textDecoration: "none", fontSize: 11, fontWeight: 700 }}>
+                  Share on Telegram
+                </a>
+                <button onClick={copyRefLink}
+                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 9, border: "1px solid #27272a", background: "transparent", color: "#71717a", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                  {refCopied ? "Copied to clipboard!" : "Copy link"}
+                </button>
+              </div>
+
+              {/* How it works */}
+              <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 20px" }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "#52525b", letterSpacing: "1.5px", marginBottom: 14 }}>HOW IT WORKS</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {[
+                    { n: "01", t: "Share your link", d: "Send your unique link to traders, Crypto Twitter, or Telegram groups." },
+                    { n: "02", t: "Friend joins & upgrades", d: "They connect Phantom and pay 2.7 SOL (10% off). Activation is instant." },
+                    { n: "03", t: "You earn free Pro", d: "Every 3 paid referrals give you 1 free month added to your account." },
+                  ].map(s => (
+                    <div key={s.n} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#7c3aed18", border: "1px solid #7c3aed40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "#a855f7", flexShrink: 0 }}>{s.n}</div>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#e2d9f3", marginBottom: 2 }}>{s.t}</div>
+                        <div style={{ fontSize: 10, color: "#52525b", lineHeight: 1.6 }}>{s.d}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+          )}
+
           {/* PRO TAB */}
           {tab === "pro" && (
             <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px", maxWidth: 700 }}>
@@ -664,7 +812,6 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   color: tab === n.id ? (n.pro ? "#a855f7" : "#ef4444") : "#3f3f46",
                   borderTop: tab === n.id ? `2px solid ${n.pro ? "#a855f7" : "#ef4444"}` : "2px solid transparent",
                 }}>
-                <span style={{ fontSize: 16 }}>{n.icon}</span>
                 <span style={{ fontSize: 8, fontWeight: tab === n.id ? 700 : 400 }}>{n.label}</span>
               </button>
             ))}

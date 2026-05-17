@@ -72,8 +72,9 @@ export interface ProStatus {
   error?: string;
 }
 
-export async function proCheckout(): Promise<ProCheckout> {
-  const r = await fetch("/api/pro/checkout", { cache: "no-store" });
+export async function proCheckout(ref?: string): Promise<ProCheckout> {
+  const qs = ref ? `?ref=${encodeURIComponent(ref)}` : "";
+  const r = await fetch(`/api/pro/checkout${qs}`, { cache: "no-store" });
   if (!r.ok) {
     let msg = `checkout ${r.status}`;
     try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
