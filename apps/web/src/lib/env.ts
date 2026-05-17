@@ -21,3 +21,9 @@ export const PRO_DURATION_MS = PRO_DURATION_DAYS * 24 * 60 * 60 * 1000;
 // Helius webhooks
 export const HELIUS_WEBHOOK_AUTH = process.env.HELIUS_WEBHOOK_AUTH ?? "";
 export const WEBHOOK_BASE_URL = process.env.WEBHOOK_BASE_URL ?? "";
+
+// PumpPortal server-side trading
+export const PUMPPORTAL_API_KEY = process.env.PUMPPORTAL_API_KEY ?? "";
+export const GEASS_WALLET_PUBKEY = process.env.GEASS_WALLET_PUBKEY ?? "";
+export const GEASS_WALLET_PRIVKEY = process.env.GEASS_WALLET_PRIVKEY ?? "";
+export const SOLANA_RPC = process.env.SOLANA_RPC ?? HELIUS_RPC;

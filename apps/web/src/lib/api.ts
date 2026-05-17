@@ -124,6 +124,33 @@ export async function fetchPortfolio(wallet: string): Promise<PortfolioResult> {
   return r.json();
 }
 
+export interface AutoSnipeResult {
+  signature: string;
+  wallet: string;
+  error?: string;
+}
+
+export async function autoSnipe(params: {
+  mint: string;
+  amount?: number;
+  slippage?: number;
+  priorityFee?: number;
+  pool?: string;
+  method?: "api" | "local";
+}): Promise<AutoSnipeResult> {
+  const r = await fetch("/api/pump/autosnipe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!r.ok) {
+    let msg = `autosnipe ${r.status}`;
+    try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
 export async function pumpIpfs(form: FormData): Promise<{ metadataUri: string }> {
   const r = await fetch("/api/pump/ipfs", { method: "POST", body: form });
   if (!r.ok) {
