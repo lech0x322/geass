@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Keypair, VersionedTransaction } from "@solana/web3.js";
 import { KOLS, NAV, TIER } from "@/lib/config";
 import { fmtAge, shortAddr } from "@/lib/utils";
-import { scan, fetchBalance, pumpTradeTx, pumpIpfs } from "@/lib/api";
+import { scan, fetchBalance, pumpTradeTx, pumpIpfs, fetchPortfolio, type PortfolioResult } from "@/lib/api";
 import { signAndSendBytes } from "@/lib/wallet";
 import { useGemStream } from "@/lib/useGemStream";
 import { useProStatus } from "@/lib/pro";
@@ -35,9 +35,13 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const pro = useProStatus(wallet);
+  const [portfolio, setPortfolio] = useState<PortfolioResult | null>(null);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
+  const [portfolioErr, setPortfolioErr] = useState("");
 
   // Launch state
   const [ct, setCt]           = useState({ name: "", sym: "", desc: "", img: "", devBuy: "0.5" });
+  const [ctFile, setCtFile]   = useState<File | null>(null);
   const [ctStep, setCtStep]   = useState<"form" | "done">("form");
   const [ctLoad, setCtLoad]   = useState(false);
   const [ctMsg, setCtMsg]     = useState("");
@@ -139,11 +143,11 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
       form.append("symbol", ct.sym.toUpperCase());
       form.append("description", ct.desc || ct.name);
       form.append("showName", "true");
-      if (ct.img) {
-        try {
-          const ir = await fetch(ct.img, { signal: AbortSignal.timeout(8_000) });
-          form.append("file", await ir.blob(), "img.png");
-        } catch { /* image is optional */ }
+      if (ctFile) {
+        form.append("file", ctFile, ctFile.name);
+      } else if (ct.img) {
+        // Server fetches the URL to avoid CORS issues
+        form.append("imageUrl", ct.img);
       }
       const meta = await pumpIpfs(form);
       setCtMsg("Creating on-chain...");
@@ -170,6 +174,18 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     }
     setCtLoad(false);
   };
+
+  // ── Portfolio ───────────────────────────────────────────────
+  const loadPortfolio = useCallback(async () => {
+    setPortfolioLoading(true); setPortfolioErr("");
+    try { setPortfolio(await fetchPortfolio(wallet)); }
+    catch (e) { setPortfolioErr(e instanceof Error ? e.message : String(e)); }
+    setPortfolioLoading(false);
+  }, [wallet]);
+
+  useEffect(() => {
+    if (tab === "pro" && pro.active && !portfolio && !portfolioLoading) loadPortfolio();
+  }, [tab, pro.active]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Stream status ───────────────────────────────────────────
   const detecting = stream.detecting;
@@ -454,9 +470,17 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                       style={{ width: "100%", background: "#09090b", border: "1px solid #27272a", borderRadius: 7, color: "#f4f4f5", padding: "9px 12px", fontSize: 11, outline: "none", resize: "vertical" }} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 4 }}>IMAGE URL</div>
-                    <input value={ct.img} onChange={e => setCt(p => ({ ...p, img: e.target.value }))} placeholder="https://..."
-                      style={{ width: "100%", background: "#09090b", border: "1px solid #27272a", borderRadius: 7, color: "#f4f4f5", padding: "9px 12px", fontSize: 11, outline: "none" }} />
+                    <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 4 }}>IMAGE</div>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "9px 12px", background: "#09090b", border: `1px solid ${ctFile ? "#10b981" : "#27272a"}`, borderRadius: 7 }}>
+                      <input type="file" accept="image/*" style={{ display: "none" }}
+                        onChange={e => { setCtFile(e.target.files?.[0] ?? null); setCt(p => ({ ...p, img: "" })); }} />
+                      <span style={{ fontSize: 11, color: ctFile ? "#10b981" : "#52525b" }}>{ctFile ? ctFile.name : "Upload file..."}</span>
+                      {ctFile && <button onClick={e => { e.preventDefault(); setCtFile(null); }} style={{ marginLeft: "auto", background: "transparent", border: "none", color: "#52525b", cursor: "pointer", fontSize: 12, lineHeight: 1 }}>✕</button>}
+                    </label>
+                    {!ctFile && (
+                      <input value={ct.img} onChange={e => setCt(p => ({ ...p, img: e.target.value }))} placeholder="or paste image URL..."
+                        style={{ width: "100%", marginTop: 6, background: "#09090b", border: "1px solid #27272a", borderRadius: 7, color: "#f4f4f5", padding: "9px 12px", fontSize: 11, outline: "none" }} />
+                    )}
                   </div>
                   <div style={{ background: "#111113", border: "1px solid #27272a", borderRadius: 8, padding: 12 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
@@ -479,7 +503,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   <div style={{ fontSize: 16, fontWeight: 800, color: "#10b981", marginBottom: 6 }}>Token Launched!</div>
                   <div style={{ fontSize: 11, color: "#52525b", marginBottom: 4 }}>${ct.sym.toUpperCase()} is live on Pump.fun</div>
                   <div style={{ fontSize: 10, color: "#3f3f46", marginBottom: 16 }}>{ctMsg}</div>
-                  <button onClick={() => { setCtStep("form"); setCt({ name: "", sym: "", desc: "", img: "", devBuy: "0.5" }); setCtMsg(""); }}
+                  <button onClick={() => { setCtStep("form"); setCt({ name: "", sym: "", desc: "", img: "", devBuy: "0.5" }); setCtMsg(""); setCtFile(null); }}
                     style={{ background: "#dc2626", border: "none", color: "#fff", padding: "8px 20px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                     Launch Another
                   </button>
@@ -513,6 +537,65 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   </div>
                 ))}
               </div>
+
+              {/* Portfolio Analytics — Pro only */}
+              {pro.active && (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#a855f7", letterSpacing: "1px" }}>PORTFOLIO ANALYTICS</span>
+                    <button onClick={loadPortfolio} disabled={portfolioLoading}
+                      style={{ fontSize: 9, padding: "3px 8px", borderRadius: 5, border: "1px solid #27272a", background: "transparent", color: "#52525b", cursor: portfolioLoading ? "wait" : "pointer" }}>
+                      {portfolioLoading ? "Loading..." : "↻ Refresh"}
+                    </button>
+                  </div>
+                  {portfolioErr && <div style={{ fontSize: 10, color: "#ef4444", marginBottom: 8 }}>{portfolioErr}</div>}
+                  {portfolio && (
+                    <>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 10 }}>
+                        {[
+                          { l: "SOL Balance", v: `${portfolio.sol.toFixed(4)} SOL`, c: "#10b981" },
+                          { l: "Tokens", v: String(portfolio.holdings.length), c: "#a855f7" },
+                          { l: "USD Value", v: portfolio.totalUsd !== null ? `$${portfolio.totalUsd.toFixed(2)}` : "—", c: "#eab308" },
+                        ].map(s => (
+                          <div key={s.l} style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 8, padding: "10px 12px" }}>
+                            <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 3 }}>{s.l}</div>
+                            <div style={{ fontSize: 13, fontWeight: 800, color: s.c }}>{s.v}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {portfolio.holdings.length > 0 && (
+                        <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 10, overflow: "hidden" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "6px 12px", borderBottom: "1px solid #18181b" }}>
+                            {["TOKEN", "AMOUNT", "VALUE"].map(h => (
+                              <span key={h} style={{ fontSize: 8, color: "#3f3f46", letterSpacing: "1px", fontWeight: 700 }}>{h}</span>
+                            ))}
+                          </div>
+                          {portfolio.holdings.slice(0, 15).map(h => (
+                            <div key={h.mint} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "7px 12px", borderBottom: "1px solid #0f0f0f", alignItems: "center" }}>
+                              <div>
+                                <div style={{ fontSize: 10, fontWeight: 700, color: "#f4f4f5" }}>{h.symbol}</div>
+                                <div style={{ fontSize: 8, color: "#3f3f46", fontFamily: "monospace" }}>{h.mint.slice(0, 8)}…</div>
+                              </div>
+                              <span style={{ fontSize: 10, color: "#d4d4d8" }}>
+                                {h.amount >= 1e6 ? `${(h.amount / 1e6).toFixed(2)}M` : h.amount >= 1e3 ? `${(h.amount / 1e3).toFixed(1)}k` : h.amount.toFixed(2)}
+                              </span>
+                              <span style={{ fontSize: 10, color: h.usdValue !== null ? "#eab308" : "#3f3f46" }}>
+                                {h.usdValue !== null ? `$${h.usdValue.toFixed(2)}` : "—"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {portfolio.holdings.length === 0 && (
+                        <div style={{ textAlign: "center", padding: "20px", color: "#3f3f46", fontSize: 11 }}>No token holdings found</div>
+                      )}
+                    </>
+                  )}
+                  {!portfolio && !portfolioLoading && !portfolioErr && (
+                    <div style={{ textAlign: "center", padding: "20px", color: "#3f3f46", fontSize: 11 }}>Loading portfolio...</div>
+                  )}
+                </div>
+              )}
 
               {pro.active ? (
                 <div style={{ background: "linear-gradient(135deg,#0f1f15,#0a1a12)", border: "1px solid #10b98150", borderRadius: 16, padding: "24px 20px", position: "relative", overflow: "hidden" }}>

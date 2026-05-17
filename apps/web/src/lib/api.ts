@@ -97,6 +97,32 @@ export async function proVerify(signature: string, wallet: string): Promise<ProS
   return r.json();
 }
 
+export interface HoldingRow {
+  mint: string;
+  symbol: string;
+  amount: number;
+  decimals: number;
+  usdValue: number | null;
+  priceUsd: number | null;
+}
+
+export interface PortfolioResult {
+  sol: number;
+  solUsd: number | null;
+  holdings: HoldingRow[];
+  totalUsd: number | null;
+}
+
+export async function fetchPortfolio(wallet: string): Promise<PortfolioResult> {
+  const r = await fetch(`/api/portfolio?wallet=${encodeURIComponent(wallet)}`, { cache: "no-store" });
+  if (!r.ok) {
+    let msg = `portfolio ${r.status}`;
+    try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
 export async function pumpIpfs(form: FormData): Promise<{ metadataUri: string }> {
   const r = await fetch("/api/pump/ipfs", { method: "POST", body: form });
   if (!r.ok) {
