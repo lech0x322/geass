@@ -7,6 +7,8 @@ interface PhantomProvider {
   publicKey?: { toString(): string };
   connect: () => Promise<{ publicKey: { toString(): string } }>;
   disconnect: () => Promise<void>;
+  signTransaction?: (tx: { serialize: () => Uint8Array }) => Promise<{ serialize: () => Uint8Array }>;
+  signAllTransactions?: (txs: { serialize: () => Uint8Array }[]) => Promise<{ serialize: () => Uint8Array }[]>;
   signAndSendTransaction?: (
     tx: { serialize: () => Uint8Array; serializeMessage: () => Uint8Array },
   ) => Promise<{ signature: string }>;
@@ -38,7 +40,6 @@ export async function connectPhantom(): Promise<string> {
 export async function signAndSendBytes(bytes: Uint8Array): Promise<string> {
   const p = getPhantom();
   if (!p) throw new Error("Phantom not found");
-  // Prefer the legacy request API which accepts a base64-serialized transaction.
   if (p.request) {
     try {
       const res = await p.request({
@@ -59,4 +60,36 @@ export async function signAndSendBytes(bytes: Uint8Array): Promise<string> {
     return res.signature;
   }
   throw new Error("Phantom signing API unavailable");
+}
+
+/**
+ * Sign multiple transactions with Phantom in a single user approval.
+ * Used for Jito bundle submissions where we need multiple signed txs.
+ * Returns base64-encoded serialized signed transactions.
+ */
+export async function signAllWithPhantom(txBytes: Uint8Array[]): Promise<string[]> {
+  const p = getPhantom();
+  if (!p) throw new Error("Phantom not found");
+
+  const fakeTxs = txBytes.map(bytes => ({
+    serialize: () => bytes,
+    serializeMessage: () => bytes,
+  }));
+
+  if (p.signAllTransactions) {
+    const signed = await p.signAllTransactions(fakeTxs);
+    return signed.map(tx => Buffer.from(tx.serialize()).toString("base64"));
+  }
+
+  // Fallback: sign one at a time
+  if (p.signTransaction) {
+    const results: string[] = [];
+    for (const fakeTx of fakeTxs) {
+      const signed = await p.signTransaction(fakeTx);
+      results.push(Buffer.from(signed.serialize()).toString("base64"));
+    }
+    return results;
+  }
+
+  throw new Error("Phantom signAllTransactions unavailable");
 }
