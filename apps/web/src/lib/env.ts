@@ -27,3 +27,7 @@ export const PUMPPORTAL_API_KEY = process.env.PUMPPORTAL_API_KEY ?? "";
 export const GEASS_WALLET_PUBKEY = process.env.GEASS_WALLET_PUBKEY ?? "";
 export const GEASS_WALLET_PRIVKEY = process.env.GEASS_WALLET_PRIVKEY ?? "";
 export const SOLANA_RPC = process.env.SOLANA_RPC ?? HELIUS_RPC;
+
+// Jito Block Engine
+export const JITO_BLOCK_ENGINE_URL = process.env.JITO_BLOCK_ENGINE_URL
+  ?? "https://mainnet.block-engine.jito.wtf";

@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Keypair, VersionedTransaction } from "@solana/web3.js";
 import { KOLS, NAV, TIER } from "@/lib/config";
 import { fmtAge, shortAddr } from "@/lib/utils";
-import { scan, fetchBalance, pumpTradeTx, pumpIpfs, fetchPortfolio, autoSnipe, type PortfolioResult, type AutoSnipeResult } from "@/lib/api";
+import { scan, fetchBalance, pumpTradeTx, pumpIpfs, fetchPortfolio, autoSnipe, jitoLaunchBundle, jitoSubmit, type PortfolioResult, type AutoSnipeResult } from "@/lib/api";
+import { signAllWithPhantom } from "@/lib/wallet";
 import { signAndSendBytes } from "@/lib/wallet";
 import { useGemStream } from "@/lib/useGemStream";
 import { useProStatus } from "@/lib/pro";
@@ -60,6 +61,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [ctStep, setCtStep]   = useState<"form" | "done">("form");
   const [ctLoad, setCtLoad]   = useState(false);
   const [ctMsg, setCtMsg]     = useState("");
+  const [ctJito, setCtJito]   = useState(true);
+  const [ctTip, setCtTip]     = useState("0.003");
+  const [ctJitoMode, setCtJitoMode] = useState<"phantom" | "server">("phantom");
 
   const newIdsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -179,38 +183,72 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     if (!ct.name || !ct.sym) { setCtMsg("Fill Name & Symbol"); return; }
     setCtLoad(true);
     try {
-      setCtMsg("Uploading metadata...");
-      const form = new FormData();
-      form.append("name", ct.name);
-      form.append("symbol", ct.sym.toUpperCase());
-      form.append("description", ct.desc || ct.name);
-      form.append("showName", "true");
-      if (ctFile) {
-        form.append("file", ctFile, ctFile.name);
-      } else if (ct.img) {
-        // Server fetches the URL to avoid CORS issues
-        form.append("imageUrl", ct.img);
+      if (ctJito) {
+        // ── Jito Bundle path ──────────────────────────────────────
+        setCtMsg("Uploading metadata…");
+        const result = await jitoLaunchBundle({
+          name:       ct.name,
+          symbol:     ct.sym,
+          description: ct.desc || ct.name,
+          devBuySol:  parseFloat(ct.devBuy) || 0,
+          tipSol:     parseFloat(ctTip) || 0.003,
+          file:       ctFile ?? undefined,
+          wallet:     ctJitoMode === "phantom" ? wallet : undefined,
+          server:     ctJitoMode === "server",
+        });
+
+        if (result.mode === "server") {
+          setCtMsg(`✓ Bundle ${result.bundleId.slice(0, 18)}… | ${result.mintPubkey.slice(0, 12)}…`);
+          setCtStep("done");
+          setCtLoad(false);
+          return;
+        }
+
+        // Phantom mode — sign create + buy txs
+        setCtMsg("Sign in Phantom (2 txs)…");
+        const createBytes = Buffer.from(result.createTxB64, "base64");
+        const buyBytes    = Buffer.from(result.buyTxB64, "base64");
+        const [signedCreateB64, signedBuyB64] = await signAllWithPhantom([
+          new Uint8Array(createBytes),
+          new Uint8Array(buyBytes),
+        ]);
+        setCtMsg("Submitting Jito bundle…");
+        const { bundleId } = await jitoSubmit([signedCreateB64, signedBuyB64]);
+        setCtMsg(`✓ Bundle ${bundleId.slice(0, 18)}… | ${result.mintPubkey.slice(0, 12)}…`);
+        setCtStep("done");
+      } else {
+        // ── Standard Phantom path ─────────────────────────────────
+        setCtMsg("Uploading metadata...");
+        const form = new FormData();
+        form.append("name", ct.name);
+        form.append("symbol", ct.sym.toUpperCase());
+        form.append("description", ct.desc || ct.name);
+        form.append("showName", "true");
+        if (ctFile) {
+          form.append("file", ctFile, ctFile.name);
+        } else if (ct.img) {
+          form.append("imageUrl", ct.img);
+        }
+        const meta = await pumpIpfs(form);
+        setCtMsg("Creating on-chain...");
+        const mintKp = Keypair.generate();
+        const bytes = await pumpTradeTx({
+          publicKey: wallet,
+          action: "create",
+          mint: mintKp.publicKey.toBase58(),
+          amount: parseFloat(ct.devBuy) || 0,
+          slippage: 10,
+          priorityFee: 0.0005,
+          pool: "pump",
+          tokenMetadata: { name: ct.name, symbol: ct.sym.toUpperCase(), uri: meta.metadataUri },
+        });
+        const tx = VersionedTransaction.deserialize(bytes);
+        tx.sign([mintKp]);
+        setCtMsg("Sign in Phantom...");
+        const sig = await signAndSendBytes(tx.serialize());
+        setCtMsg(`✓ Launched! TX: ${sig.slice(0, 18)}...`);
+        setCtStep("done");
       }
-      const meta = await pumpIpfs(form);
-      setCtMsg("Creating on-chain...");
-      const mintKp = Keypair.generate();
-      const bytes = await pumpTradeTx({
-        publicKey: wallet,
-        action: "create",
-        mint: mintKp.publicKey.toBase58(),
-        amount: parseFloat(ct.devBuy) || 0,
-        slippage: 10,
-        priorityFee: 0.0005,
-        pool: "pump",
-        tokenMetadata: { name: ct.name, symbol: ct.sym.toUpperCase(), uri: meta.metadataUri },
-      });
-      // Pre-sign with the mint keypair; Phantom will add the wallet signature
-      const tx = VersionedTransaction.deserialize(bytes);
-      tx.sign([mintKp]);
-      setCtMsg("Sign in Phantom...");
-      const sig = await signAndSendBytes(tx.serialize());
-      setCtMsg(`✓ Launched! TX: ${sig.slice(0, 18)}...`);
-      setCtStep("done");
     } catch (e) {
       setCtMsg("Error: " + (e instanceof Error ? e.message : String(e)));
     }
@@ -568,11 +606,47 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                     </div>
                     <input type="range" min="0" max="5" step="0.1" value={ct.devBuy} onChange={e => setCt(p => ({ ...p, devBuy: e.target.value }))} style={{ width: "100%" }} />
                   </div>
-                  {ctMsg && <div style={{ fontSize: 10, color: ctMsg.startsWith("✓") ? "#10b981" : "#f59e0b", textAlign: "center" }}>{ctMsg}</div>}
+                  {/* Jito Bundle toggle */}
+                  <div style={{ background: "#111113", border: `1px solid ${ctJito ? "#7c3aed40" : "#27272a"}`, borderRadius: 10, padding: "12px 14px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: ctJito ? 12 : 0 }}>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: ctJito ? "#a855f7" : "#71717a" }}>Use Jito Bundle <span style={{ fontSize: 8, background: "#10b98120", color: "#10b981", border: "1px solid #10b98140", padding: "1px 5px", borderRadius: 4, marginLeft: 4 }}>RECOMMENDED</span></div>
+                        <div style={{ fontSize: 9, color: "#52525b", marginTop: 1 }}>Atomic create + dev buy · anti-MEV · faster landing</div>
+                      </div>
+                      <button onClick={() => setCtJito(v => !v)}
+                        style={{ width: 40, height: 22, borderRadius: 11, border: "none", cursor: "pointer", position: "relative", background: ctJito ? "#a855f7" : "#27272a", transition: "background .2s", flexShrink: 0 }}>
+                        <span style={{ position: "absolute", top: 2, left: ctJito ? 20 : 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
+                      </button>
+                    </div>
+                    {ctJito && (
+                      <>
+                        <div style={{ display: "flex", gap: 5, marginBottom: 10 }}>
+                          {([["phantom", "Phantom signs"], ["server", "GEASS wallet"]] as ["phantom"|"server", string][]).map(([m, l]) => (
+                            <button key={m} onClick={() => setCtJitoMode(m)}
+                              style={{ flex: 1, padding: "6px 8px", borderRadius: 7, cursor: "pointer", fontSize: 9, fontWeight: 700,
+                                border: `1px solid ${ctJitoMode === m ? "#a855f7" : "#27272a"}`,
+                                background: ctJitoMode === m ? "#a855f712" : "transparent",
+                                color: ctJitoMode === m ? "#a855f7" : "#52525b" }}>{l}</button>
+                          ))}
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#52525b", marginBottom: 4 }}>
+                          <span>JITO TIP</span>
+                          <span style={{ color: "#a855f7", fontWeight: 700 }}>{parseFloat(ctTip).toFixed(4)} SOL</span>
+                        </div>
+                        <input type="range" min="0.001" max="0.01" step="0.0005" value={ctTip}
+                          onChange={e => setCtTip(e.target.value)} style={{ width: "100%" }} />
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8, color: "#3f3f46", marginTop: 2 }}>
+                          <span>0.001 — economical</span><span>0.01 — fastest</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {ctMsg && <div style={{ fontSize: 10, color: ctMsg.startsWith("✓") || ctMsg.startsWith("Bundle") ? "#10b981" : "#f59e0b", textAlign: "center" }}>{ctMsg}</div>}
                   <button onClick={launchToken} disabled={ctLoad || !ct.name || !ct.sym}
-                    style={{ background: "linear-gradient(135deg,#dc2626,#7c3aed)", border: "none", color: "#fff", padding: 11,
+                    style={{ background: ctJito ? "linear-gradient(135deg,#7c3aed,#a855f7)" : "linear-gradient(135deg,#dc2626,#7c3aed)", border: "none", color: "#fff", padding: 11,
                       borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: ctLoad ? "wait" : "pointer", letterSpacing: ".5px", opacity: (!ct.name || !ct.sym) ? 0.4 : 1 }}>
-                    {ctLoad ? <span className="pulse">⟳ Processing...</span> : "⚡ LAUNCH ON-CHAIN"}
+                    {ctLoad ? <span className="pulse">⟳ Processing...</span> : ctJito ? "⚡ LAUNCH VIA JITO BUNDLE" : "⚡ LAUNCH ON-CHAIN"}
                   </button>
                 </div>
               )}

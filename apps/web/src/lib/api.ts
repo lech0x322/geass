@@ -151,6 +151,98 @@ export async function autoSnipe(params: {
   return r.json();
 }
 
+// ── Jito Bundle API ──────────────────────────────────────────────────────────
+
+export interface JitoSnipeResult {
+  bundleId: string;
+  tipSol: number;
+  wallet: string;
+}
+
+/** Server-side Jito snipe using the GEASS wallet. */
+export async function jitoSnipe(params: {
+  mint: string;
+  amount?: number;
+  slippage?: number;
+  tipSol?: number;
+  pool?: string;
+}): Promise<JitoSnipeResult> {
+  const r = await fetch("/api/jito/snipe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!r.ok) {
+    let msg = `jito-snipe ${r.status}`;
+    try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+export interface JitoSubmitResult { bundleId: string }
+
+/** Submit pre-signed base64 transactions as a Jito bundle. */
+export async function jitoSubmit(base64Txs: string[]): Promise<JitoSubmitResult> {
+  const r = await fetch("/api/jito/submit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ transactions: base64Txs }),
+  });
+  if (!r.ok) {
+    let msg = `jito-submit ${r.status}`;
+    try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+export interface PhantomLaunchBundle {
+  mode:        "phantom";
+  mintPubkey:  string;
+  mintPrivB58: string;
+  createTxB64: string;
+  buyTxB64:    string;
+  metadataUri: string;
+}
+export interface ServerLaunchBundle {
+  mode:       "server";
+  bundleId:   string;
+  mintPubkey: string;
+  metadataUri: string;
+}
+export type LaunchBundleResult = PhantomLaunchBundle | ServerLaunchBundle;
+
+/** Build a Jito launch bundle. server=true uses GEASS wallet; otherwise returns txs for Phantom. */
+export async function jitoLaunchBundle(params: {
+  name:       string;
+  symbol:     string;
+  description?: string;
+  devBuySol:  number;
+  tipSol:     number;
+  file?:      File;
+  wallet?:    string;
+  server?:    boolean;
+}): Promise<LaunchBundleResult> {
+  const form = new FormData();
+  form.append("name",      params.name);
+  form.append("symbol",    params.symbol.toUpperCase());
+  form.append("description", params.description ?? params.name);
+  form.append("devBuySol", String(params.devBuySol));
+  form.append("tipSol",    String(params.tipSol));
+  if (params.wallet) form.append("wallet", params.wallet);
+  if (params.server) form.append("server", "true");
+  if (params.file)   form.append("file",   params.file, params.file.name);
+
+  const r = await fetch("/api/pump/launch-bundle", { method: "POST", body: form });
+  if (!r.ok) {
+    let msg = `launch-bundle ${r.status}`;
+    try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
 export async function pumpIpfs(form: FormData): Promise<{ metadataUri: string }> {
   const r = await fetch("/api/pump/ipfs", { method: "POST", body: form });
   if (!r.ok) {
