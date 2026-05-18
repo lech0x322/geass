@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Keypair, VersionedTransaction } from "@solana/web3.js";
 import { KOLS, NAV, TIER } from "@/lib/config";
 import { fmtAge, shortAddr } from "@/lib/utils";
@@ -22,7 +22,7 @@ interface Props {
 }
 
 export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
-  const [tab, setTab]         = useState<"trades" | "launch" | "gems" | "autosnipe" | "referral" | "pro">("trades");
+  const [tab, setTab]         = useState<"trades" | "launch" | "gems" | "autosnipe" | "referral" | "pro" | "settings">("trades");
   const [gems, setGems]       = useState<Gem[]>([]);
   const [loading, setLoading] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
@@ -39,6 +39,12 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [portfolio, setPortfolio] = useState<PortfolioResult | null>(null);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [portfolioErr, setPortfolioErr] = useState("");
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [soundGems, setSoundGems]   = useState(true);
+  const [soundKol, setSoundKol]     = useState(true);
+  const [solPrice, setSolPrice]     = useState<number | null>(null);
+  const [solChange, setSolChange]   = useState(0);
 
   // Auto-snipe state
   const [asEnabled, setAsEnabled]         = useState(false);
@@ -79,6 +85,21 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     return () => window.removeEventListener("resize", check);
   }, []);
 
+  // ── Sound helper ─────────────────────────────────────────────
+  function playBeep(freq1: number, freq2: number) {
+    try {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.frequency.setValueAtTime(freq1, ctx.currentTime);
+      osc.frequency.setValueAtTime(freq2, ctx.currentTime + 0.1);
+      osc.start(); osc.stop(ctx.currentTime + 0.35);
+    } catch {}
+  }
+
   // ── Real-time SSE stream ────────────────────────────────────
   const stream = useGemStream(true);
 
@@ -87,6 +108,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   useEffect(() => {
     asRef.current = { enabled: asEnabled, amount: asAmount, minScore: asMinScore, method: asMethod };
   }, [asEnabled, asAmount, asMinScore, asMethod]);
+
+  const soundRef = useRef({ gems: true, kol: true });
+  useEffect(() => { soundRef.current = { gems: soundGems, kol: soundKol }; }, [soundGems, soundKol]);
 
   useEffect(() => {
     if (!stream.newGems.length) return;
@@ -108,6 +132,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
       if (!source || source === "NONE") setSource("STREAM");
       return next;
     });
+    if (soundRef.current.gems && freshGems.length > 0) playBeep(880, 1320);
     stream.clear();
     // Auto-snipe newly detected gems if enabled
     const cfg = asRef.current;
@@ -285,6 +310,41 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     setTimeout(() => setRefCopied(false), 2000);
   };
 
+  // Load / persist sound prefs
+  useEffect(() => {
+    try {
+      const sg = localStorage.getItem("geass_sound_gems");
+      const sk = localStorage.getItem("geass_sound_kol");
+      if (sg !== null) setSoundGems(sg !== "0");
+      if (sk !== null) setSoundKol(sk !== "0");
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("geass_sound_gems", soundGems ? "1" : "0");
+      localStorage.setItem("geass_sound_kol",  soundKol  ? "1" : "0");
+    } catch {}
+  }, [soundGems, soundKol]);
+
+  useEffect(() => {
+    const load = () => fetch("/api/sol-price").then(r => r.json()).then((d: { price: number | null; change: number }) => {
+      if (d.price) setSolPrice(d.price);
+      setSolChange(d.change ?? 0);
+    }).catch(() => {});
+    load();
+    const id = setInterval(load, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // KOL sound trigger
+  const prevKolCount = useRef(0);
+  useEffect(() => {
+    if (feedTrades.length > prevKolCount.current && prevKolCount.current > 0) {
+      if (soundRef.current.kol) playBeep(660, 990);
+    }
+    prevKolCount.current = feedTrades.length;
+  }, [feedTrades.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Portfolio ───────────────────────────────────────────────
   const loadPortfolio = useCallback(async () => {
     setPortfolioLoading(true); setPortfolioErr("");
@@ -328,50 +388,72 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   // ── Sidebar content ─────────────────────────────────────────
   const sidebarContent = (
     <>
-      <div style={{ height: 56, display: "flex", alignItems: "center", padding: "0 14px", borderBottom: "1px solid #18181b", gap: 8 }}>
-        <GeassLogo size={28} />
-        <div>
-          <span style={{ fontWeight: 800, fontSize: 13, color: "#f4f4f5", letterSpacing: "1.5px" }}>GEASS</span>
-          <div style={{ fontSize: 8, color: "#3f3f46", letterSpacing: "2px", marginTop: -1 }}>ALPHA RECON</div>
-        </div>
-        {isMobile && (
+      {/* Header */}
+      <div style={{ height: 56, display: "flex", alignItems: "center", padding: sidebarCollapsed ? "0 10px" : "0 14px", borderBottom: "1px solid #18181b", gap: 8, flexShrink: 0, overflow: "hidden" }}>
+        <button onClick={() => { setTab("trades" as typeof tab); }} style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: 0, flex: 1, minWidth: 0 }}>
+          <GeassLogo size={28} />
+          {!sidebarCollapsed && (
+            <div style={{ overflow: "hidden" }}>
+              <span style={{ fontWeight: 800, fontSize: 13, color: "#f4f4f5", letterSpacing: "1.5px" }}>GEASS</span>
+              <div style={{ fontSize: 8, color: "#3f3f46", letterSpacing: "2px", marginTop: -1 }}>ALPHA RECON</div>
+            </div>
+          )}
+        </button>
+        {isMobile ? (
           <button onClick={() => setSidebarOpen(false)} style={{ marginLeft: "auto", background: "transparent", border: "none", color: "#52525b", fontSize: 18, cursor: "pointer", lineHeight: 1 }}>✕</button>
+        ) : (
+          <button onClick={() => setSidebarCollapsed(v => !v)}
+            style={{ marginLeft: "auto", background: "transparent", border: "1px solid #27272a", color: "#52525b", width: 22, height: 22, borderRadius: 5, cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            {sidebarCollapsed ? "›" : "‹"}
+          </button>
         )}
       </div>
+
+      {/* Nav */}
       <nav style={{ flex: 1, padding: "8px 6px", overflowY: "auto" }}>
         {NAV.map(n => (
           <button key={n.id} onClick={() => { setTab(n.id as typeof tab); setSidebarOpen(false); }}
-            style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 10px", borderRadius: 8,
+            title={sidebarCollapsed ? n.label : undefined}
+            style={{ width: "100%", display: "flex", alignItems: "center", gap: sidebarCollapsed ? 0 : 8, padding: sidebarCollapsed ? "9px 0" : "9px 10px", justifyContent: sidebarCollapsed ? "center" : "flex-start", borderRadius: 8,
               border: `1px solid ${tab === n.id ? (n.pro ? "#7c3aed40" : "#dc262640") : "transparent"}`,
               background: tab === n.id ? (n.pro ? "#7c3aed12" : "#dc262612") : "transparent",
               color: tab === n.id ? (n.pro ? "#a855f7" : "#ef4444") : n.pro ? "#6d4aab" : "#52525b",
-              cursor: "pointer", marginBottom: 2, fontSize: 11, fontWeight: tab === n.id ? 700 : 500, textAlign: "left" }}>
-            <span style={{ flex: 1 }}>{n.label}</span>
-            {n.badge && (
-              <span style={{ fontSize: 7, fontWeight: 700,
-                color: n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981",
-                background: (n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981") + "20",
-                border: `1px solid ${(n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981") + "40"}`,
-                padding: "1px 5px", borderRadius: 8 }}>
-                {n.badge}
-              </span>
+              cursor: "pointer", marginBottom: 2, fontSize: sidebarCollapsed ? 16 : 11, fontWeight: tab === n.id ? 700 : 500, textAlign: "left" }}>
+            <span>{n.icon}</span>
+            {!sidebarCollapsed && (
+              <>
+                <span style={{ flex: 1 }}>{n.label}</span>
+                {n.badge && (
+                  <span style={{ fontSize: 7, fontWeight: 700,
+                    color: n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981",
+                    background: (n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981") + "20",
+                    border: `1px solid ${(n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981") + "40"}`,
+                    padding: "1px 5px", borderRadius: 8 }}>
+                    {n.badge}
+                  </span>
+                )}
+              </>
             )}
           </button>
         ))}
       </nav>
-      <div style={{ padding: 8, borderTop: "1px solid #18181b", display: "flex", flexDirection: "column", gap: 6 }}>
-        {pro.active && (
+
+      {/* Footer */}
+      <div style={{ padding: sidebarCollapsed ? "8px 4px" : 8, borderTop: "1px solid #18181b", display: "flex", flexDirection: "column", gap: 6 }}>
+        {!sidebarCollapsed && pro.active && (
           <div style={{ padding: "5px 10px", background: "linear-gradient(135deg,#dc262615,#7c3aed20)", border: "1px solid #7c3aed40", borderRadius: 7, fontSize: 9, color: "#a855f7", fontWeight: 700, letterSpacing: ".5px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>👑 PRO ACTIVE</span>
             {pro.expiresAt && <span style={{ fontWeight: 500, opacity: .7 }}>{Math.max(0, Math.ceil((pro.expiresAt - Date.now()) / 86_400_000))}d</span>}
           </div>
         )}
-        <div style={{ padding: "6px 10px", background: "#10b98110", border: "1px solid #10b98130", borderRadius: 7, fontSize: 9, color: "#10b981" }}>
-          ✓ {shortAddr(wallet)}{wBal ? ` · ${wBal}◎` : ""}
-        </div>
-        <button onClick={onDisconnect}
-          style={{ width: "100%", padding: "6px 8px", borderRadius: 7, border: "1px solid #27272a", background: "transparent", color: "#52525b", fontSize: 9, fontWeight: 600, cursor: "pointer" }}>
-          Disconnect
+        {!sidebarCollapsed && (
+          <div style={{ padding: "6px 10px", background: "#10b98110", border: "1px solid #10b98130", borderRadius: 7, fontSize: 9, color: "#10b981" }}>
+            ✓ {shortAddr(wallet)}{wBal ? ` · ${wBal}◎` : ""}
+          </div>
+        )}
+        <button onClick={onDisconnect} title="Disconnect"
+          style={{ width: "100%", padding: sidebarCollapsed ? "6px" : "6px 8px", borderRadius: 7, border: "1px solid #27272a", background: "transparent", color: "#52525b", fontSize: sidebarCollapsed ? 14 : 9, fontWeight: 600, cursor: "pointer" }}>
+          {sidebarCollapsed ? "⏏" : "Disconnect"}
         </button>
       </div>
     </>
@@ -388,7 +470,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
       {/* Sidebar — desktop: always visible; mobile: drawer */}
       {!isMobile ? (
-        <aside style={{ width: 200, background: "#0c0c0e", borderRight: "1px solid #18181b", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+        <aside style={{ width: sidebarCollapsed ? 52 : 200, background: "#0c0c0e", borderRight: "1px solid #18181b", display: "flex", flexDirection: "column", flexShrink: 0, transition: "width .2s ease" }}>
           {sidebarContent}
         </aside>
       ) : (
@@ -409,9 +491,44 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
             <button onClick={() => setSidebarOpen(true)} style={{ background: "transparent", border: "1px solid #27272a", color: "#a1a1aa", width: 32, height: 32, borderRadius: 7, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>☰</button>
             <GeassLogo size={22} />
             <span style={{ fontWeight: 800, fontSize: 12, letterSpacing: "1.5px" }}>GEASS</span>
+            {solPrice && (
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: 10 }}>◎</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#f4f4f5" }}>${solPrice.toFixed(2)}</span>
+                {solChange !== 0 && <span style={{ fontSize: 9, color: solChange >= 0 ? "#10b981" : "#ef4444" }}>{solChange >= 0 ? "+" : ""}{solChange.toFixed(1)}%</span>}
+              </div>
+            )}
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 5 }}>
               {streamConnected && <div className="live-dot" style={{ background: statusColor }} />}
               <span style={{ fontSize: 8, color: statusColor, fontWeight: 600 }}>{statusLabel}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Ticker + SOL price strip — always visible */}
+        {gems.length > 0 && (
+          <div style={{ height: 32, borderBottom: "1px solid #18181b", background: "#0a0a0c", display: "flex", alignItems: "center", overflow: "hidden", flexShrink: 0, gap: 0 }}>
+            {/* SOL price — desktop only */}
+            {!isMobile && solPrice && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 14px", borderRight: "1px solid #18181b", flexShrink: 0, height: "100%" }}>
+                <span style={{ fontSize: 12 }}>◎</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: "#f4f4f5" }}>${solPrice.toFixed(2)}</span>
+                {solChange !== 0 && <span style={{ fontSize: 9, color: solChange >= 0 ? "#10b981" : "#ef4444", fontWeight: 600 }}>{solChange >= 0 ? "+" : ""}{solChange.toFixed(1)}%</span>}
+              </div>
+            )}
+            {/* Scrolling coin ticker */}
+            <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
+              <div className="ticker-track">
+                {[...gems, ...gems].map((g, i) => (
+                  <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap", fontSize: 10, color: "#52525b", cursor: "pointer", flexShrink: 0 }}
+                    onClick={() => setSnipeGem(g)}>
+                    <span style={{ fontWeight: 700, color: g.tier === "S_TIER" ? "#10b981" : g.tier === "A_TIER" ? "#3b82f6" : "#eab308" }}>${g.sym}</span>
+                    <span style={{ color: "#3f3f46" }}>{g.score}pts</span>
+                    {g.kol > 0 && <span style={{ color: "#a855f7", fontSize: 8 }}>KOL</span>}
+                    <span style={{ color: "#27272a" }}>·</span>
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -486,27 +603,67 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
               </div>
 
               {/* Grid */}
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
-                {loading && !gems.length && (
-                  <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "50px 20px" }}>
-                    <div style={{ fontSize: 18, color: "#dc2626", display: "inline-block" }} className="spin">⊗</div>
-                    <div className="pulse" style={{ fontSize: 11, color: "#dc262680", marginTop: 10, letterSpacing: "2px" }}>SCANNING SOLANA MATRIX...</div>
+              {!pro.active && gems.length > 0 ? (
+                <div style={{ position: "relative" }}>
+                  {/* Preview — first 3 visible */}
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill,minmax(280px,1fr))", gap: 12, marginBottom: 0 }}>
+                    {loading && !gems.length && (
+                      <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "50px 20px" }}>
+                        <div style={{ fontSize: 18, color: "#dc2626", display: "inline-block" }} className="spin">⊗</div>
+                        <div className="pulse" style={{ fontSize: 11, color: "#dc262680", marginTop: 10, letterSpacing: "2px" }}>SCANNING SOLANA MATRIX...</div>
+                      </div>
+                    )}
+                    {filtered.slice(0, 3).map(g => <GemCard key={g.id} gem={g} isNew={newIds.has(g.id)} onSnipe={setSnipeGem} />)}
                   </div>
-                )}
-                {filtered.map(g => <GemCard key={g.id} gem={g} isNew={newIds.has(g.id)} onSnipe={setSnipeGem} />)}
-                {!loading && gems.length > 0 && filtered.length === 0 && (
-                  <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: "#3f3f46" }}>
-                    <div style={{ fontSize: 24, marginBottom: 6 }}>🔍</div>
-                    <div style={{ fontSize: 12 }}>No gems match filters — try lowering Min Score</div>
-                  </div>
-                )}
-                {!loading && !gems.length && (
-                  <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: "#3f3f46" }}>
-                    <div style={{ fontSize: 24, marginBottom: 6 }}>⏳</div>
-                    <div style={{ fontSize: 12 }}>Waiting for the first signals from pump.fun...</div>
-                  </div>
-                )}
-              </div>
+                  {/* Blurred locked section */}
+                  {filtered.length > 3 && (
+                    <div style={{ position: "relative", marginTop: 12 }}>
+                      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill,minmax(280px,1fr))", gap: 12, filter: "blur(6px)", pointerEvents: "none", userSelect: "none", opacity: 0.5 }}>
+                        {filtered.slice(3, 9).map(g => <GemCard key={g.id} gem={g} isNew={false} onSnipe={() => {}} />)}
+                      </div>
+                      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
+                        <div style={{ background: "linear-gradient(135deg,#14101f,#0d0d12)", border: "1px solid #7c3aed60", borderRadius: 20, padding: "28px 36px", textAlign: "center", backdropFilter: "blur(8px)" }}>
+                          <div style={{ fontSize: 36, marginBottom: 8 }}>🔒</div>
+                          <div style={{ fontSize: 16, fontWeight: 800, color: "#f4f4f5", marginBottom: 6 }}>{filtered.length - 3} more signals locked</div>
+                          <div style={{ fontSize: 11, color: "#71717a", marginBottom: 20, maxWidth: 260, lineHeight: 1.6 }}>Full Alpha Scanner access — all signals, real-time — with GEASS Pro.</div>
+                          <button onClick={() => setTab("pro" as typeof tab)}
+                            style={{ padding: "10px 28px", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 0 24px #7c3aed40" }}>
+                            👑 Upgrade to GEASS Pro
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {!loading && gems.length > 0 && filtered.length === 0 && (
+                    <div style={{ textAlign: "center", padding: 40, color: "#3f3f46" }}>
+                      <div style={{ fontSize: 24, marginBottom: 6 }}>🔍</div>
+                      <div style={{ fontSize: 12 }}>No gems match filters — try lowering Min Score</div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
+                  {loading && !gems.length && (
+                    <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "50px 20px" }}>
+                      <div style={{ fontSize: 18, color: "#dc2626", display: "inline-block" }} className="spin">⊗</div>
+                      <div className="pulse" style={{ fontSize: 11, color: "#dc262680", marginTop: 10, letterSpacing: "2px" }}>SCANNING SOLANA MATRIX...</div>
+                    </div>
+                  )}
+                  {filtered.map(g => <GemCard key={g.id} gem={g} isNew={newIds.has(g.id)} onSnipe={setSnipeGem} />)}
+                  {!loading && gems.length > 0 && filtered.length === 0 && (
+                    <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: "#3f3f46" }}>
+                      <div style={{ fontSize: 24, marginBottom: 6 }}>🔍</div>
+                      <div style={{ fontSize: 12 }}>No gems match filters — try lowering Min Score</div>
+                    </div>
+                  )}
+                  {!loading && !gems.length && (
+                    <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: "#3f3f46" }}>
+                      <div style={{ fontSize: 24, marginBottom: 6 }}>⏳</div>
+                      <div style={{ fontSize: 12 }}>Waiting for the first signals from pump.fun...</div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -884,6 +1041,69 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 </div>
               </div>
 
+            </div>
+          )}
+
+          {/* SETTINGS TAB */}
+          {tab === "settings" && (
+            <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px", maxWidth: 560 }}>
+              <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", marginBottom: 4 }}>⚙️ Settings</h1>
+              <p style={{ fontSize: 11, color: "#3f3f46", marginBottom: 24 }}>Configure your GEASS experience</p>
+
+              {/* Sounds */}
+              <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 16px", marginBottom: 16 }}>
+                <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 14 }}>🔊 SOUND ALERTS</div>
+                {([
+                  [soundGems, setSoundGems, "New Gem Detected", "Plays a chime when a new token is detected by the Alpha Scanner"],
+                  [soundKol,  setSoundKol,  "KOL Trade Alert",  "Plays a tone when a tracked KOL wallet makes a new trade"],
+                ] as [boolean, React.Dispatch<React.SetStateAction<boolean>>, string, string][]).map(([val, set, label, desc]) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#e2d9f3" }}>{label}</div>
+                      <div style={{ fontSize: 10, color: "#52525b", marginTop: 2 }}>{desc}</div>
+                    </div>
+                    <button onClick={() => set(v => !v)}
+                      style={{ width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", position: "relative", background: val ? "#10b981" : "#27272a", transition: "background .2s", flexShrink: 0 }}>
+                      <span style={{ position: "absolute", top: 2, left: val ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Referral quick section */}
+              <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 16px", marginBottom: 16 }}>
+                <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 14 }}>👥 REFERRAL</div>
+                <div style={{ fontSize: 11, color: "#71717a", marginBottom: 10, lineHeight: 1.6 }}>
+                  Share your link — earn <span style={{ color: "#a855f7", fontWeight: 700 }}>1 free Pro month</span> for every 3 paid referrals.
+                </div>
+                <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                  <div style={{ flex: 1, background: "#09090b", border: "1px solid #7c3aed50", borderRadius: 9, padding: "10px 12px", fontFamily: "monospace", fontSize: 10, color: "#a855f7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {refLink || `https://geass.app/?ref=${refCode}`}
+                  </div>
+                  <button onClick={copyRefLink}
+                    style={{ padding: "0 16px", borderRadius: 9, border: "none", fontWeight: 700, fontSize: 11, cursor: "pointer", background: refCopied ? "#10b981" : "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", whiteSpace: "nowrap" }}>
+                    {refCopied ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+                <button onClick={() => setTab("referral" as typeof tab)} style={{ fontSize: 10, color: "#a855f7", background: "transparent", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}>
+                  View full referral stats →
+                </button>
+              </div>
+
+              {/* Wallet info */}
+              <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 16px" }}>
+                <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 14 }}>◎ WALLET</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: "#a1a1aa", fontFamily: "monospace" }}>{shortAddr(wallet)}</div>
+                    {wBal && <div style={{ fontSize: 10, color: "#3f3f46" }}>{wBal} SOL balance</div>}
+                  </div>
+                  <button onClick={onDisconnect}
+                    style={{ padding: "6px 14px", borderRadius: 7, border: "1px solid #ef444430", background: "#ef444408", color: "#ef4444", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
+                    Disconnect
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
