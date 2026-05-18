@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { GeassLogo } from "./GeassLogo";
 
 interface Props {
@@ -32,13 +32,22 @@ const STATS = [
 
 export function LandingPage({ onConnect, connecting }: Props) {
   const [connectError, setConnectError] = useState("");
+  const [connectHint, setConnectHint] = useState("");
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleConnect = async () => {
     setConnectError("");
+    setConnectHint("");
+    if (hintTimer.current) clearTimeout(hintTimer.current);
+    // After 2 s still connecting, prompt user to check the Phantom popup
+    hintTimer.current = setTimeout(() => setConnectHint("👻 Open your Phantom extension — it's waiting for approval"), 2000);
     try {
       await onConnect();
     } catch (e) {
       setConnectError(e instanceof Error ? e.message : "Connection failed");
+    } finally {
+      if (hintTimer.current) clearTimeout(hintTimer.current);
+      setConnectHint("");
     }
   };
 
@@ -53,10 +62,13 @@ export function LandingPage({ onConnect, connecting }: Props) {
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <a href="#pricing" style={{ fontSize: 11, color: "#52525b", textDecoration: "none", padding: "4px 8px" }}>Pricing</a>
-          <button onClick={handleConnect} disabled={connecting}
-            style={{ padding: "7px 16px", borderRadius: 8, border: "1px solid #dc262640", background: "#dc262612", color: "#ef4444", fontSize: 11, fontWeight: 700, cursor: connecting ? "wait" : "pointer", letterSpacing: ".5px" }}>
-            {connecting ? "Connecting..." : "Enter GEASS →"}
-          </button>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+            <button onClick={handleConnect} disabled={connecting}
+              style={{ padding: "7px 16px", borderRadius: 8, border: "1px solid #dc262640", background: "#dc262612", color: "#ef4444", fontSize: 11, fontWeight: 700, cursor: connecting ? "wait" : "pointer", letterSpacing: ".5px" }}>
+              {connecting ? "Connecting..." : "Enter GEASS →"}
+            </button>
+            {connectError && <div style={{ fontSize: 9, color: "#ef4444", maxWidth: 180, textAlign: "right" }}>{connectError}</div>}
+          </div>
         </div>
       </nav>
 
@@ -81,8 +93,11 @@ export function LandingPage({ onConnect, connecting }: Props) {
             {connecting ? "Connecting wallet..." : "◎ Connect Phantom — Enter GEASS"}
           </button>
         </div>
+        {connectHint && (
+          <div style={{ marginTop: 12, fontSize: 12, color: "#f59e0b", fontWeight: 600 }}>{connectHint}</div>
+        )}
         {connectError && (
-          <div style={{ marginTop: 12, fontSize: 11, color: "#ef4444" }}>{connectError}</div>
+          <div style={{ marginTop: 8, fontSize: 11, color: "#ef4444" }}>{connectError}</div>
         )}
         <p style={{ marginTop: 12, fontSize: 10, color: "#3f3f46" }}>No registration needed · Sign with your Phantom wallet · Free to start</p>
       </section>

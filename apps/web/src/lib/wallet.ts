@@ -51,8 +51,15 @@ export async function connectPhantom(): Promise<string> {
   const p = await waitForPhantom(2000);
 
   if (!p) {
+    // On mobile, redirect to Phantom's in-app browser
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile) {
+      const url = encodeURIComponent(window.location.href);
+      window.location.href = `https://phantom.app/ul/browse/${url}?ref=${url}`;
+      throw new Error("Opening Phantom browser…");
+    }
     window.open("https://phantom.app", "_blank");
-    throw new Error("Phantom wallet not found. Please install Phantom and refresh.");
+    throw new Error("Phantom not found. Install the Phantom extension and refresh the page.");
   }
 
   // If already connected, return immediately
@@ -61,7 +68,7 @@ export async function connectPhantom(): Promise<string> {
   // Wrap in a 30-second timeout so the UI never gets stuck forever
   const connectPromise = p.connect();
   const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("Connection timeout — check Phantom popup")), 30_000),
+    setTimeout(() => reject(new Error("No response from Phantom — click the Phantom icon in your browser toolbar, then try again")), 15_000),
   );
 
   const r = await Promise.race([connectPromise, timeoutPromise]);
