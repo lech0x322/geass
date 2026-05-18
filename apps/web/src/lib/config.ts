@@ -17,7 +17,7 @@ export const TIER: Record<string, { l: string; c: string }> = {
   RUGGED: { l: "RUG", c: "#6b7280" },
 };
 
-export type NavId = "trades" | "launch" | "gems" | "referral" | "pro" | "autosnipe";
+export type NavId = "trades" | "launch" | "gems" | "referral" | "pro" | "autosnipe" | "settings";
 
 export interface NavItem {
   id: NavId;
@@ -25,15 +25,17 @@ export interface NavItem {
   badge?: string;
   /** Render in Pro purple theme */
   pro?: boolean;
+  icon: string;
 }
 
 export const NAV: NavItem[] = [
-  { id: "trades",    label: "Realtime Trades",  badge: "LIVE" },
-  { id: "launch",    label: "Launch" },
-  { id: "gems",      label: "Alpha Scanner",    badge: "PRO",  pro: true },
-  { id: "autosnipe", label: "Auto-Snipe",       badge: "NEW",  pro: true },
-  { id: "referral",  label: "Referral",         badge: "NEW" },
-  { id: "pro",       label: "GEASS Pro",        pro: true },
+  { id: "trades",    label: "Realtime Trades",  badge: "LIVE", icon: "📡" },
+  { id: "launch",    label: "Launch",           icon: "🚀" },
+  { id: "gems",      label: "Alpha Scanner",    badge: "PRO",  pro: true, icon: "⚡" },
+  { id: "autosnipe", label: "Auto-Snipe",       badge: "NEW",  pro: true, icon: "🎯" },
+  { id: "referral",  label: "Referral",         badge: "NEW",  icon: "👥" },
+  { id: "settings",  label: "Settings",         icon: "⚙️" },
+  { id: "pro",       label: "GEASS Pro",        pro: true,     icon: "👑" },
 ];
 
 export const toB64 = (arr: Uint8Array): string => {
