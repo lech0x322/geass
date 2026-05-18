@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Keypair, VersionedTransaction } from "@solana/web3.js";
 import { KOLS, NAV, TIER } from "@/lib/config";
 import { fmtAge, shortAddr } from "@/lib/utils";
@@ -1041,6 +1041,69 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 </div>
               </div>
 
+            </div>
+          )}
+
+          {/* SETTINGS TAB */}
+          {tab === "settings" && (
+            <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px", maxWidth: 560 }}>
+              <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", marginBottom: 4 }}>⚙️ Settings</h1>
+              <p style={{ fontSize: 11, color: "#3f3f46", marginBottom: 24 }}>Configure your GEASS experience</p>
+
+              {/* Sounds */}
+              <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 16px", marginBottom: 16 }}>
+                <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 14 }}>🔊 SOUND ALERTS</div>
+                {([
+                  [soundGems, setSoundGems, "New Gem Detected", "Plays a chime when a new token is detected by the Alpha Scanner"],
+                  [soundKol,  setSoundKol,  "KOL Trade Alert",  "Plays a tone when a tracked KOL wallet makes a new trade"],
+                ] as [boolean, React.Dispatch<React.SetStateAction<boolean>>, string, string][]).map(([val, set, label, desc]) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#e2d9f3" }}>{label}</div>
+                      <div style={{ fontSize: 10, color: "#52525b", marginTop: 2 }}>{desc}</div>
+                    </div>
+                    <button onClick={() => set(v => !v)}
+                      style={{ width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", position: "relative", background: val ? "#10b981" : "#27272a", transition: "background .2s", flexShrink: 0 }}>
+                      <span style={{ position: "absolute", top: 2, left: val ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Referral quick section */}
+              <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 16px", marginBottom: 16 }}>
+                <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 14 }}>👥 REFERRAL</div>
+                <div style={{ fontSize: 11, color: "#71717a", marginBottom: 10, lineHeight: 1.6 }}>
+                  Share your link — earn <span style={{ color: "#a855f7", fontWeight: 700 }}>1 free Pro month</span> for every 3 paid referrals.
+                </div>
+                <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                  <div style={{ flex: 1, background: "#09090b", border: "1px solid #7c3aed50", borderRadius: 9, padding: "10px 12px", fontFamily: "monospace", fontSize: 10, color: "#a855f7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {refLink || `https://geass.app/?ref=${refCode}`}
+                  </div>
+                  <button onClick={copyRefLink}
+                    style={{ padding: "0 16px", borderRadius: 9, border: "none", fontWeight: 700, fontSize: 11, cursor: "pointer", background: refCopied ? "#10b981" : "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", whiteSpace: "nowrap" }}>
+                    {refCopied ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+                <button onClick={() => setTab("referral" as typeof tab)} style={{ fontSize: 10, color: "#a855f7", background: "transparent", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}>
+                  View full referral stats →
+                </button>
+              </div>
+
+              {/* Wallet info */}
+              <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 16px" }}>
+                <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 14 }}>◎ WALLET</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: "#a1a1aa", fontFamily: "monospace" }}>{shortAddr(wallet)}</div>
+                    {wBal && <div style={{ fontSize: 10, color: "#3f3f46" }}>{wBal} SOL balance</div>}
+                  </div>
+                  <button onClick={onDisconnect}
+                    style={{ padding: "6px 14px", borderRadius: 7, border: "1px solid #ef444430", background: "#ef444408", color: "#ef4444", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
+                    Disconnect
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
