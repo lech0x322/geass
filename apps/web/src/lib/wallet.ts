@@ -68,7 +68,7 @@ export async function connectPhantom(): Promise<string> {
   // Wrap in a 30-second timeout so the UI never gets stuck forever
   const connectPromise = p.connect();
   const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("Timed out — please check your Phantom popup and try again")), 30_000),
+    setTimeout(() => reject(new Error("No response from Phantom — click the Phantom icon in your browser toolbar, then try again")), 15_000),
   );
 
   const r = await Promise.race([connectPromise, timeoutPromise]);
