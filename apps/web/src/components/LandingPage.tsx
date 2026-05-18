@@ -53,10 +53,13 @@ export function LandingPage({ onConnect, connecting }: Props) {
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <a href="#pricing" style={{ fontSize: 11, color: "#52525b", textDecoration: "none", padding: "4px 8px" }}>Pricing</a>
-          <button onClick={handleConnect} disabled={connecting}
-            style={{ padding: "7px 16px", borderRadius: 8, border: "1px solid #dc262640", background: "#dc262612", color: "#ef4444", fontSize: 11, fontWeight: 700, cursor: connecting ? "wait" : "pointer", letterSpacing: ".5px" }}>
-            {connecting ? "Connecting..." : "Enter GEASS →"}
-          </button>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+            <button onClick={handleConnect} disabled={connecting}
+              style={{ padding: "7px 16px", borderRadius: 8, border: "1px solid #dc262640", background: "#dc262612", color: "#ef4444", fontSize: 11, fontWeight: 700, cursor: connecting ? "wait" : "pointer", letterSpacing: ".5px" }}>
+              {connecting ? "Connecting..." : "Enter GEASS →"}
+            </button>
+            {connectError && <div style={{ fontSize: 9, color: "#ef4444", maxWidth: 180, textAlign: "right" }}>{connectError}</div>}
+          </div>
         </div>
       </nav>
 
