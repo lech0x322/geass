@@ -243,6 +243,43 @@ export async function jitoLaunchBundle(params: {
   return r.json();
 }
 
+// ── DEX Screener Trending ────────────────────────────────────────────────────
+
+export interface TrendingToken {
+  address:       string;
+  symbol:        string;
+  name:          string;
+  priceUsd:      number | null;
+  priceChange24: number | null;
+  volume24:      number | null;
+  liquidity:     number | null;
+  marketCap:     number | null;
+  icon:          string | null;
+  boostAmount:   number;
+  dexUrl:        string;
+}
+
+export interface TrendingMeta {
+  name:        string;
+  slug:        string;
+  icon:        { type: string; value: string } | null;
+  marketCap:   number;
+  volume:      number;
+  liquidity:   number;
+  tokenCount:  number;
+  mcChange24:  number;
+}
+
+export async function fetchTrending(): Promise<{ tokens: TrendingToken[]; metas: TrendingMeta[] }> {
+  try {
+    const r = await fetch("/api/dex/trending", { cache: "no-store" });
+    if (!r.ok) return { tokens: [], metas: [] };
+    return r.json();
+  } catch {
+    return { tokens: [], metas: [] };
+  }
+}
+
 export async function pumpIpfs(form: FormData): Promise<{ metadataUri: string }> {
   const r = await fetch("/api/pump/ipfs", { method: "POST", body: form });
   if (!r.ok) {
