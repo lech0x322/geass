@@ -280,6 +280,40 @@ export async function fetchTrending(): Promise<{ tokens: TrendingToken[]; metas:
   }
 }
 
+// ── Helius Enhanced Transactions (client) ───────────────────────────────────
+
+import type { HeliusEnhancedTransaction } from "@/types/helius";
+
+/** Parse a batch of signatures into enhanced transactions. */
+export async function heliusParseTxs(signatures: string[]): Promise<HeliusEnhancedTransaction[]> {
+  if (!signatures.length) return [];
+  const r = await fetch("/api/helius/parse", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ signatures }),
+  });
+  if (!r.ok) return [];
+  const d = await r.json() as { transactions?: HeliusEnhancedTransaction[] };
+  return d.transactions ?? [];
+}
+
+/** Fetch parsed transaction history for an address. */
+export async function heliusHistory(
+  address: string,
+  opts: { limit?: number; before?: string; until?: string; type?: string } = {},
+): Promise<HeliusEnhancedTransaction[]> {
+  const qs = new URLSearchParams();
+  if (opts.limit)  qs.set("limit",  String(opts.limit));
+  if (opts.before) qs.set("before", opts.before);
+  if (opts.until)  qs.set("until",  opts.until);
+  if (opts.type)   qs.set("type",   opts.type);
+  const url = `/api/helius/history/${encodeURIComponent(address)}${qs.toString() ? `?${qs}` : ""}`;
+  const r = await fetch(url, { cache: "no-store" });
+  if (!r.ok) return [];
+  const d = await r.json() as { transactions?: HeliusEnhancedTransaction[] };
+  return d.transactions ?? [];
+}
+
 export async function pumpIpfs(form: FormData): Promise<{ metadataUri: string }> {
   const r = await fetch("/api/pump/ipfs", { method: "POST", body: form });
   if (!r.ok) {
