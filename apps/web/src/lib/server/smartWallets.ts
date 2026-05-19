@@ -1,4 +1,5 @@
 import "server-only";
+import { redis } from "./redis";
 
 /**
  * Auto-discovered "smart wallet" registry.
@@ -7,63 +8,89 @@ import "server-only";
  * swap updates per-wallet stats; wallets that cross the SMART_WALLET_*
  * thresholds are promoted to "detected KOLs" and surfaced in the KOL feed.
  *
- * In-memory only — restart loses state. Swap for Redis/Postgres for prod.
+ * Persistence: Redis (Upstash) when env vars are present; falls back to
+ * in-memory for local dev / cold starts without Redis configured.
  */
 
 export const PUMP_PROGRAM = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
 
 export const SMART_WALLET_MIN_TRADE_SOL = 0.1;
 export const SMART_WALLET_MIN_VOLUME_SOL = 10;
-export const SMART_WALLET_MIN_TRADES = 5;
-export const SMART_WALLET_MIN_WINRATE = 0.55;
+export const SMART_WALLET_MIN_TRADES     = 5;
+export const SMART_WALLET_MIN_WINRATE    = 0.55;
 
-interface Position {
-  /** Total SOL spent acquiring this mint (cost basis). */
+/** TTL for wallet stats in Redis: 30 days of inactivity expires them. */
+const REDIS_TTL_SECONDS = 60 * 60 * 24 * 30;
+const REDIS_HASH_KEY = "geass:smart_wallets";
+
+// ── Serializable shape stored in Redis ──────────────────────────────────────
+
+interface PersistedPosition {
   costSol: number;
-  /** Token units still held (raw, no decimals adjustment). */
   tokens: number;
 }
 
-export interface WalletStats {
+interface PersistedStats {
   addr: string;
   buys: number;
   sells: number;
   volumeSol: number;
   realizedPnlSol: number;
-  /** Trades that closed in profit (realizedPnl > 0). */
   wins: number;
-  /** Trades that closed (sells). */
   closed: number;
-  mints: Set<string>;
+  /** mint → position */
+  positions: Record<string, PersistedPosition>;
+  mints: string[];          // stored as array; deduped on load
   firstSeen: number;
   lastSeen: number;
-  positions: Map<string, Position>;
 }
 
-const wallets = new Map<string, WalletStats>();
-const MAX_WALLETS = 5000;
+// ── In-memory hot cache (reduces Redis round-trips per request) ──────────────
 
-function getOrCreate(addr: string): WalletStats {
-  let s = wallets.get(addr);
-  if (!s) {
-    if (wallets.size >= MAX_WALLETS) {
-      // Evict the least-recently-seen wallet to bound memory.
-      let oldestAddr = "";
-      let oldest = Infinity;
-      for (const [k, v] of wallets) {
-        if (v.lastSeen < oldest) { oldest = v.lastSeen; oldestAddr = k; }
-      }
-      if (oldestAddr) wallets.delete(oldestAddr);
-    }
-    s = {
-      addr, buys: 0, sells: 0, volumeSol: 0, realizedPnlSol: 0,
-      wins: 0, closed: 0, mints: new Set(), firstSeen: Date.now(), lastSeen: Date.now(),
-      positions: new Map(),
-    };
-    wallets.set(addr, s);
+const hotCache = new Map<string, PersistedStats>();
+const MAX_HOT  = 2000;
+// Evict the oldest entry when the cache is full.
+function hotEvict() {
+  if (hotCache.size < MAX_HOT) return;
+  let oldestKey = "";
+  let oldest = Infinity;
+  for (const [k, v] of hotCache) {
+    if (v.lastSeen < oldest) { oldest = v.lastSeen; oldestKey = k; }
   }
-  return s;
+  if (oldestKey) hotCache.delete(oldestKey);
 }
+
+async function load(addr: string): Promise<PersistedStats> {
+  if (hotCache.has(addr)) return hotCache.get(addr)!;
+
+  if (redis.available()) {
+    const raw = await redis.hget<string>(REDIS_HASH_KEY, addr);
+    if (raw) {
+      const parsed: PersistedStats = typeof raw === "string" ? JSON.parse(raw) : raw;
+      hotCache.set(addr, parsed);
+      return parsed;
+    }
+  }
+
+  const fresh: PersistedStats = {
+    addr, buys: 0, sells: 0, volumeSol: 0, realizedPnlSol: 0,
+    wins: 0, closed: 0, positions: {}, mints: [],
+    firstSeen: Date.now(), lastSeen: Date.now(),
+  };
+  return fresh;
+}
+
+async function save(s: PersistedStats): Promise<void> {
+  hotEvict();
+  hotCache.set(s.addr, s);
+  if (redis.available()) {
+    await redis.hset(REDIS_HASH_KEY, s.addr, s);
+    // Refresh top-level TTL so inactive wallets expire eventually.
+    await redis.set(`${REDIS_HASH_KEY}:ttl`, Date.now(), REDIS_TTL_SECONDS);
+  }
+}
+
+// ── Public types ─────────────────────────────────────────────────────────────
 
 export interface PumpTradeEvent {
   wallet: string;
@@ -72,51 +99,6 @@ export interface PumpTradeEvent {
   solAmount: number;
   tokenAmount: number;
   ts: number;
-}
-
-/** Record a pump.fun swap and return updated stats. */
-export function recordTrade(ev: PumpTradeEvent): WalletStats | null {
-  if (ev.solAmount < SMART_WALLET_MIN_TRADE_SOL) return null;
-  const s = getOrCreate(ev.wallet);
-  s.lastSeen = ev.ts;
-  s.volumeSol += ev.solAmount;
-  s.mints.add(ev.mint);
-
-  const pos = s.positions.get(ev.mint) ?? { costSol: 0, tokens: 0 };
-
-  if (ev.side === "buy") {
-    s.buys++;
-    pos.costSol += ev.solAmount;
-    pos.tokens += ev.tokenAmount;
-  } else {
-    s.sells++;
-    s.closed++;
-    if (pos.tokens > 0) {
-      const fraction = Math.min(ev.tokenAmount / pos.tokens, 1);
-      const costBasis = pos.costSol * fraction;
-      const pnl = ev.solAmount - costBasis;
-      s.realizedPnlSol += pnl;
-      if (pnl > 0) s.wins++;
-      pos.costSol -= costBasis;
-      pos.tokens = Math.max(0, pos.tokens - ev.tokenAmount);
-    } else {
-      // Sold without a tracked entry — treat as pure gain (we didn't see the buy).
-      s.realizedPnlSol += ev.solAmount;
-      s.wins++;
-    }
-  }
-
-  s.positions.set(ev.mint, pos);
-  return s;
-}
-
-export function isSmartWallet(s: WalletStats): boolean {
-  const trades = s.buys + s.sells;
-  if (s.volumeSol < SMART_WALLET_MIN_VOLUME_SOL) return false;
-  if (trades < SMART_WALLET_MIN_TRADES) return false;
-  if (s.closed === 0) return trades >= SMART_WALLET_MIN_TRADES * 2; // pre-PnL phase: require more activity
-  const winRate = s.wins / s.closed;
-  return winRate >= SMART_WALLET_MIN_WINRATE;
 }
 
 export interface SmartWalletSummary {
@@ -130,39 +112,107 @@ export interface SmartWalletSummary {
   lastSeen: number;
 }
 
-function summarize(s: WalletStats): SmartWalletSummary {
-  const trades = s.buys + s.sells;
+// ── Core logic ───────────────────────────────────────────────────────────────
+
+function summarize(s: PersistedStats): SmartWalletSummary {
   return {
     addr: s.addr,
-    trades,
+    trades: s.buys + s.sells,
     volumeSol: Number(s.volumeSol.toFixed(3)),
     realizedPnlSol: Number(s.realizedPnlSol.toFixed(3)),
     winRate: s.closed ? Number((s.wins / s.closed).toFixed(3)) : 0,
-    uniqueMints: s.mints.size,
+    uniqueMints: s.mints.length,
     firstSeen: s.firstSeen,
     lastSeen: s.lastSeen,
   };
 }
 
-/** Top detected smart wallets ranked by realized PnL. */
-export function listSmartWallets(limit = 50): SmartWalletSummary[] {
-  const out: SmartWalletSummary[] = [];
-  for (const s of wallets.values()) {
-    if (isSmartWallet(s)) out.push(summarize(s));
+export function isSmartWalletStats(s: SmartWalletSummary | PersistedStats): boolean {
+  const trades = "trades" in s ? s.trades : (s as PersistedStats).buys + (s as PersistedStats).sells;
+  const closed = "closed" in s ? (s as PersistedStats).closed : 0;
+  const wins   = "wins"   in s ? (s as PersistedStats).wins   : 0;
+  const vol    = s.volumeSol;
+  const wr     = "winRate" in s ? (s as SmartWalletSummary).winRate : (closed ? wins / closed : 0);
+
+  if (vol < SMART_WALLET_MIN_VOLUME_SOL) return false;
+  if (trades < SMART_WALLET_MIN_TRADES)  return false;
+  if (closed === 0) return trades >= SMART_WALLET_MIN_TRADES * 2;
+  return wr >= SMART_WALLET_MIN_WINRATE;
+}
+
+// Exported alias kept simple.
+export const isSmartWallet = isSmartWalletStats;
+
+/** Record a pump.fun swap and return the updated summary (or null if trade below min size). */
+export async function recordTrade(ev: PumpTradeEvent): Promise<SmartWalletSummary | null> {
+  if (ev.solAmount < SMART_WALLET_MIN_TRADE_SOL) return null;
+
+  const s = await load(ev.wallet);
+  s.lastSeen = ev.ts;
+  s.volumeSol += ev.solAmount;
+  if (!s.mints.includes(ev.mint)) s.mints.push(ev.mint);
+
+  const pos: PersistedPosition = s.positions[ev.mint] ?? { costSol: 0, tokens: 0 };
+
+  if (ev.side === "buy") {
+    s.buys++;
+    pos.costSol += ev.solAmount;
+    pos.tokens  += ev.tokenAmount;
+  } else {
+    s.sells++;
+    s.closed++;
+    if (pos.tokens > 0) {
+      const fraction = Math.min(ev.tokenAmount / pos.tokens, 1);
+      const costBasis = pos.costSol * fraction;
+      const pnl = ev.solAmount - costBasis;
+      s.realizedPnlSol += pnl;
+      if (pnl > 0) s.wins++;
+      pos.costSol -= costBasis;
+      pos.tokens   = Math.max(0, pos.tokens - ev.tokenAmount);
+    } else {
+      s.realizedPnlSol += ev.solAmount;
+      s.wins++;
+    }
   }
-  out.sort((a, b) => b.realizedPnlSol - a.realizedPnlSol);
-  return out.slice(0, limit);
+
+  s.positions[ev.mint] = pos;
+  await save(s);
+  return summarize(s);
 }
 
-export function getWalletStats(addr: string): SmartWalletSummary | null {
-  const s = wallets.get(addr);
-  return s ? summarize(s) : null;
+/** Top detected smart wallets ranked by realized PnL. */
+export async function listSmartWallets(limit = 50): Promise<SmartWalletSummary[]> {
+  let all: PersistedStats[] = [];
+
+  if (redis.available()) {
+    const raw = await redis.hgetall<string>(REDIS_HASH_KEY);
+    if (raw) {
+      for (const v of Object.values(raw)) {
+        try {
+          const parsed: PersistedStats = typeof v === "string" ? JSON.parse(v) : v;
+          all.push(parsed);
+        } catch {}
+      }
+    }
+  } else {
+    all = Array.from(hotCache.values());
+  }
+
+  return all
+    .filter(s => isSmartWallet(summarize(s)))
+    .map(summarize)
+    .sort((a, b) => b.realizedPnlSol - a.realizedPnlSol)
+    .slice(0, limit);
 }
 
-/** Deterministic hue from an address (used for KOL color). */
+export async function getWalletStats(addr: string): Promise<SmartWalletSummary | null> {
+  const s = await load(addr);
+  return (s.buys + s.sells) > 0 ? summarize(s) : null;
+}
+
+/** Deterministic hue from an address (used for KOL color in the feed). */
 export function colorForAddr(addr: string): string {
   let h = 0;
   for (let i = 0; i < addr.length; i++) h = (h * 31 + addr.charCodeAt(i)) >>> 0;
-  const hue = h % 360;
-  return `hsl(${hue} 70% 55%)`;
+  return `hsl(${h % 360} 70% 55%)`;
 }

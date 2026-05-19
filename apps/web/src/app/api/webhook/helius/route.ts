@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     // 2) Auto-discovery: extract any pump.fun trader, score it, publish if smart.
     const pump = extractPumpTrade(enhanced);
     if (!pump) continue;
-    const stats = recordTrade(pump);
+    const stats = await recordTrade(pump);
     if (stats && isSmartWallet(stats)) {
       const sig = enhanced.signature ?? `${pump.ts}-${pump.wallet.slice(0, 6)}`;
       publishKolTrade(smartWalletToFeedTrade(pump, sig));
