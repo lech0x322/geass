@@ -33,10 +33,11 @@ function SafetyBadge({ ok, label, tip }: { ok: boolean; label: string; tip: stri
   );
 }
 
-export function GemCard({ gem, isNew, onSnipe }: {
+export function GemCard({ gem, isNew, onSnipe, onDex }: {
   gem: Gem;
   isNew: boolean;
   onSnipe: (g: Gem) => void;
+  onDex?: (address: string, symbol: string) => void;
 }) {
   const tier = TIER[gem.tier] || TIER.C_TIER;
   const mcap = fmtMcap(gem.mcap);
@@ -126,12 +127,19 @@ export function GemCard({ gem, isNew, onSnipe }: {
       </div>
 
       {/* Actions */}
-      <div style={{ display: "flex", gap: 6 }}>
+      <div style={{ display: "flex", gap: 5 }}>
         <a href={gem.contractAddress ? `https://pump.fun/coin/${gem.contractAddress}` : "#"} target="_blank" rel="noreferrer"
           style={{ flex: 1, background: "#18181b", border: "1px solid #27272a", color: "#a1a1aa", padding: "7px", borderRadius: 7,
             fontSize: 10, fontWeight: 600, textDecoration: "none", textAlign: "center" }}>
-          View Pump.fun
+          Pump ↗
         </a>
+        {onDex && gem.contractAddress && (
+          <button onClick={() => onDex(gem.contractAddress, gem.sym)}
+            style={{ flex: 1, background: "#f9731612", border: "1px solid #f9731640", color: "#f97316",
+              padding: "7px", borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
+            DEX ↗
+          </button>
+        )}
         <button onClick={() => onSnipe(gem)}
           style={{ flex: 1, background: "linear-gradient(135deg,#dc2626,#7c3aed)", border: "none", color: "#fff",
             padding: "7px", borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: ".5px" }}>

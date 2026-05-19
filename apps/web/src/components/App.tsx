@@ -14,6 +14,7 @@ import type { Gem } from "@/lib/types";
 import { GeassLogo } from "./GeassLogo";
 import { GemCard } from "./GemCard";
 import { SnipeModal } from "./SnipeModal";
+import { TokenModal } from "./TokenModal";
 
 interface Props {
   wallet: string;
@@ -30,6 +31,12 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [source, setSource]   = useState("");
   const [newIds, setNewIds]   = useState<Set<string>>(new Set());
   const [snipeGem, setSnipeGem] = useState<Gem | null>(null);
+  const [dexToken, setDexToken] = useState<{ address: string; symbol: string } | null>(null);
+  const [searchQ, setSearchQ] = useState("");
+  const [searchResults, setSearchResults] = useState<{ baseToken: { address: string; name: string; symbol: string }; priceUsd: string | null; priceChange: Record<string, number> | null; volume: Record<string, number>; liquidity: { usd: number | null } | null; url: string }[]>([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [ctMintAddress, setCtMintAddress] = useState<string | null>(null);
   const [wBal, setWBal]       = useState<string | null>(initialBalance);
   const [filters, setFilters] = useState({ minScore: 0, tiers: [] as string[], hasKol: false, noFlags: false });
   const feedTrades = useKolFeed();
@@ -229,6 +236,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
         if (result.mode === "server") {
           setCtMsg(`✓ Bundle ${result.bundleId.slice(0, 18)}… | ${result.mintPubkey.slice(0, 12)}…`);
+          setCtMintAddress(result.mintPubkey);
           setCtStep("done");
           setCtLoad(false);
           return;
@@ -245,6 +253,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
         setCtMsg("Submitting Jito bundle…");
         const { bundleId } = await jitoSubmit([signedCreateB64, signedBuyB64]);
         setCtMsg(`✓ Bundle ${bundleId.slice(0, 18)}… | ${result.mintPubkey.slice(0, 12)}…`);
+        setCtMintAddress(result.mintPubkey);
         setCtStep("done");
       } else {
         // ── Standard Phantom path ─────────────────────────────────
@@ -340,6 +349,19 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     const id = setInterval(load, 30_000);
     return () => clearInterval(id);
   }, []);
+
+  // DEX Screener search (debounced 350ms)
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!searchQ.trim() || searchQ.length < 2) { setSearchResults([]); return; }
+    searchTimer.current = setTimeout(() => {
+      fetch(`/api/dex/search?q=${encodeURIComponent(searchQ)}`)
+        .then(r => r.json())
+        .then((d: { pairs: typeof searchResults }) => setSearchResults(d.pairs ?? []))
+        .catch(() => {});
+    }, 350);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [searchQ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // KOL sound trigger
   const prevKolCount = useRef(0);
@@ -547,8 +569,63 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           </div>
         )}
 
+        {/* DEX Screener Search bar */}
+        <div style={{ padding: isMobile ? "8px 12px" : "8px 18px", borderBottom: "1px solid #18181b", background: "#0c0c0e", flexShrink: 0, position: "relative" }}>
+          <div style={{ position: "relative", maxWidth: 480 }}>
+            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "#52525b", pointerEvents: "none" }}>🔍</span>
+            <input
+              value={searchQ}
+              onChange={e => { setSearchQ(e.target.value); setSearchOpen(true); }}
+              onFocus={() => setSearchOpen(true)}
+              onBlur={() => setTimeout(() => setSearchOpen(false), 200)}
+              placeholder="Search any Solana token by name, symbol or address…"
+              style={{ width: "100%", background: "#111113", border: "1px solid #27272a", borderRadius: 9, color: "#f4f4f5", padding: "7px 12px 7px 30px", fontSize: 11, outline: "none", transition: "border .15s" }}
+            />
+            {searchQ && (
+              <button onClick={() => { setSearchQ(""); setSearchResults([]); }}
+                style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "#52525b", cursor: "pointer", fontSize: 12, lineHeight: 1 }}>
+                ✕
+              </button>
+            )}
+          </div>
+          {/* Search dropdown */}
+          {searchOpen && searchResults.length > 0 && (
+            <div style={{ position: "absolute", top: "100%", left: isMobile ? 12 : 18, right: isMobile ? 12 : 18, maxWidth: 480, background: "#111113", border: "1px solid #27272a", borderRadius: 10, zIndex: 100, overflow: "hidden", boxShadow: "0 8px 32px #00000080" }}>
+              {searchResults.map((p, i) => {
+                const ch24 = p.priceChange?.h24;
+                return (
+                  <button key={i} onMouseDown={() => { setDexToken({ address: p.baseToken.address, symbol: p.baseToken.symbol }); setSearchQ(""); setSearchResults([]); }}
+                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: "transparent", border: "none", borderBottom: "1px solid #18181b", cursor: "pointer", textAlign: "left" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: "#f4f4f5" }}>${p.baseToken.symbol}</span>
+                        <span style={{ fontSize: 9, color: "#52525b" }}>{p.baseToken.name}</span>
+                      </div>
+                      <div style={{ fontSize: 9, color: "#3f3f46", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.baseToken.address}</div>
+                    </div>
+                    {p.priceUsd && <span style={{ fontSize: 11, fontWeight: 700, color: "#f4f4f5", flexShrink: 0 }}>${parseFloat(p.priceUsd) < 0.0001 ? parseFloat(p.priceUsd).toExponential(2) : parseFloat(p.priceUsd).toFixed(6)}</span>}
+                    {ch24 !== undefined && ch24 !== null && <span style={{ fontSize: 10, fontWeight: 600, color: ch24 >= 0 ? "#10b981" : "#ef4444", flexShrink: 0 }}>{ch24 >= 0 ? "+" : ""}{ch24.toFixed(1)}%</span>}
+                    <span style={{ fontSize: 9, color: "#f97316", flexShrink: 0 }}>DEX ↗</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         <main style={{ flex: 1, overflow: "auto" }}>
           {snipeGem && <SnipeModal gem={snipeGem} wallet={wallet} onClose={() => setSnipeGem(null)} />}
+          {dexToken && (
+            <TokenModal
+              address={dexToken.address}
+              symbol={dexToken.symbol}
+              onClose={() => setDexToken(null)}
+              onSnipe={(addr, sym) => {
+                setDexToken(null);
+                setSnipeGem({ contractAddress: addr, sym, name: sym, score: 0, tier: "B_TIER", mcap: 0, xPotential: 0, kol: 0, mintRev: false, freezeRev: false, holders: 0, reasons: [], redFlags: [], kolBuyers: [], id: addr } as unknown as Gem);
+              }}
+            />
+          )}
 
           {/* ALPHA SCANNER TAB */}
           {tab === "gems" && (
@@ -627,7 +704,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                         <div className="pulse" style={{ fontSize: 11, color: "#dc262680", marginTop: 10, letterSpacing: "2px" }}>SCANNING SOLANA MATRIX...</div>
                       </div>
                     )}
-                    {filtered.slice(0, 3).map(g => <GemCard key={g.id} gem={g} isNew={newIds.has(g.id)} onSnipe={setSnipeGem} />)}
+                    {filtered.slice(0, 3).map(g => <GemCard key={g.id} gem={g} isNew={newIds.has(g.id)} onSnipe={setSnipeGem} onDex={(addr, sym) => setDexToken({ address: addr, symbol: sym })} />)}
                   </div>
                   {/* Blurred locked section */}
                   {filtered.length > 3 && (
@@ -663,7 +740,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                       <div className="pulse" style={{ fontSize: 11, color: "#dc262680", marginTop: 10, letterSpacing: "2px" }}>SCANNING SOLANA MATRIX...</div>
                     </div>
                   )}
-                  {filtered.map(g => <GemCard key={g.id} gem={g} isNew={newIds.has(g.id)} onSnipe={setSnipeGem} />)}
+                  {filtered.map(g => <GemCard key={g.id} gem={g} isNew={newIds.has(g.id)} onSnipe={setSnipeGem} onDex={(addr, sym) => setDexToken({ address: addr, symbol: sym })} />)}
                   {!loading && gems.length > 0 && filtered.length === 0 && (
                     <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: "#3f3f46" }}>
                       <div style={{ fontSize: 24, marginBottom: 6 }}>🔍</div>
@@ -827,7 +904,27 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   <div style={{ fontSize: 16, fontWeight: 800, color: "#10b981", marginBottom: 6 }}>Token Launched!</div>
                   <div style={{ fontSize: 11, color: "#52525b", marginBottom: 4 }}>${ct.sym.toUpperCase()} is live on Pump.fun</div>
                   <div style={{ fontSize: 10, color: "#3f3f46", marginBottom: 16 }}>{ctMsg}</div>
-                  <button onClick={() => { setCtStep("form"); setCt({ name: "", sym: "", desc: "", img: "", devBuy: "0.5" }); setCtMsg(""); setCtFile(null); }}
+                  {ctMintAddress && (
+                    <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 14 }}>
+                      <a href={`https://pump.fun/coin/${ctMintAddress}`} target="_blank" rel="noopener noreferrer"
+                        style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #27272a", background: "transparent", color: "#a1a1aa", fontSize: 11, fontWeight: 600, textDecoration: "none" }}>
+                        Pump.fun ↗
+                      </a>
+                      <a href={`https://dexscreener.com/solana/${ctMintAddress}`} target="_blank" rel="noopener noreferrer"
+                        style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #f9731640", background: "#f9731612", color: "#f97316", fontSize: 11, fontWeight: 700, textDecoration: "none" }}>
+                        DEX Screener ↗
+                      </a>
+                      <a href={`https://solscan.io/token/${ctMintAddress}`} target="_blank" rel="noopener noreferrer"
+                        style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #3b82f640", background: "#3b82f612", color: "#3b82f6", fontSize: 11, fontWeight: 700, textDecoration: "none" }}>
+                        Solscan ↗
+                      </a>
+                      <button onClick={() => setDexToken({ address: ctMintAddress, symbol: ct.sym })}
+                        style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #10b98140", background: "#10b98112", color: "#10b981", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                        DEX Info
+                      </button>
+                    </div>
+                  )}
+                  <button onClick={() => { setCtStep("form"); setCt({ name: "", sym: "", desc: "", img: "", devBuy: "0.5" }); setCtMsg(""); setCtFile(null); setCtMintAddress(null); }}
                     style={{ background: "#dc2626", border: "none", color: "#fff", padding: "8px 20px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                     Launch Another
                   </button>
