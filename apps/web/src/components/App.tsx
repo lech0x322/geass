@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { Keypair, VersionedTransaction } from "@solana/web3.js";
 import { KOLS, NAV, TIER } from "@/lib/config";
 import { fmtAge, shortAddr } from "@/lib/utils";
-import { scan, fetchBalance, pumpTradeTx, pumpIpfs, fetchPortfolio, autoSnipe, jitoLaunchBundle, jitoSubmit, type PortfolioResult, type AutoSnipeResult } from "@/lib/api";
+import { scan, fetchBalance, pumpTradeTx, pumpIpfs, fetchPortfolio, autoSnipe, jitoLaunchBundle, jitoSubmit, fetchTrending, type PortfolioResult, type AutoSnipeResult, type TrendingToken, type TrendingMeta } from "@/lib/api";
 import { signAllWithPhantom } from "@/lib/wallet";
 import { signAndSendBytes } from "@/lib/wallet";
 import { useGemStream } from "@/lib/useGemStream";
@@ -22,7 +22,7 @@ interface Props {
 }
 
 export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
-  const [tab, setTab]         = useState<"trades" | "launch" | "gems" | "autosnipe" | "referral" | "pro" | "settings">("trades");
+  const [tab, setTab]         = useState<"trades" | "launch" | "gems" | "autosnipe" | "referral" | "pro" | "settings" | "trending">("trades");
   const [gems, setGems]       = useState<Gem[]>([]);
   const [loading, setLoading] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
@@ -39,6 +39,11 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [portfolio, setPortfolio] = useState<PortfolioResult | null>(null);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [portfolioErr, setPortfolioErr] = useState("");
+
+  // Trending
+  const [trendingTokens, setTrendingTokens] = useState<TrendingToken[]>([]);
+  const [trendingMetas,  setTrendingMetas]  = useState<TrendingMeta[]>([]);
+  const [trendingLoading, setTrendingLoading] = useState(false);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [soundGems, setSoundGems]   = useState(true);
@@ -356,6 +361,15 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   useEffect(() => {
     if (tab === "pro" && pro.active && !portfolio && !portfolioLoading) loadPortfolio();
   }, [tab, pro.active]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (tab !== "trending") return;
+    setTrendingLoading(true);
+    fetchTrending().then(d => {
+      setTrendingTokens(d.tokens);
+      setTrendingMetas(d.metas);
+    }).finally(() => setTrendingLoading(false));
+  }, [tab]);
 
   // ── Stream status ───────────────────────────────────────────
   const detecting = stream.detecting;
@@ -1104,6 +1118,114 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TRENDING TAB */}
+          {tab === "trending" && (
+            <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
+                <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5" }}>🔥 Trending on Solana</h1>
+                <span style={{ fontSize: 8, color: "#f97316", background: "#f9731620", border: "1px solid #f9731640", padding: "2px 8px", borderRadius: 8, fontWeight: 700 }}>DEX SCREENER</span>
+                {trendingLoading && <span style={{ fontSize: 9, color: "#52525b" }} className="pulse">Loading...</span>}
+                <button onClick={() => { setTrendingLoading(true); fetchTrending().then(d => { setTrendingTokens(d.tokens); setTrendingMetas(d.metas); }).finally(() => setTrendingLoading(false)); }}
+                  disabled={trendingLoading} style={{ marginLeft: "auto", fontSize: 9, padding: "4px 10px", borderRadius: 6, border: "1px solid #27272a", background: "transparent", color: "#52525b", cursor: trendingLoading ? "wait" : "pointer" }}>
+                  ↻ Refresh
+                </button>
+              </div>
+              <p style={{ fontSize: 11, color: "#3f3f46", marginBottom: 18 }}>Top boosted tokens · ranked by community activity, volume &amp; trust signals</p>
+
+              {/* Trending Metas / Categories */}
+              {trendingMetas.length > 0 && (
+                <div style={{ marginBottom: 22 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "#52525b", letterSpacing: "1.5px", marginBottom: 10 }}>TRENDING CATEGORIES</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {trendingMetas.map(m => (
+                      <div key={m.slug} style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 10, padding: "8px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+                        {m.icon?.type === "emoji" && <span style={{ fontSize: 16 }}>{m.icon.value}</span>}
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#f4f4f5" }}>{m.name}</div>
+                          <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
+                            <span style={{ fontSize: 9, color: "#3f3f46" }}>{m.tokenCount} tokens</span>
+                            {m.mcChange24 !== 0 && (
+                              <span style={{ fontSize: 9, fontWeight: 600, color: m.mcChange24 >= 0 ? "#10b981" : "#ef4444" }}>
+                                {m.mcChange24 >= 0 ? "+" : ""}{m.mcChange24.toFixed(1)}% 24h
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Trending Tokens list */}
+              {!trendingLoading && trendingTokens.length === 0 && (
+                <div style={{ textAlign: "center", padding: "40px 20px", color: "#3f3f46" }}>
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>🔥</div>
+                  <div style={{ fontSize: 12 }}>No trending data — try refreshing</div>
+                </div>
+              )}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {trendingTokens.map((t, i) => (
+                  <div key={t.address} style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+                    {/* Rank */}
+                    <div style={{ width: 24, textAlign: "center", fontSize: 11, fontWeight: 800, color: i < 3 ? "#f97316" : "#3f3f46", flexShrink: 0 }}>
+                      {i < 3 ? ["🥇","🥈","🥉"][i] : `#${i + 1}`}
+                    </div>
+                    {/* Icon */}
+                    {t.icon
+                      ? <img src={t.icon} alt={t.symbol} width={32} height={32} style={{ borderRadius: "50%", flexShrink: 0, objectFit: "cover" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      : <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#27272a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#52525b", flexShrink: 0 }}>{t.symbol[0]}</div>
+                    }
+                    {/* Name + address */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "#f4f4f5" }}>${t.symbol}</div>
+                      <div style={{ fontSize: 9, color: "#3f3f46", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name} · {t.address.slice(0, 12)}…</div>
+                    </div>
+                    {/* Price + change */}
+                    {!isMobile && (
+                      <div style={{ textAlign: "right", flexShrink: 0, minWidth: 80 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#f4f4f5" }}>
+                          {t.priceUsd !== null ? (t.priceUsd < 0.0001 ? t.priceUsd.toExponential(2) : `$${t.priceUsd.toFixed(6)}`) : "—"}
+                        </div>
+                        {t.priceChange24 !== null && (
+                          <div style={{ fontSize: 10, fontWeight: 600, color: t.priceChange24 >= 0 ? "#10b981" : "#ef4444" }}>
+                            {t.priceChange24 >= 0 ? "+" : ""}{t.priceChange24.toFixed(1)}%
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {/* Volume */}
+                    {!isMobile && t.volume24 !== null && (
+                      <div style={{ textAlign: "right", flexShrink: 0, minWidth: 80 }}>
+                        <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px" }}>VOL 24H</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#eab308" }}>
+                          {t.volume24 >= 1e6 ? `$${(t.volume24/1e6).toFixed(1)}M` : t.volume24 >= 1e3 ? `$${(t.volume24/1e3).toFixed(0)}K` : `$${t.volume24.toFixed(0)}`}
+                        </div>
+                      </div>
+                    )}
+                    {/* Boost */}
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px" }}>BOOST</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#f97316" }}>
+                        {"🔥".repeat(Math.min(3, Math.ceil(t.boostAmount / 100)))} {t.boostAmount >= 1000 ? `${(t.boostAmount/1000).toFixed(0)}k` : t.boostAmount}
+                      </div>
+                    </div>
+                    {/* View link */}
+                    <a href={t.dexUrl} target="_blank" rel="noopener noreferrer"
+                      style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 7, border: "1px solid #f9731630", background: "#f9731610", color: "#f97316", fontSize: 10, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}>
+                      DEX ↗
+                    </a>
+                  </div>
+                ))}
+              </div>
+              {trendingTokens.length > 0 && (
+                <div style={{ marginTop: 14, fontSize: 9, color: "#27272a", textAlign: "center" }}>
+                  Data from DEX Screener · Top boosted Solana tokens · Updates every 60s
+                </div>
+              )}
             </div>
           )}
 

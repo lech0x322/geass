@@ -17,7 +17,7 @@ export const TIER: Record<string, { l: string; c: string }> = {
   RUGGED: { l: "RUG", c: "#6b7280" },
 };
 
-export type NavId = "trades" | "launch" | "gems" | "referral" | "pro" | "autosnipe" | "settings";
+export type NavId = "trades" | "launch" | "gems" | "referral" | "pro" | "autosnipe" | "settings" | "trending";
 
 export interface NavItem {
   id: NavId;
@@ -30,6 +30,7 @@ export interface NavItem {
 
 export const NAV: NavItem[] = [
   { id: "trades",    label: "Realtime Trades",  badge: "LIVE", icon: "📡" },
+  { id: "trending",  label: "Trending",         badge: "NEW",  icon: "🔥" },
   { id: "launch",    label: "Launch",           icon: "🚀" },
   { id: "gems",      label: "Alpha Scanner",    badge: "PRO",  pro: true, icon: "⚡" },
   { id: "autosnipe", label: "Auto-Snipe",       badge: "NEW",  pro: true, icon: "🎯" },
