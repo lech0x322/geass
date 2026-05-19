@@ -314,6 +314,29 @@ export async function heliusHistory(
   return d.transactions ?? [];
 }
 
+export interface SmartWalletSummary {
+  addr: string;
+  trades: number;
+  volumeSol: number;
+  realizedPnlSol: number;
+  winRate: number;
+  uniqueMints: number;
+  firstSeen: number;
+  lastSeen: number;
+}
+
+/** Top auto-discovered smart wallets from the pump.fun webhook stream. */
+export async function fetchSmartWallets(limit = 50): Promise<SmartWalletSummary[]> {
+  try {
+    const r = await fetch(`/api/kol/smart?limit=${limit}`, { cache: "no-store" });
+    if (!r.ok) return [];
+    const d = await r.json() as { wallets?: SmartWalletSummary[] };
+    return d.wallets ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export async function pumpIpfs(form: FormData): Promise<{ metadataUri: string }> {
   const r = await fetch("/api/pump/ipfs", { method: "POST", body: form });
   if (!r.ok) {

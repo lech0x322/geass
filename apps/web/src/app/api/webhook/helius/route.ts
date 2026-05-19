@@ -3,7 +3,13 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { HELIUS_WEBHOOK_AUTH } from "@/lib/env";
 import { publishKolTrade } from "@/lib/server/kolFeed";
-import { parseKolTrade, type HeliusTxEnhanced } from "@/lib/server/kolParser";
+import {
+  parseKolTrade,
+  extractPumpTrade,
+  smartWalletToFeedTrade,
+  type HeliusTxEnhanced,
+} from "@/lib/server/kolParser";
+import { recordTrade, isSmartWallet } from "@/lib/server/smartWallets";
 import type { HeliusWebhookPayload } from "@/types/helius";
 
 export const dynamic = "force-dynamic";
@@ -36,11 +42,26 @@ export async function POST(req: NextRequest) {
   if (!payload.length) return NextResponse.json({ ok: true, processed: 0 });
 
   let kolTrades = 0;
+  let smartTrades = 0;
   for (const tx of payload) {
-    const trade = parseKolTrade(tx as unknown as HeliusTxEnhanced);
-    if (trade) {
-      publishKolTrade(trade);
+    const enhanced = tx as unknown as HeliusTxEnhanced;
+
+    // 1) Hardcoded KOLs always publish.
+    const kolTrade = parseKolTrade(enhanced);
+    if (kolTrade) {
+      publishKolTrade(kolTrade);
       kolTrades++;
+      continue;
+    }
+
+    // 2) Auto-discovery: extract any pump.fun trader, score it, publish if smart.
+    const pump = extractPumpTrade(enhanced);
+    if (!pump) continue;
+    const stats = recordTrade(pump);
+    if (stats && isSmartWallet(stats)) {
+      const sig = enhanced.signature ?? `${pump.ts}-${pump.wallet.slice(0, 6)}`;
+      publishKolTrade(smartWalletToFeedTrade(pump, sig));
+      smartTrades++;
     }
   }
 
@@ -48,6 +69,7 @@ export async function POST(req: NextRequest) {
     ok: true,
     processed: payload.length,
     kolTrades,
+    smartTrades,
   });
 }
 
