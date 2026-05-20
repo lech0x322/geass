@@ -216,24 +216,26 @@ export type LaunchBundleResult = PhantomLaunchBundle | ServerLaunchBundle;
 
 /** Build a Jito launch bundle. server=true uses GEASS wallet; otherwise returns txs for Phantom. */
 export async function jitoLaunchBundle(params: {
-  name:       string;
-  symbol:     string;
+  name:        string;
+  symbol:      string;
   description?: string;
-  devBuySol:  number;
-  tipSol:     number;
-  file?:      File;
-  wallet?:    string; // Phantom pubkey (phantom mode)
-  server?:    boolean; // GEASS server wallet (server mode)
+  devBuySol:   number;
+  tipSol:      number;
+  file?:       File;
+  imageUrl?:   string; // fallback image URL (fetched browser-side)
+  wallet?:     string; // Phantom pubkey (phantom mode)
+  server?:     boolean; // GEASS server wallet (server mode)
 }): Promise<LaunchBundleResult> {
   const { Keypair, VersionedTransaction } = await import("@solana/web3.js");
 
-  // 1. Upload metadata via server proxy (CORS-restricted endpoint)
+  // 1. Upload metadata — called directly from browser (pump.fun blocks cloud IPs)
   const ipfsForm = new FormData();
   ipfsForm.append("name",        params.name);
   ipfsForm.append("symbol",      params.symbol.toUpperCase());
   ipfsForm.append("description", params.description ?? params.name);
   ipfsForm.append("showName",    "true");
-  if (params.file) ipfsForm.append("file", params.file, params.file.name);
+  if (params.file)     ipfsForm.append("file", params.file, params.file.name);
+  else if (params.imageUrl) ipfsForm.append("imageUrl", params.imageUrl);
   const { metadataUri } = await pumpIpfs(ipfsForm);
 
   // 2. Generate ephemeral mint keypair in browser (private key never leaves browser)
@@ -402,12 +404,33 @@ export async function fetchSmartWallets(limit = 50): Promise<SmartWalletSummary[
   }
 }
 
+/**
+ * Upload token metadata + image to pump.fun IPFS.
+ * Called directly from the browser — pump.fun blocks cloud/datacenter IPs (same as trade-local).
+ * If imageUrl is present, fetches the image browser-side and attaches it as a Blob.
+ */
 export async function pumpIpfs(form: FormData): Promise<{ metadataUri: string }> {
-  const r = await fetch("/api/pump/ipfs", { method: "POST", body: form });
+  // If imageUrl was passed instead of a file, fetch it in the browser and convert to Blob
+  const imageUrl = form.get("imageUrl")?.toString().trim();
+  if (imageUrl) {
+    form.delete("imageUrl");
+    try {
+      const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(10_000) });
+      if (!imgRes.ok) throw new Error(`image fetch ${imgRes.status}`);
+      const ct  = imgRes.headers.get("content-type") ?? "image/png";
+      const buf = await imgRes.arrayBuffer();
+      const ext = ct.split("/")[1]?.split(";")[0]?.trim() || "png";
+      form.set("file", new Blob([buf], { type: ct }), `image.${ext}`);
+    } catch (e) {
+      throw new Error(`Could not load image: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  // Call pump.fun directly from the browser (residential IP — not blocked like Vercel)
+  const r = await fetch("https://pump.fun/api/ipfs", { method: "POST", body: form });
   if (!r.ok) {
-    let msg = `ipfs ${r.status}`;
-    try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
-    throw new Error(msg);
+    const text = await r.text().catch(() => "");
+    throw new Error(`pump.fun IPFS ${r.status}: ${text.slice(0, 200) || "upload failed"}`);
   }
   return r.json();
 }

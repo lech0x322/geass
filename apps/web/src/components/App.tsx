@@ -281,6 +281,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           devBuySol,
           tipSol,
           file:        ctFile ?? undefined,
+          imageUrl:    !ctFile && ct.img ? ct.img : undefined,
           wallet:      ctJitoMode === "phantom" ? wallet : undefined,
           server:      ctJitoMode === "server",
         });
