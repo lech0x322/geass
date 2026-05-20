@@ -61,7 +61,13 @@ export function InternalWalletPanel({ iw }: Props) {
   const [confirmed, setConfirmed] = useState(false);
   const [showPrivKey, setShowPrivKey] = useState(false);
 
-  const go = (s: Screen) => { setErr(""); setPw(""); setPw2(""); setConfirmed(false); setScreen(s); };
+  const go = (s: Screen) => {
+    setErr("");
+    setPw("");
+    setPw2("");
+    if (s !== "create-password") setConfirmed(false);
+    setScreen(s);
+  };
 
   async function doCreate() {
     const { keypair, privateKeyB58 } = iw.create();
