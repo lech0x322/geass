@@ -24,7 +24,8 @@ import {
 
 function geassKeypair(): Keypair {
   if (!GEASS_WALLET_PRIVKEY) throw new Error("GEASS_WALLET_PRIVKEY not set");
-  const key = GEASS_WALLET_PRIVKEY.trim().replace(/^["']|["']$/g, "");
+  // Strip any non-base58 characters (quotes, whitespace, invisible chars from Vercel)
+  const key = GEASS_WALLET_PRIVKEY.replace(/[^1-9A-HJ-NP-Za-km-z]/g, "");
   try {
     return Keypair.fromSecretKey(bs58.decode(key));
   } catch {

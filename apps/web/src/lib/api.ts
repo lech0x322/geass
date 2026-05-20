@@ -1,4 +1,4 @@
-// Client-side API — calls Next.js proxy routes only. No external URLs, no keys.
+// Client-side API — calls Next.js proxy routes and, where needed, PumpPortal directly from the browser.
 import type { Gem } from "./types";
 
 export interface ScanResult {
@@ -35,21 +35,21 @@ export async function pumpTradeTx(payload: {
   pool?: "pump";
   tokenMetadata?: { name: string; symbol: string; uri: string };
 }): Promise<Uint8Array> {
-  const r = await fetch("/api/pump/trade", {
+  // Called from the browser — PumpPortal blocks server-side (cloud) IPs, so we call it directly.
+  const r = await fetch("https://pumpportal.fun/api/trade-local", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       denominatedInSol: "true",
       slippage: 15,
-      priorityFee: 0.001,
+      priorityFee: 0.0005,
       pool: "pump",
       ...payload,
     }),
   });
   if (!r.ok) {
-    let msg = `trade ${r.status}`;
-    try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
-    throw new Error(msg);
+    const text = await r.text();
+    throw new Error(`PumpPortal ${r.status}: ${text || "Bad Request"}`);
   }
   return new Uint8Array(await r.arrayBuffer());
 }
@@ -200,9 +200,9 @@ export async function jitoSubmit(base64Txs: string[]): Promise<JitoSubmitResult>
 export interface PhantomLaunchBundle {
   mode:        "phantom";
   mintPubkey:  string;
-  mintPrivB58: string;
-  createTxB64: string;
-  buyTxB64:    string;
+  mintPrivB58: string; // ephemeral mint keypair — needed for create tx co-signing
+  createTxB64: string; // unsigned — Phantom signs this, then mint keypair added
+  buyTxB64:    string; // unsigned — Phantom signs this
   metadataUri: string;
 }
 export interface ServerLaunchBundle {
@@ -221,26 +221,79 @@ export async function jitoLaunchBundle(params: {
   devBuySol:  number;
   tipSol:     number;
   file?:      File;
-  wallet?:    string;
-  server?:    boolean;
+  wallet?:    string; // Phantom pubkey (phantom mode)
+  server?:    boolean; // GEASS server wallet (server mode)
 }): Promise<LaunchBundleResult> {
-  const form = new FormData();
-  form.append("name",      params.name);
-  form.append("symbol",    params.symbol.toUpperCase());
-  form.append("description", params.description ?? params.name);
-  form.append("devBuySol", String(params.devBuySol));
-  form.append("tipSol",    String(params.tipSol));
-  if (params.wallet) form.append("wallet", params.wallet);
-  if (params.server) form.append("server", "true");
-  if (params.file)   form.append("file",   params.file, params.file.name);
+  const { Keypair } = await import("@solana/web3.js");
+  const { default: bs58 } = await import("bs58");
 
-  const r = await fetch("/api/pump/launch-bundle", { method: "POST", body: form });
-  if (!r.ok) {
-    let msg = `launch-bundle ${r.status}`;
-    try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
-    throw new Error(msg);
+  // 1. Upload metadata to pump.fun IPFS via our server proxy (CORS restricted endpoint)
+  const ipfsForm = new FormData();
+  ipfsForm.append("name",        params.name);
+  ipfsForm.append("symbol",      params.symbol.toUpperCase());
+  ipfsForm.append("description", params.description ?? params.name);
+  ipfsForm.append("showName",    "true");
+  if (params.file) ipfsForm.append("file", params.file, params.file.name);
+  const { metadataUri } = await pumpIpfs(ipfsForm);
+
+  // 2. Generate ephemeral mint keypair in the browser
+  const mintKeypair = Keypair.generate();
+  const mintPubkey  = mintKeypair.publicKey.toBase58();
+  const mintPrivB58 = bs58.encode(mintKeypair.secretKey);
+
+  // 3. Determine payer pubkey
+  const payerPubkey = params.server
+    ? (process.env.NEXT_PUBLIC_GEASS_WALLET_PUBKEY ?? "")
+    : (params.wallet ?? "");
+  if (!payerPubkey) throw new Error("No wallet connected");
+
+  // 4. Build create + buy txs directly from browser (PumpPortal blocks cloud IPs, not residential)
+  const sym = params.symbol.toUpperCase();
+  const [createBytes, buyBytes] = await Promise.all([
+    pumpTradeTx({
+      publicKey: payerPubkey,
+      action: "create",
+      mint: mintPubkey,
+      amount: params.devBuySol,
+      denominatedInSol: "true",
+      slippage: 10,
+      priorityFee: 0.0005,
+      pool: "pump",
+      tokenMetadata: { name: params.name, symbol: sym, uri: metadataUri },
+    }),
+    pumpTradeTx({
+      publicKey: payerPubkey,
+      action: "buy",
+      mint: mintPubkey,
+      amount: params.devBuySol,
+      denominatedInSol: "true",
+      slippage: 10,
+      priorityFee: 0.0005,
+      pool: "pump",
+    }),
+  ]);
+
+  const createTxB64 = Buffer.from(createBytes).toString("base64");
+  const buyTxB64    = Buffer.from(buyBytes).toString("base64");
+
+  if (params.server) {
+    // 5a. GEASS server mode: send unsigned txs + mint privkey → server signs + submits Jito bundle
+    const r = await fetch("/api/pump/sign-server", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ createTxB64, buyTxB64, mintPrivB58, mintPubkey, tipSol: params.tipSol }),
+    });
+    if (!r.ok) {
+      let msg = `sign-server ${r.status}`;
+      try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
+      throw new Error(msg);
+    }
+    const { bundleId } = await r.json();
+    return { mode: "server", bundleId, mintPubkey, metadataUri };
   }
-  return r.json();
+
+  // 5b. Phantom mode: return raw txs for the caller to sign with Phantom + mint keypair
+  return { mode: "phantom", mintPubkey, mintPrivB58, createTxB64, buyTxB64, metadataUri };
 }
 
 // ── DEX Screener Trending ────────────────────────────────────────────────────

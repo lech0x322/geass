@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Keypair, VersionedTransaction } from "@solana/web3.js";
+import bs58 from "bs58";
 import { KOLS, NAV, TIER, SETTINGS_TAB_OVERRIDES } from "@/lib/config";
 import { fmtAge, shortAddr } from "@/lib/utils";
 import { scan, fetchBalance, pumpTradeTx, pumpIpfs, fetchPortfolio, autoSnipe, jitoLaunchBundle, jitoSubmit, fetchTrending, type PortfolioResult, type AutoSnipeResult, type TrendingToken, type TrendingMeta } from "@/lib/api";
@@ -289,10 +290,15 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
         setCtMsg("Sign in Phantom (2 txs)…");
         const createBytes = Buffer.from(result.createTxB64, "base64");
         const buyBytes    = Buffer.from(result.buyTxB64, "base64");
-        const [signedCreateB64, signedBuyB64] = await signAllWithPhantom([
+        const [phantomCreateB64, signedBuyB64] = await signAllWithPhantom([
           new Uint8Array(createBytes),
           new Uint8Array(buyBytes),
         ]);
+        // Add mint keypair co-signature to create tx (Phantom only signed its wallet slot)
+        const mintKp = Keypair.fromSecretKey(bs58.decode(result.mintPrivB58));
+        const createTxSigned = VersionedTransaction.deserialize(Buffer.from(phantomCreateB64, "base64"));
+        createTxSigned.sign([mintKp]);
+        const signedCreateB64 = Buffer.from(createTxSigned.serialize()).toString("base64");
         setCtMsg("Submitting Jito bundle…");
         const { bundleId } = await jitoSubmit([signedCreateB64, signedBuyB64]);
         setCtMsg(`Bundle ${bundleId.slice(0, 18)}… | ${result.mintPubkey.slice(0, 12)}…`);
@@ -328,7 +334,8 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
         tx.sign([mintKp]);
         setCtMsg("Sign in Phantom...");
         const sig = await signAndSendBytes(tx.serialize());
-        setCtMsg(`Launched. TX: ${sig.slice(0, 18)}...`);
+        setCtMintAddress(mintKp.publicKey.toBase58());
+        setCtMsg(`TX: ${sig.slice(0, 18)}…`);
         setCtStep("done");
       }
     } catch (e) {
