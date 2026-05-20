@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { IconZap, IconSearch } from "./icons";
 
 interface Pair {
   chainId: string;
@@ -113,7 +114,7 @@ export function TokenModal({ address, symbol, onClose, onSnipe }: Props) {
 
           {!loading && pairs.length === 0 && (
             <div style={{ padding: "40px 20px", textAlign: "center" }}>
-              <div style={{ fontSize: 24, marginBottom: 8 }}>🔍</div>
+              <div style={{ color: "#3f3f46", marginBottom: 8, display: "flex", justifyContent: "center" }}><IconSearch size={24} /></div>
               <div style={{ fontSize: 12, color: "#52525b" }}>No pairs found on DEX Screener yet</div>
               <div style={{ fontSize: 10, color: "#3f3f46", marginTop: 4 }}>Token may not have a liquidity pool yet</div>
             </div>
@@ -236,8 +237,8 @@ export function TokenModal({ address, symbol, onClose, onSnipe }: Props) {
               Pump.fun ↗
             </a>
             <button onClick={() => { onSnipe(address, token?.symbol ?? symbol ?? ""); onClose(); }}
-              style={{ flex: 2, padding: "9px", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#dc2626,#7c3aed)", color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: ".5px" }}>
-              ⚡ SNIPE THIS TOKEN
+              style={{ flex: 2, padding: "9px", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#dc2626,#7c3aed)", color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: ".5px", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <IconZap size={12} /> SNIPE THIS TOKEN
             </button>
           </div>
         )}

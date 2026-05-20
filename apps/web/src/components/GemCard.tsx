@@ -2,6 +2,7 @@
 import { TIER } from "@/lib/config";
 import { fmtMcap } from "@/lib/utils";
 import type { Gem } from "@/lib/types";
+import { IconZap, IconSolana } from "./icons";
 
 function BondingCurveBar({ pct, sol }: { pct: number; sol: number }) {
   const clamped = Math.max(0, Math.min(100, pct));
@@ -10,7 +11,9 @@ function BondingCurveBar({ pct, sol }: { pct: number; sol: number }) {
     <div title={`Pump.fun bonding curve · ${sol.toFixed(2)} SOL collected`}>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8, color: "#52525b", letterSpacing: ".8px", marginBottom: 3 }}>
         <span>BONDING CURVE</span>
-        <span style={{ color, fontWeight: 700 }}>{clamped.toFixed(0)}% · {sol.toFixed(1)}◎</span>
+        <span style={{ color, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 3 }}>
+          {clamped.toFixed(0)}% · {sol.toFixed(1)} <IconSolana size={8} />
+        </span>
       </div>
       <div style={{ height: 4, background: "#18181b", borderRadius: 2, overflow: "hidden" }}>
         <div style={{ width: `${clamped}%`, height: "100%", background: color, transition: "width .4s ease" }} />
@@ -142,8 +145,9 @@ export function GemCard({ gem, isNew, onSnipe, onDex }: {
         )}
         <button onClick={() => onSnipe(gem)}
           style={{ flex: 1, background: "linear-gradient(135deg,#dc2626,#7c3aed)", border: "none", color: "#fff",
-            padding: "7px", borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: ".5px" }}>
-          ⚡ SNIPE
+            padding: "7px", borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: ".5px",
+            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+          <IconZap size={11} /> SNIPE
         </button>
       </div>
     </div>

@@ -1,18 +1,23 @@
 "use client";
 
+import type { FC } from "react";
 import { useState, useRef } from "react";
 import { GeassLogo } from "./GeassLogo";
+import {
+  IconSearch, IconZap, IconTarget, IconChart,
+  IconSparkle, IconBroadcast, IconRocket, IconCrown, IconSolana,
+} from "./icons";
 
 interface Props {
   onConnect: () => Promise<void>;
   connecting: boolean;
 }
 
-const PRO_FEATURES = [
-  { icon: "🔍", title: "Insider & Rug Detector", desc: "Advanced on-chain analysis detects insider wallets, coordinated buys and rug patterns before they hit Twitter." },
-  { icon: "⚡", title: "Dedicated RPC + Helius Priority", desc: "Skip the queue. Your requests go through dedicated Helius nodes — first to detect, first to snipe." },
-  { icon: "🤖", title: "Custom AI Rules & Sniping Bots", desc: "Define your own entry conditions. Automate buys based on score, KOL activity, bonding curve progress." },
-  { icon: "📊", title: "Portfolio Analytics + Risk Tools", desc: "Real-time P&L, exposure by tier, drawdown alerts, and AI-generated risk scores per position." },
+const PRO_FEATURES: { Icon: FC<{ size?: number }>; title: string; desc: string }[] = [
+  { Icon: IconSearch, title: "Insider & Rug Detector",         desc: "Advanced on-chain analysis detects insider wallets, coordinated buys and rug patterns before they hit Twitter." },
+  { Icon: IconZap,    title: "Dedicated RPC + Helius Priority", desc: "Skip the queue. Your requests go through dedicated Helius nodes — first to detect, first to snipe." },
+  { Icon: IconTarget, title: "Custom AI Rules & Sniping Bots", desc: "Define your own entry conditions. Automate buys based on score, KOL activity, bonding curve progress." },
+  { Icon: IconChart,  title: "Portfolio Analytics + Risk Tools", desc: "Real-time P&L, exposure by tier, drawdown alerts, and AI-generated risk scores per position." },
 ];
 
 const FREE_FEATURES = [
@@ -40,7 +45,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
     setConnectHint("");
     if (hintTimer.current) clearTimeout(hintTimer.current);
     // After 2 s still connecting, prompt user to check the Phantom popup
-    hintTimer.current = setTimeout(() => setConnectHint("👻 Open your Phantom extension — it's waiting for approval"), 2000);
+    hintTimer.current = setTimeout(() => setConnectHint("Open your Phantom extension — it's waiting for approval"), 2000);
     try {
       await onConnect();
     } catch (e) {
@@ -89,8 +94,8 @@ export function LandingPage({ onConnect, connecting }: Props) {
         </p>
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
           <button onClick={handleConnect} disabled={connecting}
-            style={{ padding: "13px 32px", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#dc2626,#7c3aed)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: connecting ? "wait" : "pointer", letterSpacing: ".5px", boxShadow: "0 0 32px #dc262640" }}>
-            {connecting ? "Connecting wallet..." : "◎ Connect Phantom — Enter GEASS"}
+            style={{ padding: "13px 32px", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#dc2626,#7c3aed)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: connecting ? "wait" : "pointer", letterSpacing: ".5px", boxShadow: "0 0 32px #dc262640", display: "inline-flex", alignItems: "center", gap: 8 }}>
+            {connecting ? "Connecting wallet..." : <><IconSolana size={14} /> Connect Phantom — Enter GEASS</>}
           </button>
         </div>
         {connectHint && (
@@ -120,15 +125,15 @@ export function LandingPage({ onConnect, connecting }: Props) {
           <h2 style={{ textAlign: "center", fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Core Features</h2>
           <p style={{ textAlign: "center", fontSize: 12, color: "#52525b", marginBottom: 40 }}>Everything in the Free tier — no credit card, no signup</p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 16 }}>
-            {[
-              { icon: "💎", label: "Alpha Scanner", desc: "Real-time detection of Solana tokens with growth potential. Scored by 20+ on-chain signals via Helius + DexScreener.", badge: "FREE", bc: "#10b981" },
-              { icon: "⚡", label: "Live KOL Feed", desc: "Watch exactly what high-performing wallets are buying and selling, the moment it happens on-chain.", badge: "FREE", bc: "#3b82f6" },
-              { icon: "🚀", label: "Token Launch", desc: "Create and deploy tokens directly on Pump.fun in under 60 seconds. 100% on-chain via Phantom.", badge: "FREE", bc: "#a855f7" },
-            ].map(f => (
+            {([
+              { Icon: IconSparkle,   label: "Alpha Scanner", desc: "Real-time detection of Solana tokens with growth potential. Scored by 20+ on-chain signals via Helius + DexScreener.", badge: "FREE", bc: "#10b981" },
+              { Icon: IconBroadcast, label: "Live KOL Feed", desc: "Watch exactly what high-performing wallets are buying and selling, the moment it happens on-chain.", badge: "FREE", bc: "#3b82f6" },
+              { Icon: IconRocket,    label: "Token Launch",  desc: "Create and deploy tokens directly on Pump.fun in under 60 seconds. 100% on-chain via Phantom.", badge: "FREE", bc: "#a855f7" },
+            ] as { Icon: FC<{ size?: number }>; label: string; desc: string; badge: string; bc: string }[]).map(f => (
               <div key={f.label} style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "24px 20px", position: "relative", overflow: "hidden" }}>
                 <div style={{ position: "absolute", top: 0, right: 0, left: 0, height: 2, background: `linear-gradient(90deg, transparent, ${f.bc}60, transparent)` }} />
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-                  <span style={{ fontSize: 28 }}>{f.icon}</span>
+                  <span style={{ color: f.bc, display: "inline-flex" }}><f.Icon size={28} /></span>
                   <span style={{ fontSize: 8, fontWeight: 700, color: f.bc, background: f.bc + "18", border: `1px solid ${f.bc}40`, padding: "2px 8px", borderRadius: 8 }}>{f.badge}</span>
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>{f.label}</div>
@@ -143,7 +148,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
       <section style={{ padding: "0 24px 80px", background: "#0a0a0c" }}>
         <div style={{ maxWidth: 900, margin: "0 auto", paddingTop: 64 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "center", marginBottom: 8 }}>
-            <span style={{ fontSize: 18 }}>👑</span>
+            <span style={{ color: "#eab308", display: "inline-flex" }}><IconCrown size={18} /></span>
             <h2 style={{ fontSize: 24, fontWeight: 800 }}>GEASS Pro</h2>
             <span style={{ fontSize: 9, fontWeight: 700, color: "#10b981", background: "#10b98120", border: "1px solid #10b98140", padding: "3px 10px", borderRadius: 8 }}>LIVE · 3 SOL/MO</span>
           </div>
@@ -151,7 +156,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14 }}>
             {PRO_FEATURES.map(f => (
               <div key={f.title} style={{ background: "linear-gradient(135deg, #111113 0%, #14101f 100%)", border: "1px solid #7c3aed30", borderRadius: 14, padding: "20px 18px" }}>
-                <div style={{ fontSize: 24, marginBottom: 10 }}>{f.icon}</div>
+                <div style={{ color: "#a855f7", marginBottom: 10 }}><f.Icon size={24} /></div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#e2d9f3", marginBottom: 6 }}>{f.title}</div>
                 <div style={{ fontSize: 10, color: "#71717a", lineHeight: 1.6 }}>{f.desc}</div>
               </div>
@@ -211,8 +216,8 @@ export function LandingPage({ onConnect, connecting }: Props) {
           <h2 style={{ fontSize: 22, fontWeight: 800, marginTop: 16, marginBottom: 8 }}>Ready to see the alpha?</h2>
           <p style={{ fontSize: 12, color: "#52525b", marginBottom: 28, lineHeight: 1.6 }}>Connect your Phantom wallet to enter GEASS. It takes 5 seconds.</p>
           <button onClick={handleConnect} disabled={connecting}
-            style={{ padding: "12px 28px", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#dc2626,#7c3aed)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: connecting ? "wait" : "pointer", boxShadow: "0 0 40px #dc262630" }}>
-            {connecting ? "Connecting..." : "◎ Connect Phantom"}
+            style={{ padding: "12px 28px", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#dc2626,#7c3aed)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: connecting ? "wait" : "pointer", boxShadow: "0 0 40px #dc262630", display: "inline-flex", alignItems: "center", gap: 8 }}>
+            {connecting ? "Connecting..." : <><IconSolana size={14} /> Connect Phantom</>}
           </button>
           {connectError && <div style={{ marginTop: 10, fontSize: 11, color: "#ef4444" }}>{connectError}</div>}
         </div>
