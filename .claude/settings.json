@@ -21,12 +21,6 @@
         "source": "github",
         "repo": "upstash/context7"
       }
-    },
-    "claude-code-toolkit": {
-      "source": {
-        "source": "github",
-        "repo": "rohitg00/awesome-claude-code-toolkit"
-      }
     }
   }
 }
