@@ -17,23 +17,50 @@ export const TIER: Record<string, { l: string; c: string }> = {
   RUGGED: { l: "RUG", c: "#6b7280" },
 };
 
-export type NavId = "trades" | "launch" | "gems" | "referral" | "pro" | "autosnipe";
+export type NavId = "trades" | "launch" | "gems" | "referral" | "pro" | "autosnipe" | "settings" | "trending";
+
+export type NavIconId =
+  | "broadcast" | "flame" | "rocket" | "zap" | "target"
+  | "users" | "cog" | "crown";
+
+export type SettingsSection = "sounds" | "referral" | "wallet";
+/** Settings sub-items that navigate to a different tab entirely. */
+export const SETTINGS_TAB_OVERRIDES: Partial<Record<SettingsSection, NavId>> = {
+  referral: "referral",
+};
 
 export interface NavItem {
   id: NavId;
   label: string;
+  /** Shorter label used in the mobile bottom bar. */
+  mobileLabel?: string;
   badge?: string;
   /** Render in Pro purple theme */
   pro?: boolean;
+  iconId: NavIconId;
+  /** Include in the mobile bottom tab bar. */
+  mobile?: boolean;
+  /** Sub-items shown when the nav item expands (e.g. Settings). */
+  sub?: { id: SettingsSection; label: string }[];
 }
 
 export const NAV: NavItem[] = [
-  { id: "trades",    label: "Realtime Trades",  badge: "LIVE" },
-  { id: "launch",    label: "Launch" },
-  { id: "gems",      label: "Alpha Scanner",    badge: "PRO",  pro: true },
-  { id: "autosnipe", label: "Auto-Snipe",       badge: "NEW",  pro: true },
-  { id: "referral",  label: "Referral",         badge: "NEW" },
-  { id: "pro",       label: "GEASS Pro",        pro: true },
+  { id: "trades",    label: "Realtime Trades", mobileLabel: "KOL",     badge: "LIVE", iconId: "broadcast", mobile: true },
+  { id: "trending",  label: "Trending",                                badge: "NEW",  iconId: "flame",     mobile: true },
+  { id: "launch",    label: "Launch",          mobileLabel: "Trade",                  iconId: "rocket",    mobile: true },
+  { id: "gems",      label: "Alpha Scanner",   mobileLabel: "Scanner", badge: "PRO",  pro: true, iconId: "zap",    mobile: true },
+  { id: "autosnipe", label: "Auto-Snipe",                              badge: "NEW",  pro: true, iconId: "target" },
+  {
+    id: "settings",
+    label: "Settings",
+    iconId: "cog",
+    sub: [
+      { id: "sounds",   label: "Sound Alerts" },
+      { id: "referral", label: "Referral" },
+      { id: "wallet",   label: "Wallet" },
+    ],
+  },
+  { id: "pro",       label: "GEASS Pro",                                          pro: true, iconId: "crown" },
 ];
 
 export const toB64 = (arr: Uint8Array): string => {

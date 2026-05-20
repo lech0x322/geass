@@ -24,7 +24,13 @@ import {
 
 function geassKeypair(): Keypair {
   if (!GEASS_WALLET_PRIVKEY) throw new Error("GEASS_WALLET_PRIVKEY not set");
-  return Keypair.fromSecretKey(bs58.decode(GEASS_WALLET_PRIVKEY));
+  // Strip any non-base58 characters (quotes, whitespace, invisible chars from Vercel)
+  const key = GEASS_WALLET_PRIVKEY.replace(/[^1-9A-HJ-NP-Za-km-z]/g, "");
+  try {
+    return Keypair.fromSecretKey(bs58.decode(key));
+  } catch {
+    throw new Error("GEASS_WALLET_PRIVKEY is invalid — must be a base58 Solana private key");
+  }
 }
 
 function geassPublicKey(): PublicKey {
@@ -120,7 +126,7 @@ export async function jitoSnipe(params: {
     amount:           params.amount ?? 0.01,
     denominatedInSol: "true",
     slippage:         params.slippage ?? 10,
-    priorityFee:      0,                   // Jito handles priority, skip standard fee
+    priorityFee:      0.0005,              // required by PumpPortal even in Jito bundles
     pool:             params.pool ?? "auto",
   });
   const buyTx = VersionedTransaction.deserialize(buyBytes);
@@ -174,7 +180,7 @@ export async function jitoLaunchServer(params: {
     amount:        params.devBuySol,
     denominatedInSol: "true",
     slippage:      10,
-    priorityFee:   0,
+    priorityFee:   0.0005,
     pool:          "pump",
     tokenMetadata: {
       name:   params.tokenName,
@@ -193,7 +199,7 @@ export async function jitoLaunchServer(params: {
     amount:           params.devBuySol,
     denominatedInSol: "true",
     slippage:         10,
-    priorityFee:      0,
+    priorityFee:      0.0005,
     pool:             "pump",
   });
   const buyTx = VersionedTransaction.deserialize(buyBytes);
@@ -239,7 +245,7 @@ export async function buildLaunchTxsForPhantom(params: {
     amount:        params.devBuySol,
     denominatedInSol: "true",
     slippage:      10,
-    priorityFee:   0,
+    priorityFee:   0.0005,
     pool:          "pump",
     tokenMetadata: {
       name:   params.tokenName,
@@ -259,7 +265,7 @@ export async function buildLaunchTxsForPhantom(params: {
     amount:           params.devBuySol,
     denominatedInSol: "true",
     slippage:         10,
-    priorityFee:      0,
+    priorityFee:      0.0005,
     pool:             "pump",
   });
   // We return the buy tx as-is; tip is appended via a 3rd tx in the bundle on submit.

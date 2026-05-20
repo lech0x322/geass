@@ -1,20 +1,56 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Keypair, VersionedTransaction } from "@solana/web3.js";
-import { KOLS, NAV, TIER } from "@/lib/config";
+import bs58 from "bs58";
+import { KOLS, NAV, TIER, SETTINGS_TAB_OVERRIDES } from "@/lib/config";
 import { fmtAge, shortAddr } from "@/lib/utils";
-import { scan, fetchBalance, pumpTradeTx, pumpIpfs, fetchPortfolio, autoSnipe, jitoLaunchBundle, jitoSubmit, type PortfolioResult, type AutoSnipeResult } from "@/lib/api";
+import { scan, fetchBalance, pumpTradeTx, pumpIpfs, fetchPortfolio, autoSnipe, jitoLaunchBundle, jitoSubmit, fetchTrending, type PortfolioResult, type AutoSnipeResult, type TrendingToken, type TrendingMeta } from "@/lib/api";
 import { signAllWithPhantom } from "@/lib/wallet";
 import { signAndSendBytes } from "@/lib/wallet";
 import { useGemStream } from "@/lib/useGemStream";
 import { useProStatus } from "@/lib/pro";
 import { useKolFeed } from "@/lib/useKolFeed";
-
 import type { Gem } from "@/lib/types";
 import { GeassLogo } from "./GeassLogo";
 import { GemCard } from "./GemCard";
 import { SnipeModal } from "./SnipeModal";
+import { TokenModal } from "./TokenModal";
+import { InternalWalletPanel } from "./InternalWalletPanel";
+import { useInternalWallet } from "@/lib/useInternalWallet";
+import {
+  IconBroadcast, IconFlame, IconRocket, IconZap, IconTarget, IconUsers,
+  IconCog, IconCrown, IconChevronDown, IconSolana, IconSearch, IconX,
+  IconMenu, IconRefresh, IconLock, IconSpeaker, IconWallet, IconPower,
+  IconCheck, IconChart, IconArrowUpRight, IconCopy,
+} from "./icons";
+import type { NavIconId, SettingsSection } from "@/lib/config";
+
+const NAV_ICON: Record<NavIconId, React.FC<{ size?: number }>> = {
+  broadcast: IconBroadcast,
+  flame:     IconFlame,
+  rocket:    IconRocket,
+  zap:       IconZap,
+  target:    IconTarget,
+  users:     IconUsers,
+  cog:       IconCog,
+  crown:     IconCrown,
+};
+
+const NavIcon = ({ id, size = 14 }: { id: NavIconId; size?: number }) => {
+  const C = NAV_ICON[id];
+  return <C size={size} />;
+};
+
+/** Scrolls the requested settings section into view when it mounts/changes. */
+function SettingsBody({ section, children }: { section: SettingsSection | null; children: React.ReactNode }) {
+  useEffect(() => {
+    if (!section) return;
+    const el = document.getElementById(`settings-${section}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [section]);
+  return <>{children}</>;
+}
 
 interface Props {
   wallet: string;
@@ -23,7 +59,7 @@ interface Props {
 }
 
 export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
-  const [tab, setTab]         = useState<"trades" | "launch" | "gems" | "autosnipe" | "referral" | "pro">("trades");
+  const [tab, setTab]         = useState<"trades" | "launch" | "gems" | "autosnipe" | "referral" | "pro" | "settings" | "trending">("trades");
   const [gems, setGems]       = useState<Gem[]>([]);
   const [loading, setLoading] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
@@ -31,15 +67,35 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [source, setSource]   = useState("");
   const [newIds, setNewIds]   = useState<Set<string>>(new Set());
   const [snipeGem, setSnipeGem] = useState<Gem | null>(null);
+  const [dexToken, setDexToken] = useState<{ address: string; symbol: string } | null>(null);
+  const [searchQ, setSearchQ] = useState("");
+  const [searchResults, setSearchResults] = useState<{ baseToken: { address: string; name: string; symbol: string }; priceUsd: string | null; priceChange: Record<string, number> | null; volume: Record<string, number>; liquidity: { usd: number | null } | null; url: string }[]>([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [ctMintAddress, setCtMintAddress] = useState<string | null>(null);
   const [wBal, setWBal]       = useState<string | null>(initialBalance);
   const [filters, setFilters] = useState({ minScore: 0, tiers: [] as string[], hasKol: false, noFlags: false });
   const feedTrades = useKolFeed();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const pro = useProStatus(wallet);
+  const iw = useInternalWallet();
   const [portfolio, setPortfolio] = useState<PortfolioResult | null>(null);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [portfolioErr, setPortfolioErr] = useState("");
+
+  // Trending
+  const [trendingTokens, setTrendingTokens] = useState<TrendingToken[]>([]);
+  const [trendingMetas,  setTrendingMetas]  = useState<TrendingMeta[]>([]);
+  const [trendingLoading, setTrendingLoading] = useState(false);
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
+  const [soundGems, setSoundGems]   = useState(true);
+  const [soundKol, setSoundKol]     = useState(true);
+  const [solPrice, setSolPrice]     = useState<number | null>(null);
+  const [solChange, setSolChange]   = useState(0);
 
   // Auto-snipe state
   const [asEnabled, setAsEnabled]         = useState(false);
@@ -80,14 +136,34 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     return () => window.removeEventListener("resize", check);
   }, []);
 
+  // ── Sound helper ─────────────────────────────────────────────
+  function playBeep(freq1: number, freq2: number) {
+    try {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.frequency.setValueAtTime(freq1, ctx.currentTime);
+      osc.frequency.setValueAtTime(freq2, ctx.currentTime + 0.1);
+      osc.start(); osc.stop(ctx.currentTime + 0.35);
+    } catch {}
+  }
+
   // ── Real-time SSE stream ────────────────────────────────────
   const stream = useGemStream(true);
 
-  // Keep latest auto-snipe settings in a ref so the stream callback always sees current values
+  // Keep latest auto-snipe settings + internal wallet ref so stream callback sees current values
+  const iwRef = useRef(iw);
+  useEffect(() => { iwRef.current = iw; }, [iw]);
   const asRef = useRef({ enabled: false, amount: "0.01", minScore: 75, method: "api" as "api" | "local" });
   useEffect(() => {
     asRef.current = { enabled: asEnabled, amount: asAmount, minScore: asMinScore, method: asMethod };
   }, [asEnabled, asAmount, asMinScore, asMethod]);
+
+  const soundRef = useRef({ gems: true, kol: true });
+  useEffect(() => { soundRef.current = { gems: soundGems, kol: soundKol }; }, [soundGems, soundKol]);
 
   useEffect(() => {
     if (!stream.newGems.length) return;
@@ -109,6 +185,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
       if (!source || source === "NONE") setSource("STREAM");
       return next;
     });
+    if (soundRef.current.gems && freshGems.length > 0) playBeep(880, 1320);
     stream.clear();
     // Auto-snipe newly detected gems if enabled
     const cfg = asRef.current;
@@ -119,7 +196,10 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           .filter(g => g.score >= cfg.minScore && !asSniped.current.has(g.contractAddress))
           .forEach(g => {
             asSniped.current.add(g.contractAddress);
-            autoSnipe({ mint: g.contractAddress, amount: amt, method: cfg.method })
+            // Use internal trading wallet if unlocked, otherwise fall back to server-side API
+            const currentIw = iwRef.current;
+            const effectiveMethod = currentIw.status === "unlocked" ? "local" : cfg.method;
+            autoSnipe({ mint: g.contractAddress, amount: amt, method: effectiveMethod })
               .then((res: AutoSnipeResult) => {
                 setAsLog(l => [{ mint: g.contractAddress, sym: g.sym, sig: res.signature, ts: Date.now() }, ...l].slice(0, 50));
               })
@@ -141,7 +221,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
   // ── Manual scan ─────────────────────────────────────────────
   const doScan = useCallback(async () => {
-    setLoading(true); setScanMsg("⚡ Scanning Solana...");
+    setLoading(true); setScanMsg("Scanning Solana...");
     try {
       const res = await scan(6);
       if (res.gems.length) {
@@ -199,7 +279,8 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
         });
 
         if (result.mode === "server") {
-          setCtMsg(`✓ Bundle ${result.bundleId.slice(0, 18)}… | ${result.mintPubkey.slice(0, 12)}…`);
+          setCtMsg(`Bundle ${result.bundleId.slice(0, 18)}… | ${result.mintPubkey.slice(0, 12)}…`);
+          setCtMintAddress(result.mintPubkey);
           setCtStep("done");
           setCtLoad(false);
           return;
@@ -209,13 +290,19 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
         setCtMsg("Sign in Phantom (2 txs)…");
         const createBytes = Buffer.from(result.createTxB64, "base64");
         const buyBytes    = Buffer.from(result.buyTxB64, "base64");
-        const [signedCreateB64, signedBuyB64] = await signAllWithPhantom([
+        const [phantomCreateB64, signedBuyB64] = await signAllWithPhantom([
           new Uint8Array(createBytes),
           new Uint8Array(buyBytes),
         ]);
+        // Add mint keypair co-signature to create tx (Phantom only signed its wallet slot)
+        const mintKp = Keypair.fromSecretKey(bs58.decode(result.mintPrivB58));
+        const createTxSigned = VersionedTransaction.deserialize(Buffer.from(phantomCreateB64, "base64"));
+        createTxSigned.sign([mintKp]);
+        const signedCreateB64 = Buffer.from(createTxSigned.serialize()).toString("base64");
         setCtMsg("Submitting Jito bundle…");
         const { bundleId } = await jitoSubmit([signedCreateB64, signedBuyB64]);
-        setCtMsg(`✓ Bundle ${bundleId.slice(0, 18)}… | ${result.mintPubkey.slice(0, 12)}…`);
+        setCtMsg(`Bundle ${bundleId.slice(0, 18)}… | ${result.mintPubkey.slice(0, 12)}…`);
+        setCtMintAddress(result.mintPubkey);
         setCtStep("done");
       } else {
         // ── Standard Phantom path ─────────────────────────────────
@@ -247,7 +334,8 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
         tx.sign([mintKp]);
         setCtMsg("Sign in Phantom...");
         const sig = await signAndSendBytes(tx.serialize());
-        setCtMsg(`✓ Launched! TX: ${sig.slice(0, 18)}...`);
+        setCtMintAddress(mintKp.publicKey.toBase58());
+        setCtMsg(`TX: ${sig.slice(0, 18)}…`);
         setCtStep("done");
       }
     } catch (e) {
@@ -286,6 +374,54 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     setTimeout(() => setRefCopied(false), 2000);
   };
 
+  // Load / persist sound prefs
+  useEffect(() => {
+    try {
+      const sg = localStorage.getItem("geass_sound_gems");
+      const sk = localStorage.getItem("geass_sound_kol");
+      if (sg !== null) setSoundGems(sg !== "0");
+      if (sk !== null) setSoundKol(sk !== "0");
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("geass_sound_gems", soundGems ? "1" : "0");
+      localStorage.setItem("geass_sound_kol",  soundKol  ? "1" : "0");
+    } catch {}
+  }, [soundGems, soundKol]);
+
+  useEffect(() => {
+    const load = () => fetch("/api/sol-price").then(r => r.json()).then((d: { price: number | null; change: number }) => {
+      if (d.price) setSolPrice(d.price);
+      setSolChange(d.change ?? 0);
+    }).catch(() => {});
+    load();
+    const id = setInterval(load, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // DEX Screener search (debounced 350ms)
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!searchQ.trim() || searchQ.length < 2) { setSearchResults([]); return; }
+    searchTimer.current = setTimeout(() => {
+      fetch(`/api/dex/search?q=${encodeURIComponent(searchQ)}`)
+        .then(r => r.json())
+        .then((d: { pairs: typeof searchResults }) => setSearchResults(d.pairs ?? []))
+        .catch(() => {});
+    }, 350);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [searchQ]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // KOL sound trigger
+  const prevKolCount = useRef(0);
+  useEffect(() => {
+    if (feedTrades.length > prevKolCount.current && prevKolCount.current > 0) {
+      if (soundRef.current.kol) playBeep(660, 990);
+    }
+    prevKolCount.current = feedTrades.length;
+  }, [feedTrades.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Portfolio ───────────────────────────────────────────────
   const loadPortfolio = useCallback(async () => {
     setPortfolioLoading(true); setPortfolioErr("");
@@ -297,6 +433,15 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   useEffect(() => {
     if (tab === "pro" && pro.active && !portfolio && !portfolioLoading) loadPortfolio();
   }, [tab, pro.active]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (tab !== "trending") return;
+    setTrendingLoading(true);
+    fetchTrending().then(d => {
+      setTrendingTokens(d.tokens);
+      setTrendingMetas(d.metas);
+    }).finally(() => setTrendingLoading(false));
+  }, [tab]);
 
   // ── Stream status ───────────────────────────────────────────
   const detecting = stream.detecting;
@@ -329,50 +474,155 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   // ── Sidebar content ─────────────────────────────────────────
   const sidebarContent = (
     <>
-      <div style={{ height: 56, display: "flex", alignItems: "center", padding: "0 14px", borderBottom: "1px solid #18181b", gap: 8 }}>
-        <GeassLogo size={28} />
-        <div>
-          <span style={{ fontWeight: 800, fontSize: 13, color: "#f4f4f5", letterSpacing: "1.5px" }}>GEASS</span>
-          <div style={{ fontSize: 8, color: "#3f3f46", letterSpacing: "2px", marginTop: -1 }}>ALPHA RECON</div>
-        </div>
-        {isMobile && (
-          <button onClick={() => setSidebarOpen(false)} style={{ marginLeft: "auto", background: "transparent", border: "none", color: "#52525b", fontSize: 18, cursor: "pointer", lineHeight: 1 }}>✕</button>
+      {/* Header */}
+      <div style={{ height: 56, display: "flex", alignItems: "center", padding: sidebarCollapsed ? "0 10px" : "0 14px", borderBottom: "1px solid #18181b", gap: 8, flexShrink: 0, overflow: "hidden" }}>
+        <button onClick={() => { setTab("trades" as typeof tab); }} style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: 0, flex: 1, minWidth: 0 }}>
+          <GeassLogo size={28} />
+          {!sidebarCollapsed && (
+            <div style={{ overflow: "hidden" }}>
+              <span style={{ fontWeight: 800, fontSize: 13, color: "#f4f4f5", letterSpacing: "1.5px" }}>GEASS</span>
+              <div style={{ fontSize: 8, color: "#3f3f46", letterSpacing: "2px", marginTop: -1 }}>ALPHA RECON</div>
+            </div>
+          )}
+        </button>
+        {isMobile ? (
+          <button onClick={() => setSidebarOpen(false)} aria-label="Close menu"
+            style={{ marginLeft: "auto", background: "transparent", border: "none", color: "#52525b", cursor: "pointer", lineHeight: 1, padding: 4, display: "flex" }}>
+            <IconX size={16} />
+          </button>
+        ) : (
+          <button onClick={() => setSidebarCollapsed(v => !v)} aria-label="Collapse sidebar"
+            style={{ marginLeft: "auto", background: "transparent", border: "1px solid #27272a", color: "#52525b", width: 22, height: 22, borderRadius: 5, cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            {sidebarCollapsed ? "›" : "‹"}
+          </button>
         )}
       </div>
+
+      {/* Nav */}
       <nav style={{ flex: 1, padding: "8px 6px", overflowY: "auto" }}>
-        {NAV.map(n => (
-          <button key={n.id} onClick={() => { setTab(n.id as typeof tab); setSidebarOpen(false); }}
-            style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 10px", borderRadius: 8,
-              border: `1px solid ${tab === n.id ? (n.pro ? "#7c3aed40" : "#dc262640") : "transparent"}`,
-              background: tab === n.id ? (n.pro ? "#7c3aed12" : "#dc262612") : "transparent",
-              color: tab === n.id ? (n.pro ? "#a855f7" : "#ef4444") : n.pro ? "#6d4aab" : "#52525b",
-              cursor: "pointer", marginBottom: 2, fontSize: 11, fontWeight: tab === n.id ? 700 : 500, textAlign: "left" }}>
-            <span style={{ flex: 1 }}>{n.label}</span>
-            {n.badge && (
-              <span style={{ fontSize: 7, fontWeight: 700,
-                color: n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981",
-                background: (n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981") + "20",
-                border: `1px solid ${(n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981") + "40"}`,
-                padding: "1px 5px", borderRadius: 8 }}>
-                {n.badge}
-              </span>
-            )}
-          </button>
-        ))}
+        {NAV.map(n => {
+          const isActive = tab === n.id;
+          const accent = n.pro ? "#a855f7" : "#ef4444";
+          const accentBg = n.pro ? "#7c3aed12" : "#dc262612";
+          const accentBd = n.pro ? "#7c3aed40" : "#dc262640";
+          const hasSub = !!n.sub?.length;
+          const expanded = hasSub && settingsOpen && !sidebarCollapsed;
+
+          return (
+            <div key={n.id}>
+              <button
+                onClick={() => {
+                  if (hasSub && !sidebarCollapsed) { setSettingsOpen(v => !v); return; }
+                  if (hasSub && sidebarCollapsed) {
+                    setTab(n.id as typeof tab);
+                    setSettingsSection(null);
+                    setSidebarOpen(false);
+                    return;
+                  }
+                  setTab(n.id as typeof tab);
+                  setSidebarOpen(false);
+                  if (n.id !== "settings") setSettingsOpen(false);
+                }}
+                title={sidebarCollapsed ? n.label : undefined}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center",
+                  gap: sidebarCollapsed ? 0 : 10,
+                  padding: sidebarCollapsed ? "9px 0" : "9px 10px",
+                  justifyContent: sidebarCollapsed ? "center" : "flex-start",
+                  borderRadius: 8,
+                  border: `1px solid ${isActive ? accentBd : "transparent"}`,
+                  background: isActive ? accentBg : "transparent",
+                  color: isActive ? accent : n.pro ? "#6d4aab" : "#71717a",
+                  cursor: "pointer", marginBottom: 2,
+                  fontSize: 11, fontWeight: isActive ? 700 : 500, textAlign: "left",
+                }}>
+                <NavIcon id={n.iconId} size={sidebarCollapsed ? 16 : 14} />
+                {!sidebarCollapsed && (
+                  <>
+                    <span style={{ flex: 1 }}>{n.label}</span>
+                    {n.badge && (
+                      <span style={{ fontSize: 7, fontWeight: 700,
+                        color: n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981",
+                        background: (n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981") + "20",
+                        border: `1px solid ${(n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981") + "40"}`,
+                        padding: "1px 5px", borderRadius: 8 }}>
+                        {n.badge}
+                      </span>
+                    )}
+                    {hasSub && (
+                      <span style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .15s", display: "flex" }}>
+                        <IconChevronDown size={12} />
+                      </span>
+                    )}
+                  </>
+                )}
+              </button>
+              {expanded && n.sub && (
+                <div style={{ marginLeft: 16, marginBottom: 4, borderLeft: "1px solid #27272a", paddingLeft: 8 }}>
+                  {n.sub.map(s => {
+                    const subActive = tab === "settings" && settingsSection === s.id;
+                    return (
+                      <button key={s.id}
+                        onClick={() => {
+                          const override = SETTINGS_TAB_OVERRIDES[s.id];
+                          if (override) {
+                            setTab(override as typeof tab);
+                          } else {
+                            setTab("settings" as typeof tab);
+                            setSettingsSection(s.id);
+                          }
+                          setSidebarOpen(false);
+                        }}
+                        style={{
+                          width: "100%", padding: "6px 10px", borderRadius: 6,
+                          background: subActive ? "#dc262610" : "transparent",
+                          border: "none", color: subActive ? "#ef4444" : "#52525b",
+                          fontSize: 10, fontWeight: subActive ? 700 : 500, textAlign: "left",
+                          cursor: "pointer", marginBottom: 1,
+                        }}>
+                        {s.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </nav>
-      <div style={{ padding: 8, borderTop: "1px solid #18181b", display: "flex", flexDirection: "column", gap: 6 }}>
-        {pro.active && (
+
+      {/* Footer */}
+      <div style={{ padding: sidebarCollapsed ? "8px 4px" : 8, borderTop: "1px solid #18181b", display: "flex", flexDirection: "column", gap: 6 }}>
+        {!sidebarCollapsed && pro.active && (
           <div style={{ padding: "5px 10px", background: "linear-gradient(135deg,#dc262615,#7c3aed20)", border: "1px solid #7c3aed40", borderRadius: 7, fontSize: 9, color: "#a855f7", fontWeight: 700, letterSpacing: ".5px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>👑 PRO ACTIVE</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+              <IconCrown size={11} /> PRO ACTIVE
+            </span>
             {pro.expiresAt && <span style={{ fontWeight: 500, opacity: .7 }}>{Math.max(0, Math.ceil((pro.expiresAt - Date.now()) / 86_400_000))}d</span>}
           </div>
         )}
-        <div style={{ padding: "6px 10px", background: "#10b98110", border: "1px solid #10b98130", borderRadius: 7, fontSize: 9, color: "#10b981" }}>
-          ✓ {shortAddr(wallet)}{wBal ? ` · ${wBal}◎` : ""}
-        </div>
-        <button onClick={onDisconnect}
-          style={{ width: "100%", padding: "6px 8px", borderRadius: 7, border: "1px solid #27272a", background: "transparent", color: "#52525b", fontSize: 9, fontWeight: 600, cursor: "pointer" }}>
-          Disconnect
+        {!sidebarCollapsed && (
+          <div style={{ padding: "6px 10px", background: "#10b98110", border: "1px solid #10b98130", borderRadius: 7, fontSize: 9, color: "#10b981", display: "flex", alignItems: "center", gap: 5 }}>
+            <IconCheck size={10} />
+            <span>{shortAddr(wallet)}{wBal ? ` · ${wBal} SOL` : ""}</span>
+          </div>
+        )}
+        {!sidebarCollapsed && iw.status !== "none" && (
+          <div
+            onClick={() => { setTab("settings" as typeof tab); setSettingsSection("wallet"); setSidebarOpen(false); }}
+            style={{ padding: "6px 10px", background: iw.status === "unlocked" ? "#3b82f610" : "#27272a30", border: `1px solid ${iw.status === "unlocked" ? "#3b82f640" : "#27272a"}`, borderRadius: 7, fontSize: 9, color: iw.status === "unlocked" ? "#3b82f6" : "#52525b", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+            <IconWallet size={10} />
+            <span>
+              {iw.status === "unlocked"
+                ? `${shortAddr(iw.publicKey ?? "")} · ${iw.balance?.toFixed(3) ?? "…"} SOL`
+                : `Trading Wallet locked`}
+            </span>
+          </div>
+        )}
+        <button onClick={onDisconnect} title="Disconnect"
+          style={{ width: "100%", padding: sidebarCollapsed ? "6px" : "6px 8px", borderRadius: 7, border: "1px solid #27272a", background: "transparent", color: "#52525b", fontSize: 9, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+          <IconPower size={12} />
+          {!sidebarCollapsed && "Disconnect"}
         </button>
       </div>
     </>
@@ -389,7 +639,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
       {/* Sidebar — desktop: always visible; mobile: drawer */}
       {!isMobile ? (
-        <aside style={{ width: 200, background: "#0c0c0e", borderRight: "1px solid #18181b", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+        <aside style={{ width: sidebarCollapsed ? 52 : 200, background: "#0c0c0e", borderRight: "1px solid #18181b", display: "flex", flexDirection: "column", flexShrink: 0, transition: "width .2s ease" }}>
           {sidebarContent}
         </aside>
       ) : (
@@ -407,9 +657,19 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
         {/* Mobile top bar */}
         {isMobile && (
           <div style={{ height: 50, background: "#0c0c0e", borderBottom: "1px solid #18181b", display: "flex", alignItems: "center", padding: "0 14px", gap: 10, flexShrink: 0 }}>
-            <button onClick={() => setSidebarOpen(true)} style={{ background: "transparent", border: "1px solid #27272a", color: "#a1a1aa", width: 32, height: 32, borderRadius: 7, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>☰</button>
+            <button onClick={() => setSidebarOpen(true)} aria-label="Open menu"
+              style={{ background: "transparent", border: "1px solid #27272a", color: "#a1a1aa", width: 32, height: 32, borderRadius: 7, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <IconMenu size={16} />
+            </button>
             <GeassLogo size={22} />
             <span style={{ fontWeight: 800, fontSize: 12, letterSpacing: "1.5px" }}>GEASS</span>
+            {solPrice && (
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <IconSolana size={12} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#f4f4f5" }}>${solPrice.toFixed(2)}</span>
+                {solChange !== 0 && <span style={{ fontSize: 9, color: solChange >= 0 ? "#10b981" : "#ef4444" }}>{solChange >= 0 ? "+" : ""}{solChange.toFixed(1)}%</span>}
+              </div>
+            )}
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 5 }}>
               {streamConnected && <div className="live-dot" style={{ background: statusColor }} />}
               <span style={{ fontSize: 8, color: statusColor, fontWeight: 600 }}>{statusLabel}</span>
@@ -417,14 +677,101 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           </div>
         )}
 
+        {/* Ticker + SOL price strip — always visible */}
+        {gems.length > 0 && (
+          <div style={{ height: 32, borderBottom: "1px solid #18181b", background: "#0a0a0c", display: "flex", alignItems: "center", overflow: "hidden", flexShrink: 0, gap: 0 }}>
+            {/* SOL price — desktop only */}
+            {!isMobile && solPrice && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 14px", borderRight: "1px solid #18181b", flexShrink: 0, height: "100%" }}>
+                <IconSolana size={14} />
+                <span style={{ fontSize: 12, fontWeight: 800, color: "#f4f4f5" }}>${solPrice.toFixed(2)}</span>
+                {solChange !== 0 && <span style={{ fontSize: 9, color: solChange >= 0 ? "#10b981" : "#ef4444", fontWeight: 600 }}>{solChange >= 0 ? "+" : ""}{solChange.toFixed(1)}%</span>}
+              </div>
+            )}
+            {/* Scrolling coin ticker */}
+            <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
+              <div className="ticker-track">
+                {[...gems, ...gems].map((g, i) => (
+                  <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap", fontSize: 10, color: "#52525b", cursor: "pointer", flexShrink: 0 }}
+                    onClick={() => setSnipeGem(g)}>
+                    <span style={{ fontWeight: 700, color: g.tier === "S_TIER" ? "#10b981" : g.tier === "A_TIER" ? "#3b82f6" : "#eab308" }}>${g.sym}</span>
+                    <span style={{ color: "#3f3f46" }}>{g.score}pts</span>
+                    {g.kol > 0 && <span style={{ color: "#a855f7", fontSize: 8 }}>KOL</span>}
+                    <span style={{ color: "#27272a" }}>·</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* DEX Screener Search bar */}
+        <div style={{ padding: isMobile ? "8px 12px" : "8px 18px", borderBottom: "1px solid #18181b", background: "#0c0c0e", flexShrink: 0, position: "relative" }}>
+          <div style={{ position: "relative", maxWidth: 480 }}>
+            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#52525b", pointerEvents: "none", display: "flex" }}>
+              <IconSearch size={12} />
+            </span>
+            <input
+              value={searchQ}
+              onChange={e => { setSearchQ(e.target.value); setSearchOpen(true); }}
+              onFocus={() => setSearchOpen(true)}
+              onBlur={() => setTimeout(() => setSearchOpen(false), 200)}
+              placeholder="Search any Solana token by name, symbol or address…"
+              style={{ width: "100%", background: "#111113", border: "1px solid #27272a", borderRadius: 9, color: "#f4f4f5", padding: "7px 12px 7px 30px", fontSize: 11, outline: "none", transition: "border .15s" }}
+            />
+            {searchQ && (
+              <button onClick={() => { setSearchQ(""); setSearchResults([]); }} aria-label="Clear search"
+                style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "#52525b", cursor: "pointer", display: "flex", padding: 2 }}>
+                <IconX size={12} />
+              </button>
+            )}
+          </div>
+          {/* Search dropdown */}
+          {searchOpen && searchResults.length > 0 && (
+            <div style={{ position: "absolute", top: "100%", left: isMobile ? 12 : 18, right: isMobile ? 12 : 18, maxWidth: 480, background: "#111113", border: "1px solid #27272a", borderRadius: 10, zIndex: 100, overflow: "hidden", boxShadow: "0 8px 32px #00000080" }}>
+              {searchResults.map((p, i) => {
+                const ch24 = p.priceChange?.h24;
+                return (
+                  <button key={i} onMouseDown={() => { setDexToken({ address: p.baseToken.address, symbol: p.baseToken.symbol }); setSearchQ(""); setSearchResults([]); }}
+                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: "transparent", border: "none", borderBottom: "1px solid #18181b", cursor: "pointer", textAlign: "left" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: "#f4f4f5" }}>${p.baseToken.symbol}</span>
+                        <span style={{ fontSize: 9, color: "#52525b" }}>{p.baseToken.name}</span>
+                      </div>
+                      <div style={{ fontSize: 9, color: "#3f3f46", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.baseToken.address}</div>
+                    </div>
+                    {p.priceUsd && <span style={{ fontSize: 11, fontWeight: 700, color: "#f4f4f5", flexShrink: 0 }}>${parseFloat(p.priceUsd) < 0.0001 ? parseFloat(p.priceUsd).toExponential(2) : parseFloat(p.priceUsd).toFixed(6)}</span>}
+                    {ch24 !== undefined && ch24 !== null && <span style={{ fontSize: 10, fontWeight: 600, color: ch24 >= 0 ? "#10b981" : "#ef4444", flexShrink: 0 }}>{ch24 >= 0 ? "+" : ""}{ch24.toFixed(1)}%</span>}
+                    <span style={{ fontSize: 9, color: "#f97316", flexShrink: 0 }}>DEX ↗</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         <main style={{ flex: 1, overflow: "auto" }}>
           {snipeGem && <SnipeModal gem={snipeGem} wallet={wallet} onClose={() => setSnipeGem(null)} />}
+          {dexToken && (
+            <TokenModal
+              address={dexToken.address}
+              symbol={dexToken.symbol}
+              onClose={() => setDexToken(null)}
+              onSnipe={(addr, sym) => {
+                setDexToken(null);
+                setSnipeGem({ contractAddress: addr, sym, name: sym, score: 0, tier: "B_TIER", mcap: 0, xPotential: 0, kol: 0, mintRev: false, freezeRev: false, holders: 0, reasons: [], redFlags: [], kolBuyers: [], id: addr } as unknown as Gem);
+              }}
+            />
+          )}
 
           {/* ALPHA SCANNER TAB */}
           {tab === "gems" && (
             <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 5, flexWrap: "wrap" }}>
-                <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", letterSpacing: ".3px" }}>⚡ Alpha Scanner</h1>
+                <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", letterSpacing: ".3px", display: "flex", alignItems: "center", gap: 8 }}>
+                  <IconZap size={isMobile ? 16 : 18} /> Alpha Scanner
+                </h1>
                 <div style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: "auto" }}>
                   {streamConnected && <div className="live-dot" style={{ background: detecting ? "#10b981" : "#10b98180" }} />}
                   <span style={{ fontSize: 9, color: statusColor, fontWeight: streamReconnecting ? 700 : 500 }}>{statusLabel}</span>
@@ -459,12 +806,14 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                         border: `1px solid ${filters[k] ? "#dc2626" : "#27272a"}`,
                         background: filters[k] ? "#dc262612" : "transparent",
                         color: filters[k] ? "#ef4444" : "#52525b" }}>
-                      {filters[k] ? "✓" : "+"} {l}
+                      {filters[k] ? <IconCheck size={10} /> : "+"} {l}
                     </button>
                   ))}
                   <button onClick={doScan} disabled={loading}
                     style={{ marginLeft: "auto", padding: "6px 14px", borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: loading ? "wait" : "pointer", background: loading ? "#111" : "#dc2626", color: "#fff", border: "none", letterSpacing: ".5px" }}>
-                    {loading ? <span className="pulse">⟳ Scanning...</span> : "⟳ SCAN NOW"}
+                    {loading
+                      ? <span className="pulse" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconRefresh size={12} /> Scanning...</span>
+                      : <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconRefresh size={12} /> SCAN NOW</span>}
                   </button>
                 </div>
               </div>
@@ -487,27 +836,55 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
               </div>
 
               {/* Grid */}
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
-                {loading && !gems.length && (
-                  <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "50px 20px" }}>
-                    <div style={{ fontSize: 18, color: "#dc2626", display: "inline-block" }} className="spin">⊗</div>
-                    <div className="pulse" style={{ fontSize: 11, color: "#dc262680", marginTop: 10, letterSpacing: "2px" }}>SCANNING SOLANA MATRIX...</div>
+              {!pro.active ? (
+                <div style={{ position: "relative" }}>
+                  {/* Blurred preview of all tokens */}
+                  {gems.length > 0 && (
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill,minmax(280px,1fr))", gap: 12, filter: "blur(8px)", pointerEvents: "none", userSelect: "none", opacity: 0.35 }}>
+                      {filtered.slice(0, 6).map(g => <GemCard key={g.id} gem={g} isNew={false} onSnipe={() => {}} />)}
+                    </div>
+                  )}
+                  {/* Full-grid lock overlay */}
+                  <div style={{ position: gems.length > 0 ? "absolute" : "relative", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: gems.length === 0 ? "60px 20px" : 0, minHeight: gems.length === 0 ? 260 : undefined }}>
+                    <div style={{ background: "linear-gradient(135deg,#14101f,#0d0d12)", border: "1px solid #7c3aed60", borderRadius: 20, padding: "32px 40px", textAlign: "center", backdropFilter: "blur(12px)", boxShadow: "0 0 60px #7c3aed20" }}>
+                      <div style={{ color: "#7c3aed", marginBottom: 10, display: "flex", justifyContent: "center" }}><IconLock size={40} /></div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: "#f4f4f5", marginBottom: 6 }}>Alpha Scanner — Pro Only</div>
+                      <div style={{ fontSize: 12, color: "#71717a", marginBottom: 8, lineHeight: 1.6, maxWidth: 280 }}>
+                        {gems.length > 0
+                          ? <><span style={{ color: "#ef4444", fontWeight: 700 }}>{filtered.length} signals</span> detected right now. Unlock real-time access with GEASS Pro.</>
+                          : "Real-time token detection powered by Helius + DexScreener. Requires GEASS Pro."}
+                      </div>
+                      <div style={{ fontSize: 10, color: "#52525b", marginBottom: 24 }}>Score · Tier · KOL activity · Bonding curve · Safety flags</div>
+                      <button onClick={() => setTab("pro" as typeof tab)}
+                        style={{ padding: "11px 32px", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", boxShadow: "0 0 28px #7c3aed50" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}><IconCrown size={14} /> Upgrade to GEASS Pro</span>
+                      </button>
+                    </div>
                   </div>
-                )}
-                {filtered.map(g => <GemCard key={g.id} gem={g} isNew={newIds.has(g.id)} onSnipe={setSnipeGem} />)}
-                {!loading && gems.length > 0 && filtered.length === 0 && (
-                  <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: "#3f3f46" }}>
-                    <div style={{ fontSize: 24, marginBottom: 6 }}>🔍</div>
-                    <div style={{ fontSize: 12 }}>No gems match filters — try lowering Min Score</div>
-                  </div>
-                )}
-                {!loading && !gems.length && (
-                  <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: "#3f3f46" }}>
-                    <div style={{ fontSize: 24, marginBottom: 6 }}>⏳</div>
-                    <div style={{ fontSize: 12 }}>Waiting for the first signals from pump.fun...</div>
-                  </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
+                  {loading && !gems.length && (
+                    <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "50px 20px" }}>
+                      <div style={{ color: "#dc2626", display: "inline-block" }} className="spin"><IconRefresh size={18} /></div>
+                      <div className="pulse" style={{ fontSize: 11, color: "#dc262680", marginTop: 10, letterSpacing: "2px" }}>SCANNING SOLANA MATRIX...</div>
+                    </div>
+                  )}
+                  {filtered.map(g => <GemCard key={g.id} gem={g} isNew={newIds.has(g.id)} onSnipe={setSnipeGem} onDex={(addr, sym) => setDexToken({ address: addr, symbol: sym })} />)}
+                  {!loading && gems.length > 0 && filtered.length === 0 && (
+                    <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: "#3f3f46" }}>
+                      <div style={{ color: "#3f3f46", marginBottom: 6, display: "flex", justifyContent: "center" }}><IconSearch size={24} /></div>
+                      <div style={{ fontSize: 12 }}>No gems match filters — try lowering Min Score</div>
+                    </div>
+                  )}
+                  {!loading && !gems.length && (
+                    <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: "#3f3f46" }}>
+                      <div style={{ fontSize: 24, marginBottom: 6 }}>⏳</div>
+                      <div style={{ fontSize: 12 }}>Waiting for the first signals from pump.fun...</div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -515,7 +892,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           {tab === "trades" && (
             <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5" }}>📡 Live KOL Feed</h1>
+                <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8 }}>
+                  <IconBroadcast size={isMobile ? 16 : 18} /> Live KOL Feed
+                </h1>
                 <div className="live-dot" /><span style={{ fontSize: 9, color: "#10b981", fontWeight: 600 }}>LIVE</span>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill,minmax(260px,1fr))", gap: 10 }}>
@@ -560,11 +939,15 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           {/* LAUNCH TAB */}
           {tab === "launch" && (
             <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px", maxWidth: 500 }}>
-              <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", marginBottom: 4 }}>🚀 Launch Token</h1>
+              <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
+                <IconRocket size={isMobile ? 16 : 18} /> Launch Token
+              </h1>
               <p style={{ fontSize: 11, color: "#3f3f46", marginBottom: 16 }}>Create & launch on Pump.fun · 100% on-chain via Phantom</p>
               <div style={{ display: "flex", alignItems: "center", padding: "8px 12px", marginBottom: 14, background: "#111113", border: "1px solid #10b98130", borderRadius: 8 }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 10, color: "#10b981", fontWeight: 600 }}>✓ {wallet.slice(0, 16)}...</div>
+                  <div style={{ fontSize: 10, color: "#10b981", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <IconCheck size={10} /> {wallet.slice(0, 16)}...
+                  </div>
                   {wBal && <div style={{ fontSize: 9, color: "#3f3f46" }}>{wBal} SOL</div>}
                 </div>
                 <span style={{ fontSize: 9, color: "#10b98180" }}>Connected</span>
@@ -643,21 +1026,54 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                     )}
                   </div>
 
-                  {ctMsg && <div style={{ fontSize: 10, color: ctMsg.startsWith("✓") || ctMsg.startsWith("Bundle") ? "#10b981" : "#f59e0b", textAlign: "center" }}>{ctMsg}</div>}
+                  {ctMsg && <div style={{ fontSize: 10, color: ctMsg.startsWith("Bundle") || ctMsg.startsWith("Launched") ? "#10b981" : "#f59e0b", textAlign: "center" }}>{ctMsg}</div>}
                   <button onClick={launchToken} disabled={ctLoad || !ct.name || !ct.sym}
                     style={{ background: ctJito ? "linear-gradient(135deg,#7c3aed,#a855f7)" : "linear-gradient(135deg,#dc2626,#7c3aed)", border: "none", color: "#fff", padding: 11,
                       borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: ctLoad ? "wait" : "pointer", letterSpacing: ".5px", opacity: (!ct.name || !ct.sym) ? 0.4 : 1 }}>
-                    {ctLoad ? <span className="pulse">⟳ Processing...</span> : ctJito ? "⚡ LAUNCH VIA JITO BUNDLE" : "⚡ LAUNCH ON-CHAIN"}
+                    {ctLoad
+                      ? <span className="pulse" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconRefresh size={12} /> Processing...</span>
+                      : <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconZap size={12} /> {ctJito ? "LAUNCH VIA JITO BUNDLE" : "LAUNCH ON-CHAIN"}</span>}
                   </button>
                 </div>
               )}
               {ctStep === "done" && (
                 <div style={{ textAlign: "center", padding: "30px 20px", background: "#111113", border: "1px solid #10b98130", borderRadius: 12 }}>
-                  <div style={{ fontSize: 48, marginBottom: 10 }}>🚀</div>
+                  <div style={{ color: "#10b981", marginBottom: 10, display: "flex", justifyContent: "center" }}><IconRocket size={48} /></div>
                   <div style={{ fontSize: 16, fontWeight: 800, color: "#10b981", marginBottom: 6 }}>Token Launched!</div>
                   <div style={{ fontSize: 11, color: "#52525b", marginBottom: 4 }}>${ct.sym.toUpperCase()} is live on Pump.fun</div>
-                  <div style={{ fontSize: 10, color: "#3f3f46", marginBottom: 16 }}>{ctMsg}</div>
-                  <button onClick={() => { setCtStep("form"); setCt({ name: "", sym: "", desc: "", img: "", devBuy: "0.5" }); setCtMsg(""); setCtFile(null); }}
+                  <div style={{ fontSize: 10, color: "#3f3f46", marginBottom: 10 }}>{ctMsg}</div>
+                  {ctMintAddress && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", marginBottom: 14, padding: "8px 12px", background: "#0a0a0b", border: "1px solid #27272a", borderRadius: 8 }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: "#52525b", letterSpacing: "1px" }}>CA</span>
+                      <span style={{ fontSize: 10, color: "#a1a1aa", fontFamily: "monospace", wordBreak: "break-all" }}>{ctMintAddress}</span>
+                      <button onClick={() => navigator.clipboard.writeText(ctMintAddress)}
+                        style={{ background: "none", border: "none", color: "#52525b", cursor: "pointer", flexShrink: 0, padding: 2 }}
+                        title="Copy CA">
+                        <IconCopy size={13} />
+                      </button>
+                    </div>
+                  )}
+                  {ctMintAddress && (
+                    <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 14 }}>
+                      <a href={`https://pump.fun/coin/${ctMintAddress}`} target="_blank" rel="noopener noreferrer"
+                        style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #27272a", background: "transparent", color: "#a1a1aa", fontSize: 11, fontWeight: 600, textDecoration: "none" }}>
+                        Pump.fun ↗
+                      </a>
+                      <a href={`https://dexscreener.com/solana/${ctMintAddress}`} target="_blank" rel="noopener noreferrer"
+                        style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #f9731640", background: "#f9731612", color: "#f97316", fontSize: 11, fontWeight: 700, textDecoration: "none" }}>
+                        DEX Screener ↗
+                      </a>
+                      <a href={`https://solscan.io/token/${ctMintAddress}`} target="_blank" rel="noopener noreferrer"
+                        style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #3b82f640", background: "#3b82f612", color: "#3b82f6", fontSize: 11, fontWeight: 700, textDecoration: "none" }}>
+                        Solscan ↗
+                      </a>
+                      <button onClick={() => setDexToken({ address: ctMintAddress, symbol: ct.sym })}
+                        style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #10b98140", background: "#10b98112", color: "#10b981", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                        DEX Info
+                      </button>
+                    </div>
+                  )}
+                  <button onClick={() => { setCtStep("form"); setCt({ name: "", sym: "", desc: "", img: "", devBuy: "0.5" }); setCtMsg(""); setCtFile(null); setCtMintAddress(null); }}
                     style={{ background: "#dc2626", border: "none", color: "#fff", padding: "8px 20px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                     Launch Another
                   </button>
@@ -670,7 +1086,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           {tab === "autosnipe" && (
             <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px", maxWidth: 560 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
-                <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5" }}>⚡ Auto-Snipe</h1>
+                <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8 }}>
+                  <IconTarget size={isMobile ? 16 : 18} /> Auto-Snipe
+                </h1>
                 <span style={{ fontSize: 8, fontWeight: 700, color: asEnabled ? "#10b981" : "#ef4444", background: asEnabled ? "#10b98120" : "#ef444420", border: `1px solid ${asEnabled ? "#10b98140" : "#ef444440"}`, padding: "2px 8px", borderRadius: 8 }}>
                   {asEnabled ? "● ACTIVE" : "○ PAUSED"}
                 </span>
@@ -681,6 +1099,29 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
               {/* Config card */}
               <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 16px", marginBottom: 16, display: "flex", flexDirection: "column", gap: 16 }}>
+
+                {/* Trading wallet status */}
+                <div style={{ padding: "10px 12px", borderRadius: 9, border: `1px solid ${iw.status === "unlocked" ? "#3b82f640" : "#27272a"}`, background: iw.status === "unlocked" ? "#3b82f608" : "transparent", display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: iw.status === "unlocked" ? "#3b82f6" : "#52525b", flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: iw.status === "unlocked" ? "#3b82f6" : "#52525b" }}>
+                      {iw.status === "unlocked" ? "Trading Wallet Active" : iw.status === "locked" ? "Trading Wallet Locked" : "No Trading Wallet"}
+                    </div>
+                    <div style={{ fontSize: 9, color: "#3f3f46" }}>
+                      {iw.status === "unlocked"
+                        ? `${shortAddr(iw.publicKey ?? "")} · ${iw.balance?.toFixed(4) ?? "…"} SOL — will be used automatically`
+                        : iw.status === "locked"
+                        ? "Unlock in Settings → Wallet to use for autosnipe"
+                        : "Create one in Settings → Wallet for faster autosnipe"}
+                    </div>
+                  </div>
+                  {iw.status !== "none" && (
+                    <button onClick={() => { setTab("settings" as typeof tab); setSettingsSection("wallet"); }}
+                      style={{ fontSize: 9, padding: "4px 8px", borderRadius: 6, border: "1px solid #27272a", background: "transparent", color: "#52525b", cursor: "pointer", whiteSpace: "nowrap" }}>
+                      {iw.status === "locked" ? "Unlock" : "Manage"}
+                    </button>
+                  )}
+                </div>
 
                 {/* Enable toggle */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -768,7 +1209,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                     <div key={i} style={{ padding: "8px 14px", borderBottom: "1px solid #0f0f0f", display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center" }}>
                       <div>
                         <div style={{ fontSize: 10, fontWeight: 700, color: entry.err ? "#ef4444" : "#10b981" }}>
-                          {entry.err ? "✗" : "✓"} ${entry.sym}
+                          {entry.err ? <IconX size={9} /> : <IconCheck size={9} />} ${entry.sym}
                         </div>
                         <div style={{ fontSize: 8, color: "#3f3f46", fontFamily: "monospace" }}>
                           {entry.err ? entry.err.slice(0, 60) : entry.sig?.slice(0, 24) + "…"}
@@ -888,11 +1329,180 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
             </div>
           )}
 
+          {/* SETTINGS TAB */}
+          {tab === "settings" && (
+            <SettingsBody section={settingsSection}>
+            <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px", maxWidth: 560 }}>
+              <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
+                <IconCog size={isMobile ? 16 : 18} /> Settings
+              </h1>
+              <p style={{ fontSize: 11, color: "#3f3f46", marginBottom: 24 }}>Configure your GEASS experience</p>
+
+              {/* Sounds */}
+              <div id="settings-sounds" style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 16px", marginBottom: 16, scrollMarginTop: 80 }}>
+                <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+                  <IconSpeaker size={11} /> SOUND ALERTS
+                </div>
+                {([
+                  [soundGems, setSoundGems, "New Gem Detected", "Plays a chime when a new token is detected by the Alpha Scanner"],
+                  [soundKol,  setSoundKol,  "KOL Trade Alert",  "Plays a tone when a tracked KOL wallet makes a new trade"],
+                ] as [boolean, React.Dispatch<React.SetStateAction<boolean>>, string, string][]).map(([val, set, label, desc]) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#e2d9f3" }}>{label}</div>
+                      <div style={{ fontSize: 10, color: "#52525b", marginTop: 2 }}>{desc}</div>
+                    </div>
+                    <button onClick={() => set(v => !v)}
+                      style={{ width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", position: "relative", background: val ? "#10b981" : "#27272a", transition: "background .2s", flexShrink: 0 }}>
+                      <span style={{ position: "absolute", top: 2, left: val ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Phantom wallet */}
+              <div id="settings-wallet" style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 16px", marginBottom: 16, scrollMarginTop: 80 }}>
+                <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+                  <IconWallet size={11} /> PHANTOM WALLET
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: "#a1a1aa", fontFamily: "monospace" }}>{shortAddr(wallet)}</div>
+                    {wBal && <div style={{ fontSize: 10, color: "#3f3f46" }}>{wBal} SOL balance</div>}
+                  </div>
+                  <button onClick={onDisconnect}
+                    style={{ padding: "6px 14px", borderRadius: 7, border: "1px solid #ef444430", background: "#ef444408", color: "#ef4444", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
+                    Disconnect
+                  </button>
+                </div>
+              </div>
+
+              {/* Internal trading wallet */}
+              <InternalWalletPanel iw={iw} />
+            </div>
+            </SettingsBody>
+          )}
+
+          {/* TRENDING TAB */}
+          {tab === "trending" && (
+            <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
+                <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8 }}>
+                  <IconFlame size={isMobile ? 16 : 18} /> Trending on Solana
+                </h1>
+                <span style={{ fontSize: 8, color: "#f97316", background: "#f9731620", border: "1px solid #f9731640", padding: "2px 8px", borderRadius: 8, fontWeight: 700 }}>DEX SCREENER</span>
+                {trendingLoading && <span style={{ fontSize: 9, color: "#52525b" }} className="pulse">Loading...</span>}
+                <button onClick={() => { setTrendingLoading(true); fetchTrending().then(d => { setTrendingTokens(d.tokens); setTrendingMetas(d.metas); }).finally(() => setTrendingLoading(false)); }}
+                  disabled={trendingLoading} style={{ marginLeft: "auto", fontSize: 9, padding: "4px 10px", borderRadius: 6, border: "1px solid #27272a", background: "transparent", color: "#52525b", cursor: trendingLoading ? "wait" : "pointer" }}>
+                  ↻ Refresh
+                </button>
+              </div>
+              <p style={{ fontSize: 11, color: "#3f3f46", marginBottom: 18 }}>Top boosted tokens · ranked by community activity, volume &amp; trust signals</p>
+
+              {/* Trending Metas / Categories */}
+              {trendingMetas.length > 0 && (
+                <div style={{ marginBottom: 22 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "#52525b", letterSpacing: "1.5px", marginBottom: 10 }}>TRENDING CATEGORIES</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {trendingMetas.map(m => (
+                      <div key={m.slug} style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 10, padding: "8px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+                        {m.icon?.type === "emoji" && <span style={{ fontSize: 16 }}>{m.icon.value}</span>}
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#f4f4f5" }}>{m.name}</div>
+                          <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
+                            <span style={{ fontSize: 9, color: "#3f3f46" }}>{m.tokenCount} tokens</span>
+                            {m.mcChange24 !== 0 && (
+                              <span style={{ fontSize: 9, fontWeight: 600, color: m.mcChange24 >= 0 ? "#10b981" : "#ef4444" }}>
+                                {m.mcChange24 >= 0 ? "+" : ""}{m.mcChange24.toFixed(1)}% 24h
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Trending Tokens list */}
+              {!trendingLoading && trendingTokens.length === 0 && (
+                <div style={{ textAlign: "center", padding: "40px 20px", color: "#3f3f46" }}>
+                  <div style={{ color: "#f97316", marginBottom: 8, display: "flex", justifyContent: "center" }}><IconFlame size={24} /></div>
+                  <div style={{ fontSize: 12 }}>No trending data — try refreshing</div>
+                </div>
+              )}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {trendingTokens.map((t, i) => (
+                  <div key={t.address} style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+                    {/* Rank */}
+                    <div style={{ width: 24, textAlign: "center", fontSize: 11, fontWeight: 800, color: i < 3 ? "#f97316" : "#3f3f46", flexShrink: 0 }}>
+                      #{i + 1}
+                    </div>
+                    {/* Icon */}
+                    {t.icon
+                      ? <img src={t.icon} alt={t.symbol} width={32} height={32} style={{ borderRadius: "50%", flexShrink: 0, objectFit: "cover" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      : <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#27272a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#52525b", flexShrink: 0 }}>{t.symbol[0]}</div>
+                    }
+                    {/* Name + address */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "#f4f4f5" }}>${t.symbol}</div>
+                      <div style={{ fontSize: 9, color: "#3f3f46", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name} · {t.address.slice(0, 12)}…</div>
+                    </div>
+                    {/* Price + change */}
+                    {!isMobile && (
+                      <div style={{ textAlign: "right", flexShrink: 0, minWidth: 80 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#f4f4f5" }}>
+                          {t.priceUsd !== null ? (t.priceUsd < 0.0001 ? t.priceUsd.toExponential(2) : `$${t.priceUsd.toFixed(6)}`) : "—"}
+                        </div>
+                        {t.priceChange24 !== null && (
+                          <div style={{ fontSize: 10, fontWeight: 600, color: t.priceChange24 >= 0 ? "#10b981" : "#ef4444" }}>
+                            {t.priceChange24 >= 0 ? "+" : ""}{t.priceChange24.toFixed(1)}%
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {/* Volume */}
+                    {!isMobile && t.volume24 !== null && (
+                      <div style={{ textAlign: "right", flexShrink: 0, minWidth: 80 }}>
+                        <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px" }}>VOL 24H</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#eab308" }}>
+                          {t.volume24 >= 1e6 ? `$${(t.volume24/1e6).toFixed(1)}M` : t.volume24 >= 1e3 ? `$${(t.volume24/1e3).toFixed(0)}K` : `$${t.volume24.toFixed(0)}`}
+                        </div>
+                      </div>
+                    )}
+                    {/* Boost */}
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px" }}>BOOST</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#f97316" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <IconFlame size={9} />
+                          {t.boostAmount >= 1000 ? `${(t.boostAmount/1000).toFixed(0)}k` : t.boostAmount}
+                        </span>
+                      </div>
+                    </div>
+                    {/* View link */}
+                    <a href={t.dexUrl} target="_blank" rel="noopener noreferrer"
+                      style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 7, border: "1px solid #f9731630", background: "#f9731610", color: "#f97316", fontSize: 10, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}>
+                      DEX ↗
+                    </a>
+                  </div>
+                ))}
+              </div>
+              {trendingTokens.length > 0 && (
+                <div style={{ marginTop: 14, fontSize: 9, color: "#27272a", textAlign: "center" }}>
+                  Data from DEX Screener · Top boosted Solana tokens · Updates every 60s
+                </div>
+              )}
+            </div>
+          )}
+
           {/* PRO TAB */}
           {tab === "pro" && (
             <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px", maxWidth: 700 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
-                <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5" }}>👑 GEASS Pro</h1>
+                <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8 }}>
+                  <IconCrown size={isMobile ? 16 : 18} /> GEASS Pro
+                </h1>
                 {pro.active
                   ? <span style={{ fontSize: 8, fontWeight: 700, color: "#10b981", background: "#10b98120", border: "1px solid #10b98140", padding: "2px 8px", borderRadius: 8 }}>● ACTIVE</span>
                   : <span style={{ fontSize: 8, fontWeight: 700, color: "#a855f7", background: "#a855f720", border: "1px solid #a855f740", padding: "2px 8px", borderRadius: 8 }}>UPGRADE</span>}
@@ -901,13 +1511,13 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2,1fr)", gap: 14, marginBottom: 28 }}>
                 {[
-                  { icon: "🔍", title: "Insider & Rug Detector", desc: "Advanced on-chain analysis detects insider wallets, coordinated buys and rug patterns before they hit Twitter." },
-                  { icon: "⚡", title: "Dedicated RPC + Helius Priority", desc: "Skip the queue. Your requests go through dedicated Helius nodes — first to detect, first to snipe." },
-                  { icon: "🤖", title: "Custom AI Rules & Sniping Bots", desc: "Define your own entry conditions. Automate buys based on score, KOL activity, bonding curve progress." },
-                  { icon: "📊", title: "Portfolio Analytics + Risk Tools", desc: "Real-time P&L, exposure by tier, drawdown alerts, and AI-generated risk scores per position." },
+                  { Icon: IconSearch, title: "Insider & Rug Detector",         desc: "Advanced on-chain analysis detects insider wallets, coordinated buys and rug patterns before they hit Twitter." },
+                  { Icon: IconZap,    title: "Dedicated RPC + Helius Priority", desc: "Skip the queue. Your requests go through dedicated Helius nodes — first to detect, first to snipe." },
+                  { Icon: IconTarget, title: "Custom AI Rules & Sniping Bots", desc: "Define your own entry conditions. Automate buys based on score, KOL activity, bonding curve progress." },
+                  { Icon: IconChart,  title: "Portfolio Analytics + Risk Tools", desc: "Real-time P&L, exposure by tier, drawdown alerts, and AI-generated risk scores per position." },
                 ].map(f => (
                   <div key={f.title} style={{ background: "linear-gradient(135deg,#14101f,#111113)", border: "1px solid #7c3aed30", borderRadius: 14, padding: "18px 16px" }}>
-                    <div style={{ fontSize: 22, marginBottom: 8 }}>{f.icon}</div>
+                    <div style={{ color: "#a855f7", marginBottom: 8 }}><f.Icon size={22} /></div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: "#e2d9f3", marginBottom: 5 }}>{f.title}</div>
                     <div style={{ fontSize: 10, color: "#71717a", lineHeight: 1.6 }}>{f.desc}</div>
                   </div>
@@ -1008,7 +1618,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 7, marginBottom: 18 }}>
                     {["Instant on-chain activation (≈30s)", "30 days of Pro access", "Cancel anytime — just don't renew"].map(l => (
                       <li key={l} style={{ display: "flex", gap: 8, fontSize: 11, color: "#e2d9f3" }}>
-                        <span style={{ color: "#a855f7" }}>✓</span>{l}
+                        <span style={{ color: "#a855f7", display: "inline-flex" }}><IconCheck size={11} /></span>{l}
                       </li>
                     ))}
                   </ul>
@@ -1019,7 +1629,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   )}
                   <button onClick={() => pro.pay().catch(() => {/* error surfaced via pro.error */})} disabled={pro.loading}
                     style={{ width: "100%", padding: 12, borderRadius: 8, border: "none", background: "linear-gradient(135deg,#dc2626,#7c3aed)", color: "#fff", fontSize: 13, fontWeight: 800, cursor: pro.loading ? "wait" : "pointer", letterSpacing: ".5px", boxShadow: "0 0 32px #7c3aed30" }}>
-                    {pro.loading ? <span className="pulse">⟳ Confirming on-chain...</span> : "◎ Pay 3 SOL — Activate Pro"}
+                    {pro.loading
+                      ? <span className="pulse" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconRefresh size={12} /> Confirming on-chain...</span>
+                      : <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconSolana size={12} /> Pay 3 SOL — Activate Pro</span>}
                   </button>
                   <div style={{ marginTop: 10, fontSize: 9, color: "#3f3f46", textAlign: "center" }}>
                     Phantom will ask you to approve a transfer of exactly 3 SOL.
@@ -1030,19 +1642,24 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           )}
         </main>
 
-        {/* Mobile bottom tab bar */}
+        {/* Mobile bottom tab bar — only essential items, settings lives in hamburger */}
         {isMobile && (
-          <nav style={{ height: 56, background: "#0c0c0e", borderTop: "1px solid #18181b", display: "flex", alignItems: "stretch", flexShrink: 0 }}>
-            {NAV.map(n => (
-              <button key={n.id} onClick={() => setTab(n.id as typeof tab)}
-                style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
-                  background: "transparent", border: "none", cursor: "pointer",
-                  color: tab === n.id ? (n.pro ? "#a855f7" : "#ef4444") : "#3f3f46",
-                  borderTop: tab === n.id ? `2px solid ${n.pro ? "#a855f7" : "#ef4444"}` : "2px solid transparent",
-                }}>
-                <span style={{ fontSize: 8, fontWeight: tab === n.id ? 700 : 400 }}>{n.label}</span>
-              </button>
-            ))}
+          <nav style={{ height: 60, background: "#0c0c0e", borderTop: "1px solid #18181b", display: "flex", alignItems: "stretch", flexShrink: 0 }}>
+            {NAV.filter(n => n.mobile).map(n => {
+              const isActive = tab === n.id;
+              const accent = n.pro ? "#a855f7" : "#ef4444";
+              return (
+                <button key={n.id} onClick={() => { setTab(n.id as typeof tab); setSettingsOpen(false); }}
+                  style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
+                    background: "transparent", border: "none", cursor: "pointer",
+                    color: isActive ? accent : "#52525b",
+                    borderTop: isActive ? `2px solid ${accent}` : "2px solid transparent",
+                  }}>
+                  <NavIcon id={n.iconId} size={18} />
+                  <span style={{ fontSize: 9, fontWeight: isActive ? 700 : 500 }}>{n.mobileLabel ?? n.label}</span>
+                </button>
+              );
+            })}
           </nav>
         )}
       </div>

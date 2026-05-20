@@ -55,3 +55,10 @@ input[type="range"] {
 .live-dot { animation: blink 1.5s infinite; width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .spin     { animation: spin 1.5s linear infinite; }
 .pulse    { animation: pulse 1.8s infinite; }
+
+@keyframes ticker {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.ticker-track { animation: ticker 35s linear infinite; display: flex; gap: 32px; will-change: transform; }
+.ticker-track:hover { animation-play-state: paused; }

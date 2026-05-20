@@ -1,6 +1,6 @@
 export const HELIUS_KEY = process.env.HELIUS_API_KEY ?? "";
 export const HELIUS_RPC = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
-export const HELIUS_API = `https://api.helius.xyz/v0`;
+export const HELIUS_API = `https://api-mainnet.helius-rpc.com/v0`;
 export const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY ?? "";
 
 export const PUMP_PROG = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
