@@ -1,104 +1,88 @@
 "use client";
 import { useState } from "react";
 import type { Gem } from "@/lib/types";
-import { pumpTradeTx, jitoSnipe, jitoSubmit } from "@/lib/api";
-import { signAndSendBytes, signAllWithPhantom } from "@/lib/wallet";
+import { pumpPortal } from "@/lib/pumpportal";
+import { jitoSubmit } from "@/lib/api";
 import { TIP_DEFAULT_SOL, TIP_MIN_SOL, TIP_MAX_SOL } from "@geass/sdk/jito";
 import { IconZap, IconX, IconCheck, IconRefresh } from "./icons";
 
-type Mode = "phantom" | "jito-server" | "jito-phantom";
+type Mode = "phantom" | "jito-phantom" | "jito-server";
+
+const GEASS_PUBKEY = process.env.NEXT_PUBLIC_GEASS_WALLET_PUBKEY ?? "";
+
+const MODE_LABELS: Record<Mode, string> = {
+  "phantom":      "Standard",
+  "jito-phantom": "Jito (your wallet)",
+  "jito-server":  "Jito (GEASS wallet)",
+};
+const MODE_DESC: Record<Mode, string> = {
+  "phantom":      "Via Phantom · standard priority fee",
+  "jito-phantom": "Anti-MEV bundle · you sign · Phantom",
+  "jito-server":  "Anti-MEV bundle · server signs instantly",
+};
 
 export function SnipeModal({
   gem,
   wallet,
   onClose,
 }: {
-  gem: Gem | null;
+  gem:    Gem | null;
   wallet: string | null;
   onClose: () => void;
 }) {
-  const [amt, setAmt]     = useState("0.5");
+  const [amt, setAmt]       = useState("0.5");
   const [tipSol, setTipSol] = useState(String(TIP_DEFAULT_SOL));
-  const [mode, setMode]   = useState<Mode>("phantom");
-  const [step, setStep]   = useState<"form" | "loading" | "done">("form");
-  const [msg, setMsg]     = useState("");
+  const [mode, setMode]     = useState<Mode>("phantom");
+  const [step, setStep]     = useState<"form" | "loading" | "done">("form");
+  const [msg, setMsg]       = useState("");
 
   if (!gem) return null;
 
   const doSnipe = async () => {
-    if (!wallet && mode !== "jito-server") { setMsg("Connect Phantom first"); return; }
+    if (mode !== "jito-server" && !wallet) { setMsg("Connect Phantom first"); return; }
     const value = parseFloat(amt);
     const tip   = parseFloat(tipSol);
     if (!Number.isFinite(value) || value <= 0) { setMsg("Enter a positive amount"); return; }
     setStep("loading");
+    setMsg("Building transaction…");
 
     try {
-      // ── Mode A: standard Phantom (no Jito) ──────────────────────────────
+      const baseParams = {
+        publicKey: wallet ?? "",
+        action:    "buy" as const,
+        mint:      gem.contractAddress,
+        amount:    value,
+        slippage:  15,
+        tipSol:    Number.isFinite(tip) ? tip : TIP_DEFAULT_SOL,
+      };
+
       if (mode === "phantom") {
-        setMsg("Building transaction…");
-        const bytes = await pumpTradeTx({
-          publicKey: wallet!,
-          action:    "buy",
-          mint:      gem.contractAddress,
-          amount:    value,
-          slippage:  15,
-          priorityFee: 0.001,
-          pool:      "pump",
-        });
-        setMsg("Sign in Phantom…");
-        const sig = await signAndSendBytes(bytes);
-        setMsg(`TX ${sig.slice(0, 16)}…`);
-        setStep("done");
-        return;
-      }
+        // ── Standard Phantom: build → Phantom signs + sends in one step ──
+        const result = await pumpPortal.phantomTrade(baseParams);
+        setMsg(`TX ${result.signature!.slice(0, 18)}…`);
 
-      // ── Mode B: Jito via GEASS server wallet ─────────────────────────────
-      if (mode === "jito-server") {
-        setMsg("Submitting Jito bundle…");
-        const { bundleId } = await jitoSnipe({
-          mint:    gem.contractAddress,
-          amount:  value,
-          slippage: 15,
-          tipSol:  Number.isFinite(tip) ? tip : TIP_DEFAULT_SOL,
-          pool:    "auto",
-        });
-        setMsg(`Bundle ${bundleId.slice(0, 18)}…`);
-        setStep("done");
-        return;
-      }
-
-      // ── Mode C: Jito, user Phantom signs ─────────────────────────────────
-      if (mode === "jito-phantom") {
+      } else if (mode === "jito-phantom") {
+        // ── Jito Phantom: build → Phantom signs → Jito bundle ─────────────
         setMsg("Building Jito transaction…");
-        // Fetch unsigned buy tx (no priority fee — Jito handles it)
-        const buyBytes = await pumpTradeTx({
-          publicKey:   wallet!,
-          action:      "buy",
-          mint:        gem.contractAddress,
-          amount:      value,
-          slippage:    15,
-          priorityFee: 0,
-          pool:        "pump",
-        });
-        setMsg("Sign in Phantom (1 tx)…");
-        const [signedB64] = await signAllWithPhantom([buyBytes]);
-        setMsg("Submitting bundle to Jito…");
-        const { bundleId } = await jitoSubmit([signedB64]);
-        setMsg(`Bundle ${bundleId.slice(0, 18)}…`);
-        setStep("done");
-        return;
+        const result = await pumpPortal.jitoPhantomTrade({ ...baseParams, pool: "pump" });
+        setMsg(`Bundle ${result.bundleId!.slice(0, 18)}…`);
+
+      } else {
+        // ── Jito GEASS server: build in browser → server signs + submits ──
+        if (!GEASS_PUBKEY) throw new Error("GEASS wallet not configured");
+        setMsg("Submitting Jito bundle…");
+        const result = await pumpPortal.jitoServerTrade({ ...baseParams, pool: "pump" }, GEASS_PUBKEY);
+        setMsg(`Bundle ${result.bundleId!.slice(0, 18)}…`);
       }
+
+      setStep("done");
     } catch (e) {
       setMsg("Error: " + (e instanceof Error ? e.message : String(e)));
       setStep("form");
     }
   };
 
-  const modeLabel: Record<Mode, string> = {
-    "phantom":      `Buy ${amt} SOL`,
-    "jito-server":  `Jito Snipe (server wallet)`,
-    "jito-phantom": `Jito Bundle (your wallet)`,
-  };
+  const accent = mode === "phantom" ? "#ef4444" : "#a855f7";
 
   return (
     <div
@@ -120,17 +104,19 @@ export function SnipeModal({
             <div style={{ fontSize: 11, color: "#71717a", marginBottom: 4, fontFamily: "ui-monospace,monospace" }}>{msg}</div>
             {mode !== "phantom" && (
               <div style={{ fontSize: 9, color: "#3f3f46", marginBottom: 8 }}>
-                Check landing status on <a href="https://explorer.jito.wtf" target="_blank" rel="noopener noreferrer" style={{ color: "#a855f7" }}>explorer.jito.wtf</a>
+                Verify at <a href="https://explorer.jito.wtf" target="_blank" rel="noopener noreferrer" style={{ color: "#a855f7" }}>explorer.jito.wtf</a>
               </div>
             )}
-            <button onClick={onClose} style={{ marginTop: 10, background: "#ef4444", border: "none", color: "#fff", padding: "9px 22px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Close</button>
+            <button onClick={onClose} style={{ marginTop: 10, background: "#ef4444", border: "none", color: "#fff", padding: "9px 22px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              Close
+            </button>
           </div>
         ) : (
           <>
             {/* Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                <div style={{ display: "inline-flex", padding: 8, borderRadius: 9, background: mode === "phantom" ? "rgba(239,68,68,.1)" : "rgba(168,85,247,.1)", border: `1px solid ${mode === "phantom" ? "rgba(239,68,68,.3)" : "rgba(168,85,247,.3)"}`, color: mode === "phantom" ? "#ef4444" : "#a855f7" }}>
+                <div style={{ display: "inline-flex", padding: 8, borderRadius: 9, background: `${accent}18`, border: `1px solid ${accent}40`, color: accent }}>
                   <IconZap size={14} strokeWidth={1.9} />
                 </div>
                 <div>
@@ -147,24 +133,20 @@ export function SnipeModal({
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", marginBottom: 6 }}>EXECUTION MODE</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {([
-                  ["phantom",      "Standard",           "Via Phantom · standard priority fee"],
-                  ["jito-phantom", "Jito (your wallet)", "Anti-MEV bundle · you sign · Phantom"],
-                  ["jito-server",  "Jito (GEASS wallet)","Anti-MEV bundle · server signs instantly"],
-                ] as [Mode, string, string][]).map(([m, l, d]) => (
+                {(["phantom", "jito-phantom", "jito-server"] as Mode[]).map(m => (
                   <button key={m} onClick={() => setMode(m)}
                     style={{ padding: "7px 10px", borderRadius: 7, cursor: "pointer", textAlign: "left",
-                      border: `1px solid ${mode === m ? "#a855f7" : "#27272a"}`,
-                      background: mode === m ? "#a855f712" : "transparent" }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: mode === m ? "#a855f7" : "#71717a" }}>{l}</div>
-                    <div style={{ fontSize: 9, color: "#3f3f46" }}>{d}</div>
+                      border: `1px solid ${mode === m ? accent : "#27272a"}`,
+                      background: mode === m ? `${accent}12` : "transparent" }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: mode === m ? accent : "#71717a" }}>{MODE_LABELS[m]}</div>
+                    <div style={{ fontSize: 9, color: "#3f3f46" }}>{MODE_DESC[m]}</div>
                   </button>
                 ))}
               </div>
             </div>
 
             {/* Amount */}
-            <div style={{ fontSize: 10, color: "#52525b", letterSpacing: "1.5px", marginBottom: 8 }}>AMOUNT (SOL)</div>
+            <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", marginBottom: 8 }}>AMOUNT (SOL)</div>
             <div style={{ display: "flex", gap: 5, marginBottom: 8 }}>
               {["0.1", "0.5", "1", "2", "5"].map(v => (
                 <button key={v} onClick={() => setAmt(v)} style={{ flex: 1, padding: "7px", borderRadius: 7, fontSize: 11, fontWeight: 600, cursor: "pointer",
@@ -174,7 +156,7 @@ export function SnipeModal({
             <input type="number" value={amt} step="0.01" min="0" onChange={e => setAmt(e.target.value)}
               style={{ width: "100%", background: "#09090b", border: "1px solid #27272a", borderRadius: 8, color: "#fafafa", padding: "10px 12px", fontSize: 14, outline: "none", marginBottom: 12, fontVariantNumeric: "tabular-nums" }} />
 
-            {/* Jito tip slider */}
+            {/* Jito tip (only for bundle modes) */}
             {mode !== "phantom" && (
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", marginBottom: 5, display: "flex", justifyContent: "space-between" }}>
@@ -191,7 +173,7 @@ export function SnipeModal({
             )}
 
             {msg && (
-              <div style={{ fontSize: 11, color: msg.startsWith("TX") || msg.startsWith("Bundle") ? "#10b981" : "#f59e0b", marginBottom: 10, textAlign: "center" }}>{msg}</div>
+              <div style={{ fontSize: 11, color: msg.startsWith("Error") ? "#ef4444" : "#f59e0b", marginBottom: 10, textAlign: "center" }}>{msg}</div>
             )}
 
             <button onClick={doSnipe} disabled={step === "loading"}
@@ -200,10 +182,11 @@ export function SnipeModal({
                   ? "linear-gradient(135deg,#ef4444,#8b5cf6)"
                   : "linear-gradient(135deg,#7c3aed,#a855f7)",
                 border: "none", color: "#fff", padding: "11px", borderRadius: 9, fontSize: 12.5, fontWeight: 600,
-                cursor: step === "loading" ? "wait" : "pointer", letterSpacing: ".2px" }}>
+                cursor: step === "loading" ? "wait" : "pointer", letterSpacing: ".2px",
+                opacity: step === "loading" ? 0.7 : 1 }}>
               {step === "loading"
                 ? (<><IconRefresh size={12} strokeWidth={2} className="spin" /> Processing…</>)
-                : (<><IconZap size={12} strokeWidth={2} /> {modeLabel[mode]} of ${gem.sym}</>)}
+                : (<><IconZap size={12} strokeWidth={2} /> {MODE_LABELS[mode]} — {amt} SOL of ${gem.sym}</>)}
             </button>
           </>
         )}

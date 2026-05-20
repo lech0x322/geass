@@ -159,13 +159,14 @@ export interface JitoSnipeResult {
   wallet: string;
 }
 
-/** Server-side Jito snipe using the GEASS wallet. */
+/**
+ * Submit a pre-built unsigned buy tx (base64) to the GEASS server for signing
+ * and Jito bundle submission. The tx must be built browser-side via PumpPortal
+ * (use buildPumpTx from lib/pumpportal.ts) before calling this.
+ */
 export async function jitoSnipe(params: {
-  mint: string;
-  amount?: number;
-  slippage?: number;
-  tipSol?: number;
-  pool?: string;
+  buyTxB64: string;
+  tipSol?:  number;
 }): Promise<JitoSnipeResult> {
   const r = await fetch("/api/jito/snipe", {
     method: "POST",
