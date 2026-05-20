@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { IconZap, IconSearch } from "./icons";
+import { IconZap, IconSearch, IconX } from "./icons";
 
 interface Pair {
   chainId: string;
@@ -57,6 +57,7 @@ export function TokenModal({ address, symbol, onClose, onSnipe }: Props) {
   const [pairs, setPairs] = useState<Pair[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(0);
+  const [view, setView] = useState<"info" | "chart">("info");
 
   useEffect(() => {
     setLoading(true);
@@ -98,13 +99,42 @@ export function TokenModal({ address, symbol, onClose, onSnipe }: Props) {
               {token?.name} · {address.slice(0, 20)}…
             </div>
           </div>
-          <button onClick={onClose}
-            style={{ background: "transparent", border: "1px solid #27272a", color: "#52525b", width: 30, height: 30, borderRadius: 8, cursor: "pointer", fontSize: 14, flexShrink: 0 }}>
-            ✕
-          </button>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            {/* View toggle */}
+            <div style={{ display: "flex", background: "#111113", border: "1px solid #27272a", borderRadius: 8, overflow: "hidden" }}>
+              {(["info", "chart"] as const).map(v => (
+                <button key={v} onClick={() => setView(v)}
+                  style={{ padding: "5px 12px", fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
+                    background: view === v ? "#dc2626" : "transparent",
+                    color: view === v ? "#fff" : "#52525b", letterSpacing: ".5px", textTransform: "uppercase" }}>
+                  {v}
+                </button>
+              ))}
+            </div>
+            <button onClick={onClose}
+              style={{ background: "transparent", border: "1px solid #27272a", color: "#52525b", width: 30, height: 30, borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <IconX size={14} />
+            </button>
+          </div>
         </div>
 
-        {/* Scrollable body */}
+        {/* Chart view */}
+        {view === "chart" && (
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <iframe
+              src={`https://dexscreener.com/solana/${address}?embed=1&theme=dark&trades=0&info=0`}
+              style={{ flex: 1, border: "none", width: "100%", minHeight: 480 }}
+              allow="clipboard-write"
+              title="DexScreener chart"
+            />
+            <div style={{ padding: "8px 14px", fontSize: 9, color: "#3f3f46", textAlign: "center", borderTop: "1px solid #18181b" }}>
+              Chart powered by DexScreener
+            </div>
+          </div>
+        )}
+
+        {/* Info view: scrollable body + footer */}
+        {view === "info" && <>
         <div style={{ overflowY: "auto", flex: 1 }}>
           {loading && (
             <div style={{ padding: "40px 20px", textAlign: "center", fontSize: 11, color: "#52525b" }} className="pulse">
@@ -242,6 +272,7 @@ export function TokenModal({ address, symbol, onClose, onSnipe }: Props) {
             </button>
           </div>
         )}
+        </>}
       </div>
     </div>
   );

@@ -24,6 +24,10 @@ export type NavIconId =
   | "users" | "cog" | "crown";
 
 export type SettingsSection = "sounds" | "referral" | "wallet";
+/** Settings sub-items that navigate to a different tab entirely. */
+export const SETTINGS_TAB_OVERRIDES: Partial<Record<SettingsSection, NavId>> = {
+  referral: "referral",
+};
 
 export interface NavItem {
   id: NavId;
@@ -46,7 +50,6 @@ export const NAV: NavItem[] = [
   { id: "launch",    label: "Launch",          mobileLabel: "Trade",                  iconId: "rocket",    mobile: true },
   { id: "gems",      label: "Alpha Scanner",   mobileLabel: "Scanner", badge: "PRO",  pro: true, iconId: "zap",    mobile: true },
   { id: "autosnipe", label: "Auto-Snipe",                              badge: "NEW",  pro: true, iconId: "target" },
-  { id: "referral",  label: "Referral",                                badge: "NEW",  iconId: "users" },
   {
     id: "settings",
     label: "Settings",

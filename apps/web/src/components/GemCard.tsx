@@ -1,8 +1,9 @@
 "use client";
+import { useState, useRef, useEffect } from "react";
 import { TIER } from "@/lib/config";
 import { fmtMcap } from "@/lib/utils";
 import type { Gem } from "@/lib/types";
-import { IconZap, IconSolana } from "./icons";
+import { IconZap, IconSolana, IconCheck, IconX } from "./icons";
 
 function BondingCurveBar({ pct, sol }: { pct: number; sol: number }) {
   const clamped = Math.max(0, Math.min(100, pct));
@@ -22,16 +23,58 @@ function BondingCurveBar({ pct, sol }: { pct: number; sol: number }) {
   );
 }
 
-function SafetyBadge({ ok, label, tip }: { ok: boolean; label: string; tip: string }) {
+const BADGE_INFO: Record<string, { title: string; safe: string; risk: string }> = {
+  MINT: {
+    title: "Mint Authority",
+    safe: "Mint authority is revoked — no one can create new tokens. The total supply is fixed forever. This is the safest state.",
+    risk: "Mint authority is ACTIVE — the creator can print unlimited new tokens at any time, instantly diluting your position. High risk.",
+  },
+  FREEZE: {
+    title: "Freeze Authority",
+    safe: "Freeze authority is revoked — no one can freeze your wallet or prevent you from selling. Safe.",
+    risk: "Freeze authority is ACTIVE — the creator can freeze your token account, blocking you from selling or transferring. High risk.",
+  },
+};
+
+function SafetyBadge({ ok, label }: { ok: boolean; label: string }) {
   const c = ok ? "#10b981" : "#f59e0b";
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  const info = BADGE_INFO[label];
+
+  useEffect(() => {
+    if (!open) return;
+    const handle = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [open]);
+
   return (
-    <span title={tip} style={{
-      fontSize: 8, fontWeight: 700, color: c,
-      background: c + "15", border: `1px solid ${c}40`,
-      padding: "2px 6px", borderRadius: 3, letterSpacing: ".5px",
-      display: "inline-flex", alignItems: "center", gap: 3,
-    }}>
-      <span style={{ fontSize: 9 }}>{ok ? "✓" : "⚠"}</span>{label}
+    <span ref={ref} style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        onClick={e => { e.stopPropagation(); setOpen(v => !v); }}
+        style={{
+          fontSize: 8, fontWeight: 700, color: c,
+          background: c + "15", border: `1px solid ${c}40`,
+          padding: "2px 6px", borderRadius: 3, letterSpacing: ".5px",
+          display: "inline-flex", alignItems: "center", gap: 3, cursor: "pointer",
+        }}>
+        {ok ? <IconCheck size={9} /> : <span style={{ fontSize: 9, color: c }}>!</span>}
+        {label}
+      </button>
+      {open && info && (
+        <div style={{
+          position: "absolute", bottom: "calc(100% + 6px)", left: 0, zIndex: 200,
+          background: "#18181b", border: "1px solid #27272a", borderRadius: 10,
+          padding: "12px 14px", width: 240, boxShadow: "0 8px 32px #000000a0",
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#f4f4f5", marginBottom: 6 }}>{info.title}</div>
+          <div style={{ fontSize: 10, color: ok ? "#10b981" : "#f59e0b", lineHeight: 1.6, display: "flex", gap: 6 }}>
+            {ok ? <IconCheck size={11} /> : <IconX size={11} />}
+            <span>{ok ? info.safe : info.risk}</span>
+          </div>
+        </div>
+      )}
     </span>
   );
 }
@@ -96,8 +139,8 @@ export function GemCard({ gem, isNew, onSnipe, onDex }: {
 
       {/* Safety badges */}
       <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-        <SafetyBadge ok={gem.mintRev} label="MINT" tip={gem.mintRev ? "Mint authority revoked" : "Mint authority active"} />
-        <SafetyBadge ok={gem.freezeRev} label="FREEZE" tip={gem.freezeRev ? "Freeze authority revoked" : "Freeze authority active"} />
+        <SafetyBadge ok={gem.mintRev} label="MINT" />
+        <SafetyBadge ok={gem.freezeRev} label="FREEZE" />
         {gem.holders > 0 && (
           <span title={`${gem.holders} top holders observed`}
             style={{ fontSize: 8, fontWeight: 700, color: "#71717a", background: "#18181b", border: "1px solid #27272a", padding: "2px 6px", borderRadius: 3, letterSpacing: ".5px" }}>

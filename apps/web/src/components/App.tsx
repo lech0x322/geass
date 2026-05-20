@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Keypair, VersionedTransaction } from "@solana/web3.js";
-import { KOLS, NAV, TIER } from "@/lib/config";
+import { KOLS, NAV, TIER, SETTINGS_TAB_OVERRIDES } from "@/lib/config";
 import { fmtAge, shortAddr } from "@/lib/utils";
 import { scan, fetchBalance, pumpTradeTx, pumpIpfs, fetchPortfolio, autoSnipe, jitoLaunchBundle, jitoSubmit, fetchTrending, type PortfolioResult, type AutoSnipeResult, type TrendingToken, type TrendingMeta } from "@/lib/api";
 import { signAllWithPhantom } from "@/lib/wallet";
@@ -549,8 +549,13 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                     return (
                       <button key={s.id}
                         onClick={() => {
-                          setTab("settings" as typeof tab);
-                          setSettingsSection(s.id);
+                          const override = SETTINGS_TAB_OVERRIDES[s.id];
+                          if (override) {
+                            setTab(override as typeof tab);
+                          } else {
+                            setTab("settings" as typeof tab);
+                            setSettingsSection(s.id);
+                          }
                           setSidebarOpen(false);
                         }}
                         style={{
@@ -804,43 +809,31 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
               </div>
 
               {/* Grid */}
-              {!pro.active && gems.length > 0 ? (
+              {!pro.active ? (
                 <div style={{ position: "relative" }}>
-                  {/* Preview — first 3 visible */}
-                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill,minmax(280px,1fr))", gap: 12, marginBottom: 0 }}>
-                    {loading && !gems.length && (
-                      <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "50px 20px" }}>
-                        <div style={{ color: "#dc2626", display: "inline-block" }} className="spin"><IconRefresh size={18} /></div>
-                        <div className="pulse" style={{ fontSize: 11, color: "#dc262680", marginTop: 10, letterSpacing: "2px" }}>SCANNING SOLANA MATRIX...</div>
+                  {/* Blurred preview of all tokens */}
+                  {gems.length > 0 && (
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill,minmax(280px,1fr))", gap: 12, filter: "blur(8px)", pointerEvents: "none", userSelect: "none", opacity: 0.35 }}>
+                      {filtered.slice(0, 6).map(g => <GemCard key={g.id} gem={g} isNew={false} onSnipe={() => {}} />)}
+                    </div>
+                  )}
+                  {/* Full-grid lock overlay */}
+                  <div style={{ position: gems.length > 0 ? "absolute" : "relative", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: gems.length === 0 ? "60px 20px" : 0, minHeight: gems.length === 0 ? 260 : undefined }}>
+                    <div style={{ background: "linear-gradient(135deg,#14101f,#0d0d12)", border: "1px solid #7c3aed60", borderRadius: 20, padding: "32px 40px", textAlign: "center", backdropFilter: "blur(12px)", boxShadow: "0 0 60px #7c3aed20" }}>
+                      <div style={{ color: "#7c3aed", marginBottom: 10, display: "flex", justifyContent: "center" }}><IconLock size={40} /></div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: "#f4f4f5", marginBottom: 6 }}>Alpha Scanner — Pro Only</div>
+                      <div style={{ fontSize: 12, color: "#71717a", marginBottom: 8, lineHeight: 1.6, maxWidth: 280 }}>
+                        {gems.length > 0
+                          ? <><span style={{ color: "#ef4444", fontWeight: 700 }}>{filtered.length} signals</span> detected right now. Unlock real-time access with GEASS Pro.</>
+                          : "Real-time token detection powered by Helius + DexScreener. Requires GEASS Pro."}
                       </div>
-                    )}
-                    {filtered.slice(0, 3).map(g => <GemCard key={g.id} gem={g} isNew={newIds.has(g.id)} onSnipe={setSnipeGem} onDex={(addr, sym) => setDexToken({ address: addr, symbol: sym })} />)}
+                      <div style={{ fontSize: 10, color: "#52525b", marginBottom: 24 }}>Score · Tier · KOL activity · Bonding curve · Safety flags</div>
+                      <button onClick={() => setTab("pro" as typeof tab)}
+                        style={{ padding: "11px 32px", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", boxShadow: "0 0 28px #7c3aed50" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}><IconCrown size={14} /> Upgrade to GEASS Pro</span>
+                      </button>
+                    </div>
                   </div>
-                  {/* Blurred locked section */}
-                  {filtered.length > 3 && (
-                    <div style={{ position: "relative", marginTop: 12 }}>
-                      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill,minmax(280px,1fr))", gap: 12, filter: "blur(6px)", pointerEvents: "none", userSelect: "none", opacity: 0.5 }}>
-                        {filtered.slice(3, 9).map(g => <GemCard key={g.id} gem={g} isNew={false} onSnipe={() => {}} />)}
-                      </div>
-                      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
-                        <div style={{ background: "linear-gradient(135deg,#14101f,#0d0d12)", border: "1px solid #7c3aed60", borderRadius: 20, padding: "28px 36px", textAlign: "center", backdropFilter: "blur(8px)" }}>
-                          <div style={{ color: "#7c3aed", marginBottom: 8, display: "flex", justifyContent: "center" }}><IconLock size={36} /></div>
-                          <div style={{ fontSize: 16, fontWeight: 800, color: "#f4f4f5", marginBottom: 6 }}>{filtered.length - 3} more signals locked</div>
-                          <div style={{ fontSize: 11, color: "#71717a", marginBottom: 20, maxWidth: 260, lineHeight: 1.6 }}>Full Alpha Scanner access — all signals, real-time — with GEASS Pro.</div>
-                          <button onClick={() => setTab("pro" as typeof tab)}
-                            style={{ padding: "10px 28px", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 0 24px #7c3aed40" }}>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconCrown size={12} /> Upgrade to GEASS Pro</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {!loading && gems.length > 0 && filtered.length === 0 && (
-                    <div style={{ textAlign: "center", padding: 40, color: "#3f3f46" }}>
-                      <div style={{ color: "#3f3f46", marginBottom: 6, display: "flex", justifyContent: "center" }}><IconSearch size={24} /></div>
-                      <div style={{ fontSize: 12 }}>No gems match filters — try lowering Min Score</div>
-                    </div>
-                  )}
                 </div>
               ) : (
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
@@ -1304,28 +1297,6 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                     </button>
                   </div>
                 ))}
-              </div>
-
-              {/* Referral quick section */}
-              <div id="settings-referral" style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 16px", marginBottom: 16, scrollMarginTop: 80 }}>
-                <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
-                  <IconUsers size={11} /> REFERRAL
-                </div>
-                <div style={{ fontSize: 11, color: "#71717a", marginBottom: 10, lineHeight: 1.6 }}>
-                  Share your link — earn <span style={{ color: "#a855f7", fontWeight: 700 }}>1 free Pro month</span> for every 3 paid referrals.
-                </div>
-                <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-                  <div style={{ flex: 1, background: "#09090b", border: "1px solid #7c3aed50", borderRadius: 9, padding: "10px 12px", fontFamily: "monospace", fontSize: 10, color: "#a855f7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {refLink || `https://geass.app/?ref=${refCode}`}
-                  </div>
-                  <button onClick={copyRefLink}
-                    style={{ padding: "0 16px", borderRadius: 9, border: "none", fontWeight: 700, fontSize: 11, cursor: "pointer", background: refCopied ? "#10b981" : "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", whiteSpace: "nowrap" }}>
-                    {refCopied ? "Copied!" : "Copy"}
-                  </button>
-                </div>
-                <button onClick={() => setTab("referral" as typeof tab)} style={{ fontSize: 10, color: "#a855f7", background: "transparent", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}>
-                  View full referral stats →
-                </button>
               </div>
 
               {/* Wallet info */}
