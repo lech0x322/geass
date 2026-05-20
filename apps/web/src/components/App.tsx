@@ -15,6 +15,8 @@ import { GeassLogo } from "./GeassLogo";
 import { GemCard } from "./GemCard";
 import { SnipeModal } from "./SnipeModal";
 import { TokenModal } from "./TokenModal";
+import { InternalWalletPanel } from "./InternalWalletPanel";
+import { useInternalWallet } from "@/lib/useInternalWallet";
 import {
   IconBroadcast, IconFlame, IconRocket, IconZap, IconTarget, IconUsers,
   IconCog, IconCrown, IconChevronDown, IconSolana, IconSearch, IconX,
@@ -76,6 +78,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const pro = useProStatus(wallet);
+  const iw = useInternalWallet();
   const [portfolio, setPortfolio] = useState<PortfolioResult | null>(null);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [portfolioErr, setPortfolioErr] = useState("");
@@ -150,7 +153,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   // ── Real-time SSE stream ────────────────────────────────────
   const stream = useGemStream(true);
 
-  // Keep latest auto-snipe settings in a ref so the stream callback always sees current values
+  // Keep latest auto-snipe settings + internal wallet ref so stream callback sees current values
+  const iwRef = useRef(iw);
+  useEffect(() => { iwRef.current = iw; }, [iw]);
   const asRef = useRef({ enabled: false, amount: "0.01", minScore: 75, method: "api" as "api" | "local" });
   useEffect(() => {
     asRef.current = { enabled: asEnabled, amount: asAmount, minScore: asMinScore, method: asMethod };
@@ -190,7 +195,10 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           .filter(g => g.score >= cfg.minScore && !asSniped.current.has(g.contractAddress))
           .forEach(g => {
             asSniped.current.add(g.contractAddress);
-            autoSnipe({ mint: g.contractAddress, amount: amt, method: cfg.method })
+            // Use internal trading wallet if unlocked, otherwise fall back to server-side API
+            const currentIw = iwRef.current;
+            const effectiveMethod = currentIw.status === "unlocked" ? "local" : cfg.method;
+            autoSnipe({ mint: g.contractAddress, amount: amt, method: effectiveMethod })
               .then((res: AutoSnipeResult) => {
                 setAsLog(l => [{ mint: g.contractAddress, sym: g.sym, sig: res.signature, ts: Date.now() }, ...l].slice(0, 50));
               })
@@ -590,6 +598,18 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           <div style={{ padding: "6px 10px", background: "#10b98110", border: "1px solid #10b98130", borderRadius: 7, fontSize: 9, color: "#10b981", display: "flex", alignItems: "center", gap: 5 }}>
             <IconCheck size={10} />
             <span>{shortAddr(wallet)}{wBal ? ` · ${wBal} SOL` : ""}</span>
+          </div>
+        )}
+        {!sidebarCollapsed && iw.status !== "none" && (
+          <div
+            onClick={() => { setTab("settings" as typeof tab); setSettingsSection("wallet"); setSidebarOpen(false); }}
+            style={{ padding: "6px 10px", background: iw.status === "unlocked" ? "#3b82f610" : "#27272a30", border: `1px solid ${iw.status === "unlocked" ? "#3b82f640" : "#27272a"}`, borderRadius: 7, fontSize: 9, color: iw.status === "unlocked" ? "#3b82f6" : "#52525b", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+            <IconWallet size={10} />
+            <span>
+              {iw.status === "unlocked"
+                ? `${shortAddr(iw.publicKey ?? "")} · ${iw.balance?.toFixed(3) ?? "…"} SOL`
+                : `Trading Wallet locked`}
+            </span>
           </div>
         )}
         <button onClick={onDisconnect} title="Disconnect"
@@ -1062,6 +1082,29 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
               {/* Config card */}
               <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 16px", marginBottom: 16, display: "flex", flexDirection: "column", gap: 16 }}>
 
+                {/* Trading wallet status */}
+                <div style={{ padding: "10px 12px", borderRadius: 9, border: `1px solid ${iw.status === "unlocked" ? "#3b82f640" : "#27272a"}`, background: iw.status === "unlocked" ? "#3b82f608" : "transparent", display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: iw.status === "unlocked" ? "#3b82f6" : "#52525b", flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: iw.status === "unlocked" ? "#3b82f6" : "#52525b" }}>
+                      {iw.status === "unlocked" ? "Trading Wallet Active" : iw.status === "locked" ? "Trading Wallet Locked" : "No Trading Wallet"}
+                    </div>
+                    <div style={{ fontSize: 9, color: "#3f3f46" }}>
+                      {iw.status === "unlocked"
+                        ? `${shortAddr(iw.publicKey ?? "")} · ${iw.balance?.toFixed(4) ?? "…"} SOL — will be used automatically`
+                        : iw.status === "locked"
+                        ? "Unlock in Settings → Wallet to use for autosnipe"
+                        : "Create one in Settings → Wallet for faster autosnipe"}
+                    </div>
+                  </div>
+                  {iw.status !== "none" && (
+                    <button onClick={() => { setTab("settings" as typeof tab); setSettingsSection("wallet"); }}
+                      style={{ fontSize: 9, padding: "4px 8px", borderRadius: 6, border: "1px solid #27272a", background: "transparent", color: "#52525b", cursor: "pointer", whiteSpace: "nowrap" }}>
+                      {iw.status === "locked" ? "Unlock" : "Manage"}
+                    </button>
+                  )}
+                </div>
+
                 {/* Enable toggle */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
@@ -1299,12 +1342,12 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 ))}
               </div>
 
-              {/* Wallet info */}
-              <div id="settings-wallet" style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 16px", scrollMarginTop: 80 }}>
+              {/* Phantom wallet */}
+              <div id="settings-wallet" style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 16px", marginBottom: 16, scrollMarginTop: 80 }}>
                 <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
-                  <IconWallet size={11} /> WALLET
+                  <IconWallet size={11} /> PHANTOM WALLET
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
                     <div style={{ fontSize: 11, color: "#a1a1aa", fontFamily: "monospace" }}>{shortAddr(wallet)}</div>
                     {wBal && <div style={{ fontSize: 10, color: "#3f3f46" }}>{wBal} SOL balance</div>}
@@ -1315,6 +1358,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   </button>
                 </div>
               </div>
+
+              {/* Internal trading wallet */}
+              <InternalWalletPanel iw={iw} />
             </div>
             </SettingsBody>
           )}
