@@ -405,32 +405,16 @@ export async function fetchSmartWallets(limit = 50): Promise<SmartWalletSummary[
 }
 
 /**
- * Upload token metadata + image to pump.fun IPFS.
- * Called directly from the browser — pump.fun blocks cloud/datacenter IPs (same as trade-local).
- * If imageUrl is present, fetches the image browser-side and attaches it as a Blob.
+ * Upload token metadata + image to pump.fun IPFS via server proxy.
+ * The proxy rebuilds FormData with correct Blob types and real browser UA.
+ * Supports both file upload and imageUrl (fetched server-side).
  */
 export async function pumpIpfs(form: FormData): Promise<{ metadataUri: string }> {
-  // If imageUrl was passed instead of a file, fetch it in the browser and convert to Blob
-  const imageUrl = form.get("imageUrl")?.toString().trim();
-  if (imageUrl) {
-    form.delete("imageUrl");
-    try {
-      const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(10_000) });
-      if (!imgRes.ok) throw new Error(`image fetch ${imgRes.status}`);
-      const ct  = imgRes.headers.get("content-type") ?? "image/png";
-      const buf = await imgRes.arrayBuffer();
-      const ext = ct.split("/")[1]?.split(";")[0]?.trim() || "png";
-      form.set("file", new Blob([buf], { type: ct }), `image.${ext}`);
-    } catch (e) {
-      throw new Error(`Could not load image: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-
-  // Call pump.fun directly from the browser (residential IP — not blocked like Vercel)
-  const r = await fetch("https://pump.fun/api/ipfs", { method: "POST", body: form });
+  const r = await fetch("/api/pump/ipfs", { method: "POST", body: form });
   if (!r.ok) {
-    const text = await r.text().catch(() => "");
-    throw new Error(`pump.fun IPFS ${r.status}: ${text.slice(0, 200) || "upload failed"}`);
+    let msg = `ipfs ${r.status}`;
+    try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
   }
   return r.json();
 }

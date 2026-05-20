@@ -5,80 +5,104 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-const FETCH_UA = "Mozilla/5.0 (compatible; GEASS/1.0; +https://geass.app)";
 
-async function fetchImage(rawUrl: string): Promise<{ blob: Blob; filename: string }> {
-  let u: URL;
-  try { u = new URL(rawUrl); } catch { throw new Error("Image URL is not a valid URL"); }
-  if (!["http:", "https:"].includes(u.protocol)) throw new Error("Image URL must use http or https");
+// Real browser UA — pump.fun filters non-browser requests
+const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
-  const r = await fetch(rawUrl, {
-    headers: { "User-Agent": FETCH_UA, Accept: "image/*" },
-    signal: AbortSignal.timeout(10_000),
-    redirect: "follow",
-  });
-  if (!r.ok) throw new Error(`image fetch ${r.status}`);
+const ALLOWED_MIME: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png":  "png",
+  "image/gif":  "gif",
+  "image/webp": "webp",
+};
 
-  const ct = r.headers.get("content-type") ?? "";
-  if (!ct.startsWith("image/")) throw new Error(`URL did not return an image (got ${ct || "no content-type"})`);
+function normalizeType(raw: string): string {
+  const base = raw.split(";")[0].trim().toLowerCase();
+  if (base === "image/jpg") return "image/jpeg";
+  return base;
+}
 
-  const blob = await r.blob();
-  if (blob.size === 0) throw new Error("image is empty");
-  if (blob.size > MAX_IMAGE_BYTES) throw new Error("image exceeds 5 MB");
-
-  const ext = ct.split("/")[1]?.split(";")[0]?.trim() || "png";
-  return { blob, filename: `image.${ext}` };
+async function resolveImage(
+  file: File | null,
+  imageUrl: string,
+): Promise<{ buf: ArrayBuffer; mime: string; ext: string } | null> {
+  if (file && file.size > 0) {
+    const mime = normalizeType(file.type || "image/png");
+    const ext  = ALLOWED_MIME[mime] ?? "png";
+    return { buf: await file.arrayBuffer(), mime, ext };
+  }
+  if (imageUrl) {
+    const r = await fetch(imageUrl, {
+      headers: { "User-Agent": BROWSER_UA, Accept: "image/*" },
+      signal: AbortSignal.timeout(12_000),
+      redirect: "follow",
+    });
+    if (!r.ok) throw new Error(`Image fetch ${r.status}`);
+    const ct   = normalizeType(r.headers.get("content-type") ?? "image/png");
+    const mime = ALLOWED_MIME[ct] ? ct : "image/png";
+    const ext  = ALLOWED_MIME[mime] ?? "png";
+    const buf  = await r.arrayBuffer();
+    if (buf.byteLength === 0) throw new Error("Image is empty");
+    if (buf.byteLength > MAX_IMAGE_BYTES) throw new Error("Image exceeds 5 MB");
+    return { buf, mime, ext };
+  }
+  return null;
 }
 
 export async function POST(request: Request) {
   const limited = enforceRateLimit(request, { bucket: "ipfs", max: 10, windowMs: 60_000 });
   if (limited) return limited;
 
-  let form: FormData;
-  try { form = await request.formData(); }
+  let inForm: FormData;
+  try { inForm = await request.formData(); }
   catch { return NextResponse.json({ error: "Invalid multipart body" }, { status: 400 }); }
 
-  // Resolve image: prefer uploaded file, then server-side fetch from imageUrl
-  const existing = form.get("file");
-  const imageUrl = (form.get("imageUrl") ?? "").toString().trim();
-  form.delete("imageUrl");
+  const name     = inForm.get("name")?.toString().trim() ?? "";
+  const symbol   = inForm.get("symbol")?.toString().trim() ?? "";
+  const desc     = inForm.get("description")?.toString().trim() ?? name;
+  const imageUrl = inForm.get("imageUrl")?.toString().trim() ?? "";
+  const file     = inForm.get("file") instanceof File ? inForm.get("file") as File : null;
 
-  if (!(existing instanceof Blob) || existing.size === 0) {
-    if (imageUrl) {
-      try {
-        const { blob, filename } = await fetchImage(imageUrl);
-        form.set("file", blob, filename);
-      } catch (e) {
-        return NextResponse.json(
-          { error: `Could not load image from URL: ${e instanceof Error ? e.message : String(e)}` },
-          { status: 400 },
-        );
-      }
-    }
-    // No image is acceptable — pump.fun will use a placeholder
+  if (!name || !symbol) {
+    return NextResponse.json({ error: "Token name and symbol are required" }, { status: 400 });
   }
 
-  if (!form.get("name") || !form.get("symbol")) {
-    return NextResponse.json({ error: "Token name and symbol are required" }, { status: 400 });
+  let imgResult: { buf: ArrayBuffer; mime: string; ext: string } | null = null;
+  try {
+    imgResult = await resolveImage(file, imageUrl);
+  } catch (e) {
+    return NextResponse.json(
+      { error: `Image error: ${e instanceof Error ? e.message : String(e)}` },
+      { status: 400 },
+    );
+  }
+
+  // Build a fresh FormData — never reuse the incoming one to avoid Node.js serialization issues
+  const out = new FormData();
+  out.append("name",        name);
+  out.append("symbol",      symbol.toUpperCase());
+  out.append("description", desc);
+  out.append("showName",    "true");
+  if (imgResult) {
+    out.append("file", new Blob([imgResult.buf], { type: imgResult.mime }), `image.${imgResult.ext}`);
   }
 
   try {
     const upstream = await fetch("https://pump.fun/api/ipfs", {
-      method: "POST",
-      body: form,
-      headers: { "User-Agent": FETCH_UA },
-      signal: AbortSignal.timeout(25_000),
+      method:  "POST",
+      body:    out,
+      headers: { "User-Agent": BROWSER_UA },
+      signal:  AbortSignal.timeout(30_000),
     });
+
     if (!upstream.ok) {
-      const text = await upstream.text();
-      const hint = upstream.status === 500
-        ? " — pump.fun may have rejected the image format or is rate-limiting requests."
-        : "";
+      const text = await upstream.text().catch(() => "");
       return NextResponse.json(
-        { error: `pump.fun ipfs ${upstream.status}: ${text.slice(0, 200)}${hint}` },
-        { status: upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502 },
+        { error: `pump.fun IPFS ${upstream.status}: ${text.slice(0, 300) || "upload failed"}` },
+        { status: 502 },
       );
     }
+
     return NextResponse.json(await upstream.json());
   } catch (e) {
     return NextResponse.json(
