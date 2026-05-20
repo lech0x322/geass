@@ -1,13 +1,19 @@
 {
+  "enabledPlugins": {
+    "ecc@ecc": true
+  },
   "extraKnownMarketplaces": {
     "ecc": {
       "source": {
         "source": "github",
         "repo": "affaan-m/ecc"
       }
+    },
+    "nextjs": {
+      "source": {
+        "source": "github",
+        "repo": "vercel/next.js"
+      }
     }
-  },
-  "enabledPlugins": {
-    "ecc@ecc": true
   }
 }
