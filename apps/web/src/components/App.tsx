@@ -21,7 +21,7 @@ import {
   IconBroadcast, IconFlame, IconRocket, IconZap, IconTarget, IconUsers,
   IconCog, IconCrown, IconChevronDown, IconSolana, IconSearch, IconX,
   IconMenu, IconRefresh, IconLock, IconSpeaker, IconWallet, IconPower,
-  IconCheck, IconChart, IconArrowUpRight,
+  IconCheck, IconChart, IconArrowUpRight, IconCopy,
 } from "./icons";
 import type { NavIconId, SettingsSection } from "@/lib/config";
 
@@ -1034,7 +1034,18 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   <div style={{ color: "#10b981", marginBottom: 10, display: "flex", justifyContent: "center" }}><IconRocket size={48} /></div>
                   <div style={{ fontSize: 16, fontWeight: 800, color: "#10b981", marginBottom: 6 }}>Token Launched!</div>
                   <div style={{ fontSize: 11, color: "#52525b", marginBottom: 4 }}>${ct.sym.toUpperCase()} is live on Pump.fun</div>
-                  <div style={{ fontSize: 10, color: "#3f3f46", marginBottom: 16 }}>{ctMsg}</div>
+                  <div style={{ fontSize: 10, color: "#3f3f46", marginBottom: 10 }}>{ctMsg}</div>
+                  {ctMintAddress && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", marginBottom: 14, padding: "8px 12px", background: "#0a0a0b", border: "1px solid #27272a", borderRadius: 8 }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: "#52525b", letterSpacing: "1px" }}>CA</span>
+                      <span style={{ fontSize: 10, color: "#a1a1aa", fontFamily: "monospace", wordBreak: "break-all" }}>{ctMintAddress}</span>
+                      <button onClick={() => navigator.clipboard.writeText(ctMintAddress)}
+                        style={{ background: "none", border: "none", color: "#52525b", cursor: "pointer", flexShrink: 0, padding: 2 }}
+                        title="Copy CA">
+                        <IconCopy size={13} />
+                      </button>
+                    </div>
+                  )}
                   {ctMintAddress && (
                     <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 14 }}>
                       <a href={`https://pump.fun/coin/${ctMintAddress}`} target="_blank" rel="noopener noreferrer"
