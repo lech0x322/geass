@@ -157,9 +157,16 @@ export function InternalWalletPanel({ iw }: Props) {
             </div>
           </div>
         </div>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 10, color: "#a1a1aa", marginBottom: 16, cursor: "pointer" }}>
-          <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />
-          I have saved my private key in a safe place
+        <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11, color: "#f4f4f5", marginBottom: 16, cursor: "pointer", padding: "10px 12px", background: confirmed ? "#10b98115" : "#18181b", border: `1px solid ${confirmed ? "#10b98140" : "#27272a"}`, borderRadius: 8, transition: "all 0.15s" }}>
+          <input
+            type="checkbox"
+            checked={confirmed}
+            onChange={e => setConfirmed(e.target.checked)}
+            style={{ width: 16, height: 16, accentColor: "#10b981", cursor: "pointer", flexShrink: 0 }}
+          />
+          <span style={{ color: confirmed ? "#10b981" : "#a1a1aa", fontWeight: 600 }}>
+            I have saved my private key in a safe place
+          </span>
         </label>
         <button onClick={() => go("create-password")} disabled={!confirmed}
           style={{ width: "100%", padding: "10px", borderRadius: 9, border: "none", background: confirmed ? "linear-gradient(135deg,#dc2626,#7c3aed)" : "#27272a", color: confirmed ? "#fff" : "#52525b", fontSize: 11, fontWeight: 700, cursor: confirmed ? "pointer" : "default" }}>
