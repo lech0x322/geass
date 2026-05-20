@@ -262,20 +262,27 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   // ── Token launch ────────────────────────────────────────────
   const launchToken = async () => {
     if (!ct.name || !ct.sym) { setCtMsg("Fill Name & Symbol"); return; }
+    if (ctJitoMode !== "server" && !wallet) { setCtMsg("Connect Phantom first"); return; }
+    if (!ctJito && !wallet) { setCtMsg("Connect Phantom first"); return; }
+
     setCtLoad(true);
+    setCtMsg("");
     try {
       if (ctJito) {
         // ── Jito Bundle path ──────────────────────────────────────
         setCtMsg("Uploading metadata…");
+        const devBuySol = parseFloat(ct.devBuy) || 0;
+        const tipSol    = parseFloat(ctTip) || 0.003;
+
         const result = await jitoLaunchBundle({
-          name:       ct.name,
-          symbol:     ct.sym,
+          name:        ct.name,
+          symbol:      ct.sym,
           description: ct.desc || ct.name,
-          devBuySol:  parseFloat(ct.devBuy) || 0,
-          tipSol:     parseFloat(ctTip) || 0.003,
-          file:       ctFile ?? undefined,
-          wallet:     ctJitoMode === "phantom" ? wallet : undefined,
-          server:     ctJitoMode === "server",
+          devBuySol,
+          tipSol,
+          file:        ctFile ?? undefined,
+          wallet:      ctJitoMode === "phantom" ? wallet : undefined,
+          server:      ctJitoMode === "server",
         });
 
         if (result.mode === "server") {
@@ -286,53 +293,51 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           return;
         }
 
-        // Phantom mode — sign create + buy txs
-        setCtMsg("Sign in Phantom (2 txs)…");
-        const createBytes = Buffer.from(result.createTxB64, "base64");
-        const buyBytes    = Buffer.from(result.buyTxB64, "base64");
-        const [phantomCreateB64, signedBuyB64] = await signAllWithPhantom([
-          new Uint8Array(createBytes),
-          new Uint8Array(buyBytes),
-        ]);
-        // Add mint keypair co-signature to create tx (Phantom only signed its wallet slot)
-        const mintKp = Keypair.fromSecretKey(bs58.decode(result.mintPrivB58));
-        const createTxSigned = VersionedTransaction.deserialize(Buffer.from(phantomCreateB64, "base64"));
-        createTxSigned.sign([mintKp]);
-        const signedCreateB64 = Buffer.from(createTxSigned.serialize()).toString("base64");
+        // Phantom mode — Phantom signs create tx (mint keypair already pre-signed it)
+        const hasBuy = devBuySol > 0 && result.buyTxB64;
+        const txsToSign: Uint8Array[] = [new Uint8Array(Buffer.from(result.createTxB64, "base64"))];
+        if (hasBuy) txsToSign.push(new Uint8Array(Buffer.from(result.buyTxB64, "base64")));
+
+        setCtMsg(`Sign in Phantom (${txsToSign.length} tx${txsToSign.length > 1 ? "s" : ""})…`);
+        const signedB64s = await signAllWithPhantom(txsToSign);
+        const [phantomCreateB64, signedBuyB64] = signedB64s;
+
+        // createTx already has mint sig — Phantom added its sig; no further signing needed
         setCtMsg("Submitting Jito bundle…");
-        const { bundleId } = await jitoSubmit([signedCreateB64, signedBuyB64]);
+        const txsForBundle = hasBuy
+          ? [phantomCreateB64, signedBuyB64]
+          : [phantomCreateB64];
+        const { bundleId } = await jitoSubmit(txsForBundle, tipSol);
         setCtMsg(`Bundle ${bundleId.slice(0, 18)}… | ${result.mintPubkey.slice(0, 12)}…`);
         setCtMintAddress(result.mintPubkey);
         setCtStep("done");
       } else {
-        // ── Standard Phantom path ─────────────────────────────────
-        setCtMsg("Uploading metadata...");
+        // ── Standard Phantom path (no Jito) ──────────────────────
+        setCtMsg("Uploading metadata…");
         const form = new FormData();
         form.append("name", ct.name);
         form.append("symbol", ct.sym.toUpperCase());
         form.append("description", ct.desc || ct.name);
         form.append("showName", "true");
-        if (ctFile) {
-          form.append("file", ctFile, ctFile.name);
-        } else if (ct.img) {
-          form.append("imageUrl", ct.img);
-        }
+        if (ctFile) form.append("file", ctFile, ctFile.name);
+        else if (ct.img) form.append("imageUrl", ct.img);
         const meta = await pumpIpfs(form);
-        setCtMsg("Creating on-chain...");
+
+        setCtMsg("Building transaction…");
         const mintKp = Keypair.generate();
-        const bytes = await pumpTradeTx({
-          publicKey: wallet,
-          action: "create",
-          mint: mintKp.publicKey.toBase58(),
-          amount: parseFloat(ct.devBuy) || 0,
-          slippage: 10,
+        const bytes  = await pumpTradeTx({
+          publicKey:  wallet,
+          action:     "create",
+          mint:       mintKp.publicKey.toBase58(),
+          amount:     parseFloat(ct.devBuy) || 0,
+          slippage:   10,
           priorityFee: 0.0005,
-          pool: "pump",
+          pool:       "pump",
           tokenMetadata: { name: ct.name, symbol: ct.sym.toUpperCase(), uri: meta.metadataUri },
         });
         const tx = VersionedTransaction.deserialize(bytes);
         tx.sign([mintKp]);
-        setCtMsg("Sign in Phantom...");
+        setCtMsg("Sign in Phantom…");
         const sig = await signAndSendBytes(tx.serialize());
         setCtMintAddress(mintKp.publicKey.toBase58());
         setCtMsg(`TX: ${sig.slice(0, 18)}…`);

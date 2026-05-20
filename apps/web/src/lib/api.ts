@@ -183,12 +183,12 @@ export async function jitoSnipe(params: {
 
 export interface JitoSubmitResult { bundleId: string }
 
-/** Submit pre-signed base64 transactions as a Jito bundle. */
-export async function jitoSubmit(base64Txs: string[]): Promise<JitoSubmitResult> {
+/** Submit pre-signed base64 transactions as a Jito bundle. Server appends GEASS tip tx. */
+export async function jitoSubmit(base64Txs: string[], tipSol?: number): Promise<JitoSubmitResult> {
   const r = await fetch("/api/jito/submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ transactions: base64Txs }),
+    body: JSON.stringify({ transactions: base64Txs, tipSol }),
   });
   if (!r.ok) {
     let msg = `jito-submit ${r.status}`;
@@ -201,9 +201,9 @@ export async function jitoSubmit(base64Txs: string[]): Promise<JitoSubmitResult>
 export interface PhantomLaunchBundle {
   mode:        "phantom";
   mintPubkey:  string;
-  mintPrivB58: string; // ephemeral mint keypair — needed for create tx co-signing
-  createTxB64: string; // unsigned — Phantom signs this, then mint keypair added
-  buyTxB64:    string; // unsigned — Phantom signs this
+  mintPrivB58: string; // ephemeral — used only in App.tsx to co-sign locally, never sent to server
+  createTxB64: string; // pre-signed by mint keypair — Phantom adds its sig
+  buyTxB64:    string; // empty string when devBuySol = 0
   metadataUri: string;
 }
 export interface ServerLaunchBundle {
@@ -225,10 +225,9 @@ export async function jitoLaunchBundle(params: {
   wallet?:    string; // Phantom pubkey (phantom mode)
   server?:    boolean; // GEASS server wallet (server mode)
 }): Promise<LaunchBundleResult> {
-  const { Keypair } = await import("@solana/web3.js");
-  const { default: bs58 } = await import("bs58");
+  const { Keypair, VersionedTransaction } = await import("@solana/web3.js");
 
-  // 1. Upload metadata to pump.fun IPFS via our server proxy (CORS restricted endpoint)
+  // 1. Upload metadata via server proxy (CORS-restricted endpoint)
   const ipfsForm = new FormData();
   ipfsForm.append("name",        params.name);
   ipfsForm.append("symbol",      params.symbol.toUpperCase());
@@ -237,10 +236,9 @@ export async function jitoLaunchBundle(params: {
   if (params.file) ipfsForm.append("file", params.file, params.file.name);
   const { metadataUri } = await pumpIpfs(ipfsForm);
 
-  // 2. Generate ephemeral mint keypair in the browser
+  // 2. Generate ephemeral mint keypair in browser (private key never leaves browser)
   const mintKeypair = Keypair.generate();
   const mintPubkey  = mintKeypair.publicKey.toBase58();
-  const mintPrivB58 = bs58.encode(mintKeypair.secretKey);
 
   // 3. Determine payer pubkey
   const payerPubkey = params.server
@@ -248,41 +246,45 @@ export async function jitoLaunchBundle(params: {
     : (params.wallet ?? "");
   if (!payerPubkey) throw new Error("No wallet connected");
 
-  // 4. Build create + buy txs directly from browser (PumpPortal blocks cloud IPs, not residential)
   const sym = params.symbol.toUpperCase();
-  const [createBytes, buyBytes] = await Promise.all([
-    pumpTradeTx({
-      publicKey: payerPubkey,
-      action: "create",
-      mint: mintPubkey,
-      amount: params.devBuySol,
-      denominatedInSol: "true",
-      slippage: 10,
-      priorityFee: 0.0005,
-      pool: "pump",
-      tokenMetadata: { name: params.name, symbol: sym, uri: metadataUri },
-    }),
-    pumpTradeTx({
-      publicKey: payerPubkey,
-      action: "buy",
-      mint: mintPubkey,
-      amount: params.devBuySol,
-      denominatedInSol: "true",
-      slippage: 10,
-      priorityFee: 0.0005,
-      pool: "pump",
-    }),
-  ]);
+  const hasBuy = params.devBuySol > 0;
 
-  const createTxB64 = Buffer.from(createBytes).toString("base64");
-  const buyTxB64    = Buffer.from(buyBytes).toString("base64");
+  // 4. Build txs in browser (PumpPortal blocks cloud IPs)
+  const createBytes = await pumpTradeTx({
+    publicKey: payerPubkey,
+    action: "create",
+    mint: mintPubkey,
+    amount: params.devBuySol,
+    denominatedInSol: "true",
+    slippage: 10,
+    priorityFee: 0.0005,
+    pool: "pump",
+    tokenMetadata: { name: params.name, symbol: sym, uri: metadataUri },
+  });
+
+  const buyBytes = hasBuy ? await pumpTradeTx({
+    publicKey: payerPubkey,
+    action: "buy",
+    mint: mintPubkey,
+    amount: params.devBuySol,
+    denominatedInSol: "true",
+    slippage: 10,
+    priorityFee: 0.0005,
+    pool: "pump",
+  }) : null;
+
+  // 5. Pre-sign createTx with mint keypair in browser (no private key sent to server)
+  const createTx = VersionedTransaction.deserialize(createBytes);
+  createTx.sign([mintKeypair]);
+  const createTxB64 = Buffer.from(createTx.serialize()).toString("base64");
+  const buyTxB64    = buyBytes ? Buffer.from(buyBytes).toString("base64") : undefined;
 
   if (params.server) {
-    // 5a. GEASS server mode: send unsigned txs + mint privkey → server signs + submits Jito bundle
+    // 6a. GEASS server mode: send pre-signed create tx → server adds GEASS sig + tip + submits
     const r = await fetch("/api/pump/sign-server", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ createTxB64, buyTxB64, mintPrivB58, mintPubkey, tipSol: params.tipSol }),
+      body: JSON.stringify({ createTxB64, buyTxB64, mintPubkey, tipSol: params.tipSol }),
     });
     if (!r.ok) {
       let msg = `sign-server ${r.status}`;
@@ -293,8 +295,17 @@ export async function jitoLaunchBundle(params: {
     return { mode: "server", bundleId, mintPubkey, metadataUri };
   }
 
-  // 5b. Phantom mode: return raw txs for the caller to sign with Phantom + mint keypair
-  return { mode: "phantom", mintPubkey, mintPrivB58, createTxB64, buyTxB64, metadataUri };
+  // 6b. Phantom mode: return pre-signed createTx + raw buyTx for Phantom to sign
+  //     mintPrivB58 is kept only so App.tsx can add the mint signature after Phantom signs
+  const { default: bs58 } = await import("bs58");
+  return {
+    mode: "phantom",
+    mintPubkey,
+    mintPrivB58: bs58.encode(mintKeypair.secretKey), // used only locally in App.tsx, never sent to server
+    createTxB64, // already has mint sig — Phantom adds its sig next
+    buyTxB64:    buyTxB64 ?? "",
+    metadataUri,
+  };
 }
 
 // ── DEX Screener Trending ────────────────────────────────────────────────────
