@@ -1,6 +1,7 @@
 {
   "enabledPlugins": {
-    "ecc@ecc": true
+    "ecc@ecc": true,
+    "context7-plugin@context7-marketplace": true
   },
   "extraKnownMarketplaces": {
     "ecc": {
@@ -13,6 +14,12 @@
       "source": {
         "source": "github",
         "repo": "vercel/next.js"
+      }
+    },
+    "context7-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "upstash/context7"
       }
     }
   }
