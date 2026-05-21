@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   if (limited) return limited;
 
   const nonce     = randomBytes(16).toString("hex");
-  const issuedAt  = new Date().toISOString();
+  const issuedAt  = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 
   await redis.set(`siws:nonce:${nonce}`, { issuedAt }, NONCE_TTL_SECONDS);
 
