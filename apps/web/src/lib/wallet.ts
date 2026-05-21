@@ -182,7 +182,7 @@ export async function signInWithSolana(): Promise<string> {
         domain,
         uri,
         version:   "1",
-        chainId:   "solana:5eykt4UhfFLBJjwBwTfMz5KhAvcMQzVf", // CAIP-2 mainnet-beta
+        chainId:   "mainnet", // must match buildSiwsMessage: "Chain ID: mainnet"
         nonce,
         issuedAt,
         statement: "Sign in to GEASS — Solana Alpha Intelligence",
