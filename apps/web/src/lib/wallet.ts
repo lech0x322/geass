@@ -7,6 +7,7 @@ interface PhantomProvider {
   publicKey?: { toString(): string } | null;
   connect: (opts?: { onlyIfTrusted?: boolean }) => Promise<{ publicKey: { toString(): string } }>;
   disconnect: () => Promise<void>;
+  signMessage?: (message: Uint8Array, encoding?: string) => Promise<{ signature: Uint8Array }>;
   signTransaction?: (tx: { serialize: () => Uint8Array }) => Promise<{ serialize: () => Uint8Array }>;
   signAllTransactions?: (txs: { serialize: () => Uint8Array }[]) => Promise<{ serialize: () => Uint8Array }[]>;
   signAndSendTransaction?: (
@@ -133,6 +134,12 @@ function getPhantomFull(): PhantomWithSignIn | null {
   return p?.isPhantom ? p : null;
 }
 
+function toBase64(bytes: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+
 /**
  * Full Sign-In With Solana (SIWS) flow.
  * Fetches a server nonce, signs the SIWS message with Phantom,
@@ -143,7 +150,20 @@ export async function signInWithSolana(): Promise<string> {
   const p = getPhantomFull();
   if (!p) throw new Error("Phantom not found. Install the extension and refresh.");
 
-  const nonceRes = await fetch("/api/auth/nonce");
+  // Step 1: Connect if not already connected. This keeps the user-gesture
+  // window alive and avoids "request rejected" errors when signIn is called
+  // on a fresh provider.
+  if (!p.publicKey) {
+    try {
+      await p.connect();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Connection rejected";
+      throw new Error(msg.includes("User rejected") ? "Connection rejected. Approve in Phantom to continue." : msg);
+    }
+  }
+
+  // Step 2: Fetch fresh nonce from server.
+  const nonceRes = await fetch("/api/auth/nonce", { cache: "no-store" });
   if (!nonceRes.ok) throw new Error("Failed to obtain sign-in nonce");
   const { nonce, issuedAt } = await nonceRes.json() as { nonce: string; issuedAt: string };
 
@@ -153,27 +173,35 @@ export async function signInWithSolana(): Promise<string> {
   let resolvedAddress: string;
   let signature: string;
 
+  // Step 3: Try native SIWS (Phantom signIn) — single approval popup.
+  // If chainId fails on stricter Phantom versions, fall through to signMessage.
+  let usedNativeSignIn = false;
   if (p.signIn) {
-    // Phantom native SIWS — single approval, no separate connect popup
-    const out = await p.signIn({
-      domain,
-      uri,
-      version:   "1",
-      chainId:   "mainnet",
-      nonce,
-      issuedAt,
-      statement: "Sign in to GEASS — Solana Alpha Intelligence",
-    });
-    resolvedAddress = out.address.toString();
-    signature       = Buffer.from(out.signature).toString("base64");
-  } else {
-    // Fallback: connect then signMessage
-    if (!p.publicKey) {
-      const r = await p.connect();
-      resolvedAddress = r.publicKey.toString();
-    } else {
-      resolvedAddress = p.publicKey.toString();
+    try {
+      const out = await p.signIn({
+        domain,
+        uri,
+        version:   "1",
+        chainId:   "solana:5eykt4UhfFLBJjwBwTfMz5KhAvcMQzVf", // CAIP-2 mainnet-beta
+        nonce,
+        issuedAt,
+        statement: "Sign in to GEASS — Solana Alpha Intelligence",
+      });
+      resolvedAddress  = out.address.toString();
+      signature        = toBase64(out.signature);
+      usedNativeSignIn = true;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("User rejected") || msg.includes("rejected"))
+        throw new Error("Sign-in rejected. Approve the signature request in Phantom.");
+      // Otherwise fall through to signMessage fallback
+      console.warn("Phantom signIn failed, falling back to signMessage:", msg);
     }
+  }
+
+  if (!usedNativeSignIn) {
+    // Fallback: signMessage on already-connected provider.
+    resolvedAddress = p.publicKey!.toString();
 
     const messageBytes = new TextEncoder().encode(
       `${domain} wants you to sign in with your Solana account:\n` +
@@ -186,13 +214,27 @@ export async function signInWithSolana(): Promise<string> {
       `Issued At: ${issuedAt}`,
     );
 
-    if (!p.request) throw new Error("Phantom signMessage unavailable");
-    const res = await p.request({ method: "signMessage", params: { message: messageBytes, display: "utf8" } });
-    if (typeof res === "string") signature = res;
-    else if (res?.signature) signature = res.signature;
-    else throw new Error("Phantom signMessage returned no signature");
+    // Prefer direct signMessage method (current Phantom API)
+    if (p.signMessage) {
+      try {
+        const res = await p.signMessage(messageBytes, "utf8");
+        signature = toBase64(res.signature);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        throw new Error(msg.includes("rejected") ? "Signature rejected in Phantom." : `Sign failed: ${msg}`);
+      }
+    } else if (p.request) {
+      // Legacy fallback: request("signMessage", ...)
+      const res = await p.request({ method: "signMessage", params: { message: messageBytes, display: "utf8" } });
+      if (typeof res === "string")          signature = res;
+      else if (res?.signature)              signature = res.signature;
+      else throw new Error("Phantom returned no signature");
+    } else {
+      throw new Error("Phantom signMessage API unavailable. Update Phantom and retry.");
+    }
   }
 
+  // Step 4: Verify on server, get HttpOnly JWT cookie.
   const verifyRes = await fetch("/api/auth/verify", {
     method:  "POST",
     headers: { "Content-Type": "application/json" },

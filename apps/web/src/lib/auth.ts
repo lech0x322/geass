@@ -9,29 +9,38 @@ export function useWalletAuth() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Restore session from HttpOnly JWT cookie
-    fetch("/api/auth/session")
+    let cancelled = false;
+
+    const trySilentPhantomReconnect = () => {
+      try {
+        const p = getPhantom();
+        if (!p) return;
+        p.connect({ onlyIfTrusted: true })
+          .then(r => {
+            if (cancelled) return;
+            const addr = r.publicKey.toString();
+            setWallet(addr);
+            fetchBalance(addr).then(sol => { if (!cancelled && sol !== null) setBalance(sol.toFixed(3)); }).catch(() => {});
+          })
+          .catch(() => { /* user not trusted yet — expected */ });
+      } catch { /* SSR guard */ }
+    };
+
+    fetch("/api/auth/session", { cache: "no-store" })
       .then(r => r.json())
       .then(({ address }: { address: string | null }) => {
-        if (!address) return;
-        setWallet(address);
-        fetchBalance(address).then(sol => { if (sol !== null) setBalance(sol.toFixed(3)); }).catch(() => {});
+        if (cancelled) return;
+        if (address) {
+          setWallet(address);
+          fetchBalance(address).then(sol => { if (!cancelled && sol !== null) setBalance(sol.toFixed(3)); }).catch(() => {});
+        } else {
+          // No JWT session — try silent Phantom reconnect if user previously approved
+          trySilentPhantomReconnect();
+        }
       })
-      .catch(() => {
-        // Fallback: try silent Phantom reconnect (no popup)
-        try {
-          const p = getPhantom();
-          if (p) {
-            p.connect({ onlyIfTrusted: true })
-              .then(r => {
-                const addr = r.publicKey.toString();
-                setWallet(addr);
-                fetchBalance(addr).then(sol => { if (sol !== null) setBalance(sol.toFixed(3)); }).catch(() => {});
-              })
-              .catch(() => {});
-          }
-        } catch { /* SSR guard */ }
-      });
+      .catch(trySilentPhantomReconnect);
+
+    return () => { cancelled = true; };
   }, []);
 
   const connect = useCallback(async () => {
