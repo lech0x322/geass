@@ -404,6 +404,80 @@ export async function fetchSmartWallets(limit = 50): Promise<SmartWalletSummary[
   }
 }
 
+// ── 1inch Integration ────────────────────────────────────────────────────────
+
+/** Fetch USD spot prices for a list of token addresses from 1inch. */
+export async function oneinchPrices(tokens: string[], chain?: number): Promise<Record<string, string>> {
+  if (!tokens.length) return {};
+  const qs = `tokens=${tokens.join(",")}&chain=${chain ?? 1399811149}`;
+  try {
+    const r = await fetch(`/api/oneinch/price?${qs}`, { cache: "no-store" });
+    if (!r.ok) return {};
+    return r.json();
+  } catch { return {}; }
+}
+
+export interface OneinchQuote {
+  toAmount:  string;
+  fromToken: { symbol: string; decimals: number; address: string };
+  toToken:   { symbol: string; decimals: number; address: string };
+  protocols?: unknown[];
+  gas?:      number;
+}
+
+/** Get a swap quote from 1inch (no transaction built). */
+export async function oneinchQuote(params: {
+  src: string; dst: string; amount: string; from: string;
+  chain?: number; slippage?: number;
+}): Promise<OneinchQuote> {
+  const r = await fetch("/api/oneinch/swap", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...params, quoteOnly: true }),
+  });
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({ error: "quote failed" }));
+    throw new Error((e as { error?: string }).error ?? "1inch quote failed");
+  }
+  return r.json();
+}
+
+/** Build a full swap transaction via 1inch. */
+export async function oneinchSwap(params: {
+  src: string; dst: string; amount: string; from: string;
+  chain?: number; slippage?: number;
+  preferredType?: "classic" | "fusion" | "crosschain";
+  dstChain?: number;
+}): Promise<{ tx: { to: string; data: string; value: string; gas: number }; toAmount: string }> {
+  const r = await fetch("/api/oneinch/swap", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...params, quoteOnly: false }),
+  });
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({ error: "swap failed" }));
+    throw new Error((e as { error?: string }).error ?? "1inch swap failed");
+  }
+  return r.json();
+}
+
+export interface OneinchPortfolio {
+  pnlByChain:   Record<number, unknown>;
+  valueByChain: Record<number, unknown>;
+  chains:       number[];
+}
+
+/** EVM portfolio P&L + current value across all chains via 1inch. */
+export async function oneinchPortfolio(address: string, timerange = "1month"): Promise<OneinchPortfolio> {
+  const r = await fetch(
+    `/api/oneinch/portfolio?address=${encodeURIComponent(address)}&timerange=${timerange}`,
+    { cache: "no-store" },
+  );
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({ error: "portfolio failed" }));
+    throw new Error((e as { error?: string }).error ?? "1inch portfolio failed");
+  }
+  return r.json();
+}
+
 /**
  * Upload token metadata + image to pump.fun IPFS via server proxy.
  * The proxy rebuilds FormData with correct Blob types and real browser UA.

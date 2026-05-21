@@ -3,6 +3,12 @@
     "puppeteer": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-puppeteer"]
+    },
+    "1inch": {
+      "url": "https://api.1inch.com/mcp/protocol",
+      "headers": {
+        "Authorization": "Bearer ${ONEINCH_API_KEY}"
+      }
     }
   }
 }

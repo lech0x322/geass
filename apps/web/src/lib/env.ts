@@ -32,6 +32,11 @@ export const SOLANA_RPC = process.env.SOLANA_RPC ?? HELIUS_RPC;
 export const JITO_BLOCK_ENGINE_URL = process.env.JITO_BLOCK_ENGINE_URL
   ?? "https://mainnet.block-engine.jito.wtf";
 
+// 1inch Business API
+export const ONEINCH_API_KEY = process.env.ONEINCH_API_KEY ?? "";
+export const ONEINCH_BASE    = "https://api.1inch.dev";
+export const SOLANA_CHAIN_ID = 1399811149;
+
 // Sign-In With Solana (SIWS) / JWT auth
 export const SIWS_JWT_SECRET = process.env.SIWS_JWT_SECRET ?? "geass-dev-secret-change-in-production";
 export const SIWS_DOMAIN = process.env.NEXT_PUBLIC_APP_DOMAIN ?? "geass.app";
