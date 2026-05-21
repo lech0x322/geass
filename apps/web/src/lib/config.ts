@@ -47,7 +47,7 @@ export interface NavItem {
 export const NAV: NavItem[] = [
   { id: "trades",    label: "Realtime Trades", mobileLabel: "KOL",     badge: "LIVE", iconId: "broadcast", mobile: true },
   { id: "trending",  label: "Trending",                                badge: "NEW",  iconId: "flame",     mobile: true },
-  { id: "launch",    label: "Launch",          mobileLabel: "Trade",                  iconId: "rocket",    mobile: true },
+  { id: "launch",    label: "Launch",          mobileLabel: "Launch",                 iconId: "rocket",    mobile: true },
   { id: "gems",      label: "Alpha Scanner",   mobileLabel: "Scanner", badge: "PRO",  pro: true, iconId: "zap",    mobile: true },
   { id: "autosnipe", label: "Auto-Snipe",                              badge: "NEW",  pro: true, iconId: "target" },
   {
