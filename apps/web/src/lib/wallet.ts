@@ -170,8 +170,8 @@ export async function signInWithSolana(): Promise<string> {
   const domain = window.location.hostname;
   const uri    = window.location.origin;
 
-  let resolvedAddress: string;
-  let signature: string;
+  let resolvedAddress = "";
+  let signature       = "";
 
   // Step 3: Try native SIWS (Phantom signIn) — single approval popup.
   // If chainId fails on stricter Phantom versions, fall through to signMessage.
