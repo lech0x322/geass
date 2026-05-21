@@ -30,48 +30,52 @@ export function getPhantom(): PhantomProvider | null {
   return p?.isPhantom ? p : null;
 }
 
-/** Wait up to `ms` milliseconds for Phantom to inject itself into the page. */
-async function waitForPhantom(ms = 1500): Promise<PhantomProvider | null> {
-  const found = getPhantom();
-  if (found) return found;
-
-  return new Promise(resolve => {
-    const start = Date.now();
-    const id = setInterval(() => {
-      const p = getPhantom();
-      if (p || Date.now() - start >= ms) {
-        clearInterval(id);
-        resolve(p);
-      }
-    }, 100);
-  });
-}
 
 export async function connectPhantom(): Promise<string> {
-  const p = await waitForPhantom(2000);
+  // Check immediately — don't wait if Phantom is already injected
+  let p = getPhantom();
 
   if (!p) {
-    // On mobile, redirect to Phantom's in-app browser
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if (isMobile) {
-      const url = encodeURIComponent(window.location.href);
-      window.location.href = `https://phantom.app/ul/browse/${url}?ref=${url}`;
-      throw new Error("Opening Phantom browser…");
-    }
-    window.open("https://phantom.app", "_blank");
-    throw new Error("Phantom not found. Install the Phantom extension and refresh the page.");
+    // Give the extension up to 800ms to inject itself; poll fast so we don't
+    // lose the browser's "trusted user gesture" context before calling connect().
+    p = await new Promise<PhantomProvider | null>(resolve => {
+      const deadline = Date.now() + 800;
+      const id = setInterval(() => {
+        const found = getPhantom();
+        if (found || Date.now() >= deadline) {
+          clearInterval(id);
+          resolve(found);
+        }
+      }, 50);
+    });
   }
 
-  // If already connected, return immediately
+  if (!p) {
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile) {
+      const encoded = encodeURIComponent(window.location.href);
+      window.location.href = `https://phantom.app/ul/browse/${encoded}?ref=${encoded}`;
+      throw new Error("Opening Phantom…");
+    }
+    window.open("https://phantom.app", "_blank", "noopener");
+    throw new Error("Phantom not installed. Install the extension and refresh this page.");
+  }
+
+  // Already approved — return without a second popup
   if (p.publicKey) return p.publicKey.toString();
 
-  // Wrap in a 30-second timeout so the UI never gets stuck forever
-  const connectPromise = p.connect();
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("No response from Phantom — click the Phantom icon in your browser toolbar, then try again")), 15_000),
-  );
+  // p.connect() is called immediately after detecting Phantom so it stays
+  // within the trusted user-gesture window and the popup opens automatically.
+  const r = await Promise.race([
+    p.connect(),
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error("Phantom didn't respond. Click the Phantom icon in your toolbar to approve.")),
+        30_000,
+      ),
+    ),
+  ]);
 
-  const r = await Promise.race([connectPromise, timeoutPromise]);
   return r.publicKey.toString();
 }
 
