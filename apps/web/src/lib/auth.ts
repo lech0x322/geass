@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { signInWithSolana, getPhantom } from "./wallet";
+import { signInWithSolana } from "./wallet";
 import { fetchBalance } from "./api";
 
 export function useWalletAuth() {
@@ -11,34 +11,16 @@ export function useWalletAuth() {
   useEffect(() => {
     let cancelled = false;
 
-    const trySilentPhantomReconnect = () => {
-      try {
-        const p = getPhantom();
-        if (!p) return;
-        p.connect({ onlyIfTrusted: true })
-          .then(r => {
-            if (cancelled) return;
-            const addr = r.publicKey.toString();
-            setWallet(addr);
-            fetchBalance(addr).then(sol => { if (!cancelled && sol !== null) setBalance(sol.toFixed(3)); }).catch(() => {});
-          })
-          .catch(() => { /* user not trusted yet — expected */ });
-      } catch { /* SSR guard */ }
-    };
-
+    // Only restore wallet from a valid SIWS JWT session. Without a verified
+    // session, show the landing page so the user signs in via SIWS.
     fetch("/api/auth/session", { cache: "no-store" })
       .then(r => r.json())
       .then(({ address }: { address: string | null }) => {
-        if (cancelled) return;
-        if (address) {
-          setWallet(address);
-          fetchBalance(address).then(sol => { if (!cancelled && sol !== null) setBalance(sol.toFixed(3)); }).catch(() => {});
-        } else {
-          // No JWT session — try silent Phantom reconnect if user previously approved
-          trySilentPhantomReconnect();
-        }
+        if (cancelled || !address) return;
+        setWallet(address);
+        fetchBalance(address).then(sol => { if (!cancelled && sol !== null) setBalance(sol.toFixed(3)); }).catch(() => {});
       })
-      .catch(trySilentPhantomReconnect);
+      .catch(() => { /* network error — stay on landing */ });
 
     return () => { cancelled = true; };
   }, []);
