@@ -1,46 +1,44 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { connectPhantom, getPhantom } from "./wallet";
+import { signInWithSolana, getPhantom } from "./wallet";
 import { fetchBalance } from "./api";
 
-const STORAGE_KEY = "geass_wallet";
-
 export function useWalletAuth() {
-  const [wallet, setWallet] = useState<string | null>(null);
+  const [wallet, setWallet]   = useState<string | null>(null);
   const [balance, setBalance] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setWallet(stored);
-        fetchBalance(stored).then(sol => { if (sol !== null) setBalance(sol.toFixed(3)); }).catch(() => {});
-        return;
-      }
-      // Try silent reconnect if Phantom already trusts this site
-      const p = getPhantom();
-      if (p) {
-        p.connect({ onlyIfTrusted: true })
-          .then(r => {
-            const addr = r.publicKey.toString();
-            setWallet(addr);
-            localStorage.setItem(STORAGE_KEY, addr);
-            fetchBalance(addr).then(sol => { if (sol !== null) setBalance(sol.toFixed(3)); }).catch(() => {});
-          })
-          .catch(() => { /* not yet trusted — user must click connect */ });
-      }
-    } catch { /* SSR guard */ }
+    // Restore session from HttpOnly JWT cookie
+    fetch("/api/auth/session")
+      .then(r => r.json())
+      .then(({ address }: { address: string | null }) => {
+        if (!address) return;
+        setWallet(address);
+        fetchBalance(address).then(sol => { if (sol !== null) setBalance(sol.toFixed(3)); }).catch(() => {});
+      })
+      .catch(() => {
+        // Fallback: try silent Phantom reconnect (no popup)
+        try {
+          const p = getPhantom();
+          if (p) {
+            p.connect({ onlyIfTrusted: true })
+              .then(r => {
+                const addr = r.publicKey.toString();
+                setWallet(addr);
+                fetchBalance(addr).then(sol => { if (sol !== null) setBalance(sol.toFixed(3)); }).catch(() => {});
+              })
+              .catch(() => {});
+          }
+        } catch { /* SSR guard */ }
+      });
   }, []);
 
   const connect = useCallback(async () => {
     setLoading(true);
     try {
-      const addr = await connectPhantom();
-      // Set wallet immediately so the app transitions right away
+      const addr = await signInWithSolana();
       setWallet(addr);
-      localStorage.setItem(STORAGE_KEY, addr);
-      // Fetch balance in the background — don't block or fail connect on it
       fetchBalance(addr).then(sol => { if (sol !== null) setBalance(sol.toFixed(3)); }).catch(() => {});
     } catch (e) {
       console.warn("wallet connect:", e);
@@ -50,10 +48,10 @@ export function useWalletAuth() {
     }
   }, []);
 
-  const disconnect = useCallback(() => {
+  const disconnect = useCallback(async () => {
     setWallet(null);
     setBalance(null);
-    try { localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
+    await fetch("/api/auth/verify", { method: "DELETE" }).catch(() => {});
   }, []);
 
   return { wallet, balance, loading, connect, disconnect };

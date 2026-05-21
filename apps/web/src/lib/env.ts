@@ -31,3 +31,7 @@ export const SOLANA_RPC = process.env.SOLANA_RPC ?? HELIUS_RPC;
 // Jito Block Engine
 export const JITO_BLOCK_ENGINE_URL = process.env.JITO_BLOCK_ENGINE_URL
   ?? "https://mainnet.block-engine.jito.wtf";
+
+// Sign-In With Solana (SIWS) / JWT auth
+export const SIWS_JWT_SECRET = process.env.SIWS_JWT_SECRET ?? "geass-dev-secret-change-in-production";
+export const SIWS_DOMAIN = process.env.NEXT_PUBLIC_APP_DOMAIN ?? "geass.app";
