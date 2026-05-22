@@ -347,6 +347,38 @@ export async function fetchTrending(): Promise<{ tokens: TrendingToken[]; metas:
   }
 }
 
+// ── DexScreener latest token profiles ───────────────────────────────────────
+
+export interface TokenProfile {
+  chainId:      string;
+  tokenAddress: string;
+  icon:         string | null;
+  header:       string | null;
+  description:  string | null;
+  url:          string;
+  twitter:      string | null;
+  telegram:     string | null;
+  website:      string | null;
+  discord:      string | null;
+}
+
+/**
+ * Fetch the newest token profiles published on DexScreener.
+ * Backs the "Fresh Listings" panel — surfaces tokens the moment a project
+ * lists/updates its profile (icon, description, socials) on DexScreener,
+ * which is typically minutes after launch and well before they trend.
+ */
+export async function fetchTokenProfiles(chain = "solana", limit = 30): Promise<TokenProfile[]> {
+  try {
+    const r = await fetch(`/api/dex/profiles?chain=${chain}&limit=${limit}`, { cache: "no-store" });
+    if (!r.ok) return [];
+    const d = await r.json() as { profiles?: TokenProfile[] };
+    return d.profiles ?? [];
+  } catch {
+    return [];
+  }
+}
+
 // ── Helius Enhanced Transactions (client) ───────────────────────────────────
 
 import type { HeliusEnhancedTransaction } from "@/types/helius";
