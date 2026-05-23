@@ -19,7 +19,8 @@ function loadStored(wallet: string): StoredPro | null {
     const raw = localStorage.getItem(storeKey(wallet));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as StoredPro;
-    if (!parsed?.signature || !parsed?.expiresAt) return null;
+    if (!parsed?.signature) return null;
+    // expiresAt === 0 means "pending — payment sent but not yet indexed"; keep so Refresh can re-verify.
     return parsed;
   } catch { return null; }
 }
@@ -100,10 +101,16 @@ export function useProStatus(wallet: string | null): ProState {
       const bytes = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
       const sig = await signAndSendBytes(bytes);
 
-      // Poll verify (Helius needs a moment to index)
+      // Persist the signature immediately so `Refresh status` works even if
+      // Helius indexing is slow and the poll loop below times out.
+      saveStored(wallet, { signature: sig, paidAt: Date.now(), expiresAt: 0 });
+      setSignature(sig);
+
+      // Poll verify (Helius needs a moment to index — Solana mainnet can lag 30-60s
+      // behind confirmation). 24 × 2.5s = up to 60s, plus a 3s head start.
       let verified: ProStatus | null = null;
-      for (let i = 0; i < 12; i++) {
-        await new Promise(r => setTimeout(r, 2_500));
+      await new Promise(r => setTimeout(r, 3_000));
+      for (let i = 0; i < 24; i++) {
         try {
           const v = await proVerify(sig, wallet);
           if (v.active && v.expiresAt) { verified = v; break; }
@@ -111,11 +118,15 @@ export function useProStatus(wallet: string | null): ProState {
             throw new Error(v.error);
           }
         } catch (e) {
-          if (i === 11) throw e;
+          if (i === 23) throw e;
         }
+        await new Promise(r => setTimeout(r, 2_500));
       }
       if (!verified || !verified.expiresAt) {
-        throw new Error("Payment sent but not confirmed on-chain yet. Click 'Refresh status' in a moment.");
+        throw new Error(
+          "Payment landed but Helius hasn't indexed it yet (can take up to 2 minutes on a busy network). " +
+          "Your signature is saved — click 'Refresh status' in ~30 seconds to confirm.",
+        );
       }
       saveStored(wallet, {
         signature: sig,
@@ -124,7 +135,6 @@ export function useProStatus(wallet: string | null): ProState {
       });
       setActive(true);
       setExpiresAt(verified.expiresAt);
-      setSignature(sig);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       throw e;
