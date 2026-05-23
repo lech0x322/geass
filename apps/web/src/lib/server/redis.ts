@@ -50,6 +50,10 @@ export const redis = {
     try { return (await getClient()?.hgetall<Record<string, T>>(key)) ?? null; }
     catch (e) { console.error("[redis] hgetall:", e); return null; }
   },
+  async del(key: string): Promise<void> {
+    try { await getClient()?.del(key); }
+    catch (e) { console.error("[redis] del:", e); }
+  },
   available(): boolean {
     return getClient() !== null;
   },

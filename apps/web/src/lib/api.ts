@@ -1,5 +1,6 @@
 // Client-side API — calls Next.js proxy routes and, where needed, PumpPortal directly from the browser.
 import type { Gem } from "./types";
+import type { TradeRecord } from "./types/trade";
 
 export interface ScanResult {
   gems: Gem[];
@@ -519,6 +520,33 @@ export async function pumpIpfs(form: FormData): Promise<{ metadataUri: string }>
   const r = await fetch("/api/pump/ipfs", { method: "POST", body: form });
   if (!r.ok) {
     let msg = `ipfs ${r.status}`;
+    try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+// ── Bundle Detector ──────────────────────────────────────────────────────────
+
+export interface BundleResult {
+  mint: string;
+  bundled: boolean;
+  bundleCount: number;       // wallets in the largest same-slot group
+  bundleSlot: number | null; // slot where bundle happened
+  riskLevel: "low" | "medium" | "high"; // low=0-2, medium=3-5, high=6+
+  earlyBuyers: number;       // total wallets in first 50 txs
+}
+
+/**
+ * Check whether a token mint was bundled at launch by analysing its first
+ * 50 on-chain signatures via the GEASS bundle detector route.
+ */
+export async function checkBundle(mint: string): Promise<BundleResult> {
+  const r = await fetch(`/api/token/bundle?mint=${encodeURIComponent(mint)}`, {
+    cache: "no-store",
+  });
+  if (!r.ok) {
+    let msg = `bundle ${r.status}`;
     try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
     throw new Error(msg);
   }

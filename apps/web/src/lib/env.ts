@@ -40,3 +40,6 @@ export const SOLANA_CHAIN_ID = 1399811149;
 // Sign-In With Solana (SIWS) / JWT auth
 export const SIWS_JWT_SECRET = process.env.SIWS_JWT_SECRET ?? "geass-dev-secret-change-in-production";
 export const SIWS_DOMAIN = process.env.NEXT_PUBLIC_APP_DOMAIN ?? "geass.app";
+
+// Telegram Bot
+export const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? "";
