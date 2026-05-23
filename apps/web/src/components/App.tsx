@@ -457,6 +457,15 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     }).finally(() => setTrendingLoading(false));
   }, [tab]);
 
+  // Fetch Telegram status when settings opens
+  useEffect(() => {
+    if (!settingsOpen) return;
+    fetch("/api/notify/telegram/status")
+      .then(r => r.json())
+      .then((d: { connected: boolean; chatId?: string }) => setTgStatus(d))
+      .catch(() => {});
+  }, [settingsOpen]);
+
   // ── Stream status ───────────────────────────────────────────
   const detecting = stream.detecting;
   const streamConnected = stream.connected;
@@ -947,6 +956,36 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   );
                 })}
               </div>
+
+              {/* MY TRADE PNL */}
+              <div style={{ marginTop: 24, background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, overflow: "hidden" }}>
+                <div style={{ padding: "10px 14px", borderBottom: "1px solid #18181b", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: "#52525b", letterSpacing: "1.5px" }}>MY TRADE PNL</span>
+                  {tradesLoading && <span style={{ fontSize: 9, color: "#52525b" }} className="pulse">Loading…</span>}
+                </div>
+                {pnl.length === 0 && !tradesLoading ? (
+                  <div style={{ padding: "20px 14px", fontSize: 10, color: "#3f3f46", textAlign: "center" }}>
+                    No trades recorded yet. Trades are tracked automatically after each snipe.
+                  </div>
+                ) : (
+                  <div style={{ maxHeight: 300, overflowY: "auto" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "6px 14px", borderBottom: "1px solid #18181b" }}>
+                      {["TOKEN", "REALIZED PNL", "SOL IN"].map(h => (
+                        <span key={h} style={{ fontSize: 8, color: "#3f3f46", letterSpacing: "1px", fontWeight: 700 }}>{h}</span>
+                      ))}
+                    </div>
+                    {(pnl as TradePnL[]).slice(0, 10).map(p => (
+                      <div key={p.mint} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "7px 14px", borderBottom: "1px solid #0f0f0f", alignItems: "center" }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "#f4f4f5" }}>${p.symbol}</span>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: p.realizedPnlSol > 0 ? "#10b981" : p.realizedPnlSol < 0 ? "#ef4444" : "#52525b" }}>
+                          {p.realizedPnlSol > 0 ? "+" : ""}{p.realizedPnlSol.toFixed(4)} SOL
+                        </span>
+                        <span style={{ fontSize: 10, color: "#a1a1aa" }}>{p.totalBoughtSol.toFixed(4)} SOL</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -1389,6 +1428,65 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                     Disconnect
                   </button>
                 </div>
+              </div>
+
+
+              {/* Notifications */}
+              <div id="settings-notifications" style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 16px", marginBottom: 16, scrollMarginTop: 80 }}>
+                <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 14 }}>
+                  NOTIFICATIONS
+                </div>
+                {tgStatus?.connected ? (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 11, color: "#10b981", fontWeight: 600 }}>&#10003; Connected — Chat ID: {tgStatus.chatId}</span>
+                    <button
+                      disabled={tgLoading}
+                      onClick={async () => {
+                        setTgLoading(true);
+                        try {
+                          await fetch("/api/notify/telegram/disconnect", { method: "DELETE" });
+                          setTgStatus(null);
+                          setTgChatId("");
+                        } catch {}
+                        setTgLoading(false);
+                      }}
+                      style={{ fontSize: 9, padding: "5px 12px", borderRadius: 6, border: "1px solid #27272a", background: "transparent", color: "#ef4444", cursor: tgLoading ? "wait" : "pointer", fontWeight: 600 }}>
+                      Disconnect
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ fontSize: 10, color: "#71717a", lineHeight: 1.6 }}>
+                      Open @geasstrade_bot on Telegram, send /start, paste your Chat ID below.
+                    </div>
+                    <input
+                      value={tgChatId}
+                      onChange={e => setTgChatId(e.target.value)}
+                      placeholder="Telegram Chat ID (e.g. 123456789)"
+                      style={{ width: "100%", background: "#09090b", border: "1px solid #27272a", borderRadius: 7, color: "#f4f4f5", padding: "9px 12px", fontSize: 12, outline: "none", boxSizing: "border-box" }}
+                      onFocus={e => (e.target.style.borderColor = "#10b981")}
+                      onBlur={e => (e.target.style.borderColor = "#27272a")}
+                    />
+                    <button
+                      disabled={tgLoading || !tgChatId.trim()}
+                      onClick={async () => {
+                        if (!tgChatId.trim()) return;
+                        setTgLoading(true);
+                        try {
+                          const r = await fetch("/api/notify/telegram/connect", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ chatId: tgChatId.trim() }),
+                          });
+                          if (r.ok) setTgStatus({ connected: true, chatId: tgChatId.trim() });
+                        } catch {}
+                        setTgLoading(false);
+                      }}
+                      style={{ padding: "9px 14px", borderRadius: 7, border: "none", background: tgLoading || !tgChatId.trim() ? "#1e1e21" : "#10b981", color: tgLoading || !tgChatId.trim() ? "#52525b" : "#fff", fontSize: 11, fontWeight: 700, cursor: tgLoading || !tgChatId.trim() ? "not-allowed" : "pointer" }}>
+                      {tgLoading ? "Connecting…" : "Connect Telegram"}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Internal trading wallet */}
