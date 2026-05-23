@@ -86,29 +86,33 @@ function ScanGrid() {
   );
 }
 
-export function LandingPage({ onConnect, connecting }: Props) {
-  const [connectError, setConnectError] = useState("");
-  const [connectHint, setConnectHint]   = useState("");
-  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Telegram OTP login
+/** Login modal — Phantom / Telegram OTP / X */
+function LoginModal({
+  onClose,
+  onConnect,
+  connecting,
+}: {
+  onClose: () => void;
+  onConnect: () => Promise<void>;
+  connecting: boolean;
+}) {
   const [tgStep, setTgStep]   = useState<"idle" | "waiting" | "done">("idle");
   const [tgCode, setTgCode]   = useState("");
   const [tgError, setTgError] = useState("");
+  const [phantomErr, setPhantomErr] = useState("");
   const tgPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const handleConnect = async () => {
-    setConnectError("");
-    setConnectHint("");
-    if (hintTimer.current) clearTimeout(hintTimer.current);
-    hintTimer.current = setTimeout(() => setConnectHint("Check your Phantom extension — waiting for approval"), 2000);
+  useEffect(() => {
+    return () => { if (tgPollRef.current) clearInterval(tgPollRef.current); };
+  }, []);
+
+  const handlePhantom = async () => {
+    setPhantomErr("");
     try {
       await onConnect();
+      onClose();
     } catch (e) {
-      setConnectError(e instanceof Error ? e.message : "Connection failed");
-    } finally {
-      if (hintTimer.current) clearTimeout(hintTimer.current);
-      setConnectHint("");
+      setPhantomErr(e instanceof Error ? e.message : "Connection failed");
     }
   };
 
@@ -116,25 +120,24 @@ export function LandingPage({ onConnect, connecting }: Props) {
     setTgError("");
     try {
       const r = await fetch("/api/auth/telegram/init", { method: "POST" });
-      if (!r.ok) { setTgError("Nu s-a putut genera codul. Încearcă din nou."); return; }
+      if (!r.ok) { setTgError("Could not generate code. Try again."); return; }
       const { code } = await r.json() as { code: string };
       setTgCode(code);
       setTgStep("waiting");
 
-      // Poll every 2s for up to 5 minutes
       tgPollRef.current = setInterval(async () => {
         try {
           const pr = await fetch(`/api/auth/telegram/poll?code=${code}`);
-          const data = await pr.json() as { verified: boolean; address?: string; error?: string };
+          const data = await pr.json() as { verified: boolean; error?: string };
           if (data.verified) {
             clearInterval(tgPollRef.current!);
             setTgStep("done");
-            window.location.reload();
+            setTimeout(() => window.location.reload(), 800);
           }
           if (data.error === "Code expired") {
             clearInterval(tgPollRef.current!);
             setTgStep("idle");
-            setTgError("Codul a expirat. Încearcă din nou.");
+            setTgError("Code expired. Try again.");
           }
         } catch { /* network hiccup — keep polling */ }
       }, 2000);
@@ -143,16 +146,164 @@ export function LandingPage({ onConnect, connecting }: Props) {
         if (tgPollRef.current) {
           clearInterval(tgPollRef.current);
           setTgStep("idle");
-          setTgError("Timp expirat — încearcă din nou.");
+          setTgError("Timed out — try again.");
         }
       }, 300_000);
     } catch {
-      setTgError("Eroare de conexiune. Încearcă din nou.");
+      setTgError("Connection error. Try again.");
     }
   };
 
   return (
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{ position: "fixed", inset: 0, background: "#00000090", zIndex: 200, backdropFilter: "blur(4px)" }}
+      />
+
+      {/* Modal */}
+      <div style={{
+        position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+        zIndex: 201, width: "min(400px, 92vw)",
+        background: "#0e0e12", border: "1px solid #1e1e26", borderRadius: 18,
+        boxShadow: "0 32px 80px #00000090, 0 0 0 1px #ffffff06 inset",
+        overflow: "hidden",
+      }}>
+        {/* Top accent line */}
+        <div style={{ height: 2, background: "linear-gradient(90deg, #dc2626, #7c3aed, #dc2626)" }} />
+
+        <div style={{ padding: "28px 28px 24px" }}>
+          {/* Header */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <GeassLogo size={22} />
+              <div>
+                <div style={{ fontWeight: 900, fontSize: 13, letterSpacing: "1.5px" }}>GEASS</div>
+                <div style={{ fontSize: 9, color: "#3f3f46", letterSpacing: "1px" }}>ALPHA RECON</div>
+              </div>
+            </div>
+            <button onClick={onClose} style={{ background: "none", border: "none", color: "#52525b", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
+          </div>
+
+          {tgStep === "idle" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ fontSize: 11, color: "#52525b", marginBottom: 4 }}>Choose how to enter</div>
+
+              {/* Phantom — primary */}
+              <button onClick={handlePhantom} disabled={connecting}
+                style={{
+                  width: "100%", padding: "13px 18px", borderRadius: 11, border: "none",
+                  background: "linear-gradient(135deg, #dc2626 0%, #7c3aed 100%)",
+                  color: "#fff", fontSize: 13, fontWeight: 800, cursor: connecting ? "wait" : "pointer",
+                  display: "flex", alignItems: "center", gap: 10,
+                  boxShadow: "0 0 32px #dc262630",
+                }}>
+                <IconSolana size={16} />
+                {connecting ? "Connecting…" : "Connect Phantom"}
+                <span style={{ marginLeft: "auto", fontSize: 10, opacity: .6, fontWeight: 500 }}>Solana wallet</span>
+              </button>
+
+              {/* Divider */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "2px 0" }}>
+                <div style={{ flex: 1, height: 1, background: "#1a1a22" }} />
+                <span style={{ fontSize: 10, color: "#3f3f46" }}>or</span>
+                <div style={{ flex: 1, height: 1, background: "#1a1a22" }} />
+              </div>
+
+              {/* Telegram */}
+              <button onClick={handleTelegramLogin}
+                style={{
+                  width: "100%", padding: "12px 18px", borderRadius: 11,
+                  border: "1px solid #2291d038", background: "#2291d010",
+                  color: "#38bdf8", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 10,
+                }}>
+                <span style={{ fontSize: 17 }}>✈</span>
+                Login with Telegram
+                <span style={{ marginLeft: "auto", fontSize: 10, opacity: .5, fontWeight: 500 }}>@geasstrade_bot</span>
+              </button>
+
+              {/* X / Twitter */}
+              <a href="/api/auth/twitter"
+                style={{
+                  width: "100%", padding: "12px 18px", borderRadius: 11,
+                  border: "1px solid #ffffff14", background: "#ffffff07",
+                  color: "#e2e8f0", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 10, textDecoration: "none",
+                  boxSizing: "border-box",
+                }}>
+                <span style={{ fontSize: 14, fontWeight: 900 }}>𝕏</span>
+                Login with X
+                <span style={{ marginLeft: "auto", fontSize: 10, opacity: .5, fontWeight: 500 }}>Twitter account</span>
+              </a>
+
+              {phantomErr && <div style={{ fontSize: 11, color: "#ef4444", marginTop: 2 }}>{phantomErr}</div>}
+              {tgError    && <div style={{ fontSize: 11, color: "#ef4444", marginTop: 2 }}>{tgError}</div>}
+
+              <div style={{ marginTop: 8, fontSize: 10, color: "#27272a", textAlign: "center", lineHeight: 1.6 }}>
+                Non-custodial · No registration · Free to start
+              </div>
+            </div>
+          )}
+
+          {tgStep === "waiting" && (
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: "#71717a", marginBottom: 12 }}>
+                Open <span style={{ color: "#38bdf8", fontWeight: 700 }}>@geasstrade_bot</span> on Telegram and send this code:
+              </div>
+              <div style={{
+                fontSize: 32, fontWeight: 800, letterSpacing: 8, color: "#f4f4f5",
+                fontFamily: "ui-monospace,monospace", margin: "12px 0",
+                background: "#0c1a24", border: "1px solid #2291d028", borderRadius: 10, padding: "14px 0",
+              }}>{tgCode}</div>
+              <div style={{ fontSize: 10, color: "#52525b", marginBottom: 16 }}>Verifying automatically once you send it…</div>
+              <button onClick={() => { if (tgPollRef.current) clearInterval(tgPollRef.current); setTgStep("idle"); setTgCode(""); }}
+                style={{ fontSize: 11, color: "#52525b", background: "transparent", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {tgStep === "done" && (
+            <div style={{ textAlign: "center", padding: "20px 0" }}>
+              <div style={{ fontSize: 28, marginBottom: 10 }}>✓</div>
+              <div style={{ fontSize: 13, color: "#10b981", fontWeight: 700 }}>Authenticated — loading…</div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+export function LandingPage({ onConnect, connecting }: Props) {
+  const [showLogin, setShowLogin] = useState(false);
+  const [loginError, setLoginError] = useState("");
+
+  // Surface Twitter/X OAuth errors from callback redirect (?login_error=...)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get("login_error");
+    if (err) {
+      setLoginError(decodeURIComponent(err));
+      setShowLogin(true);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
+  const openLogin = () => { setLoginError(""); setShowLogin(true); };
+
+  return (
     <div style={{ background: "#07070a", color: "#f4f4f5", fontFamily: "'Inter',system-ui,sans-serif", minHeight: "100vh", overflowX: "hidden" }}>
+
+      {showLogin && (
+        <LoginModal
+          onClose={() => setShowLogin(false)}
+          onConnect={onConnect}
+          connecting={connecting}
+        />
+      )}
 
       {/* NAV */}
       <nav style={{ position: "sticky", top: 0, zIndex: 100, background: "#07070acc", backdropFilter: "blur(16px)", borderBottom: "1px solid #111115", display: "flex", alignItems: "center", padding: "0 32px", height: 52 }}>
@@ -165,9 +316,9 @@ export function LandingPage({ onConnect, connecting }: Props) {
           <a href="#features" style={{ fontSize: 11, color: "#3f3f46", textDecoration: "none", letterSpacing: ".3px" }}>Features</a>
           <a href="#how"      style={{ fontSize: 11, color: "#3f3f46", textDecoration: "none", letterSpacing: ".3px" }}>How it works</a>
           <a href="#pricing"  style={{ fontSize: 11, color: "#3f3f46", textDecoration: "none", letterSpacing: ".3px" }}>Pricing</a>
-          <button onClick={handleConnect} disabled={connecting}
-            style={{ padding: "6px 18px", borderRadius: 7, border: "1px solid #dc262650", background: "#dc26260e", color: "#ef4444", fontSize: 11, fontWeight: 700, cursor: connecting ? "wait" : "pointer", letterSpacing: ".5px" }}>
-            {connecting ? "Connecting…" : "Enter App →"}
+          <button onClick={openLogin}
+            style={{ padding: "6px 18px", borderRadius: 7, border: "1px solid #dc262650", background: "#dc26260e", color: "#ef4444", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: ".5px" }}>
+            Enter App →
           </button>
         </div>
       </nav>
@@ -204,9 +355,9 @@ export function LandingPage({ onConnect, connecting }: Props) {
         </p>
 
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", position: "relative" }}>
-          <button onClick={handleConnect} disabled={connecting}
-            style={{ padding: "14px 36px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #dc2626 0%, #7c3aed 100%)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: connecting ? "wait" : "pointer", letterSpacing: ".3px", boxShadow: "0 0 48px #dc262638, 0 2px 0 #0004 inset", display: "inline-flex", alignItems: "center", gap: 9 }}>
-            {connecting ? "Connecting wallet…" : <><IconSolana size={15} /> Connect Phantom — Enter GEASS</>}
+          <button onClick={openLogin}
+            style={{ padding: "14px 40px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #dc2626 0%, #7c3aed 100%)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", letterSpacing: ".3px", boxShadow: "0 0 48px #dc262638, 0 2px 0 #0004 inset" }}>
+            Enter GEASS →
           </button>
           <a href="#features"
             style={{ padding: "14px 24px", borderRadius: 10, border: "1px solid #1e1e24", background: "transparent", color: "#71717a", fontSize: 13, fontWeight: 600, cursor: "pointer", textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
@@ -214,38 +365,13 @@ export function LandingPage({ onConnect, connecting }: Props) {
           </a>
         </div>
 
-        {/* Alternative logins */}
-        {tgStep === "idle" && (
-          <div style={{ marginTop: 14, display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-            <button onClick={handleTelegramLogin}
-              style={{ padding: "10px 20px", borderRadius: 9, border: "1px solid #2291d040", background: "#2291d012", color: "#38bdf8", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 15 }}>✈</span> Login with Telegram
-            </button>
-            <a href="/api/auth/twitter"
-              style={{ padding: "10px 20px", borderRadius: 9, border: "1px solid #ffffff20", background: "#ffffff08", color: "#e2e8f0", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
-              <span style={{ fontSize: 15, fontWeight: 900 }}>𝕏</span> Login with X
-            </a>
-          </div>
+        {loginError && (
+          <div style={{ marginTop: 16, fontSize: 12, color: "#ef4444", fontWeight: 600 }}>{loginError}</div>
         )}
-        {tgStep === "waiting" && (
-          <div style={{ marginTop: 16, background: "#0e1a24", border: "1px solid #2291d030", borderRadius: 12, padding: "16px 20px", maxWidth: 340, margin: "16px auto 0", textAlign: "center" }}>
-            <div style={{ fontSize: 11, color: "#71717a", marginBottom: 8 }}>Trimite codul următor la <span style={{ color: "#38bdf8", fontWeight: 700 }}>@geasstrade_bot</span> pe Telegram:</div>
-            <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: 6, color: "#f4f4f5", fontFamily: "ui-monospace,monospace", margin: "8px 0" }}>{tgCode}</div>
-            <div style={{ fontSize: 10, color: "#52525b" }}>Se verifică automat după ce trimiți codul…</div>
-            <button onClick={() => { if (tgPollRef.current) clearInterval(tgPollRef.current); setTgStep("idle"); setTgCode(""); }}
-              style={{ marginTop: 10, fontSize: 10, color: "#52525b", background: "transparent", border: "none", cursor: "pointer", textDecoration: "underline" }}>
-              Anulează
-            </button>
-          </div>
-        )}
-        {tgStep === "done" && (
-          <div style={{ marginTop: 14, fontSize: 12, color: "#10b981", fontWeight: 600 }}>✓ Autentificat — se încarcă…</div>
-        )}
-        {tgError && <div style={{ marginTop: 8, fontSize: 11, color: "#ef4444" }}>{tgError}</div>}
 
-        {connectHint  && <div style={{ marginTop: 14, fontSize: 11, color: "#f59e0b", fontWeight: 600 }}>{connectHint}</div>}
-        {connectError && <div style={{ marginTop: 10,  fontSize: 11, color: "#ef4444" }}>{connectError}</div>}
-        <p style={{ marginTop: 16, fontSize: 10, color: "#27272a", letterSpacing: ".3px" }}>No registration · Phantom or Telegram · Free to start</p>
+        <p style={{ marginTop: 16, fontSize: 10, color: "#27272a", letterSpacing: ".3px" }}>
+          Phantom · Telegram · X — free to start · no registration
+        </p>
 
         {/* Decorative scanner preview */}
         <div style={{ marginTop: 72, position: "relative", maxWidth: 680, margin: "72px auto 0" }}>
@@ -390,7 +516,6 @@ export function LandingPage({ onConnect, connecting }: Props) {
             <h2 style={{ fontSize: "clamp(22px,4vw,32px)", fontWeight: 900, letterSpacing: "-1px", marginBottom: 10 }}>Best-in-class infrastructure</h2>
             <p style={{ fontSize: 12, color: "#3f3f46", maxWidth: 480, margin: "0 auto" }}>No shortcuts. Every dependency picked for speed, reliability, and on-chain transparency.</p>
           </div>
-
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12 }}>
             {[
               { name: "Helius",       desc: "Real-time WebSocket + Enhanced Transactions API for sub-50ms detection." },
@@ -418,7 +543,6 @@ export function LandingPage({ onConnect, connecting }: Props) {
             <div style={{ fontSize: 9, color: "#3f3f46", letterSpacing: "2px", fontWeight: 700, marginBottom: 12 }}>WHY GEASS</div>
             <h2 style={{ fontSize: "clamp(22px,4vw,32px)", fontWeight: 900, letterSpacing: "-1px", marginBottom: 10 }}>Built for traders, not tourists</h2>
           </div>
-
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 14 }}>
             {[
               { title: "100% non-custodial",  desc: "No deposits, no escrow. Every signature happens in your wallet. GEASS cannot move your funds — ever." },
@@ -447,7 +571,6 @@ export function LandingPage({ onConnect, connecting }: Props) {
             <div style={{ fontSize: 9, color: "#3f3f46", letterSpacing: "2px", fontWeight: 700, marginBottom: 12 }}>QUESTIONS</div>
             <h2 style={{ fontSize: "clamp(22px,4vw,32px)", fontWeight: 900, letterSpacing: "-1px" }}>Frequently asked</h2>
           </div>
-
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {[
               { q: "Is GEASS safe? Do you have my private keys?",
@@ -462,8 +585,10 @@ export function LandingPage({ onConnect, connecting }: Props) {
                 a: "Speed and cost. New tokens launch every minute on Pump.fun. Solana's sub-second finality + millicent fees mean GEASS can react in real-time without paying gas fees on every signal. 1inch integration extends reach to EVM chains when needed." },
               { q: "What about MEV / sandwich attacks?",
                 a: "GEASS auto-snipe routes through Jito bundles. Your transaction is included in a private bundle that bots cannot front-run. For manual trades, you can still opt-in to Jito tipping at submit time." },
+              { q: "Can I log in without a Phantom wallet?",
+                a: "Yes. Click 'Enter GEASS' and choose Telegram or X (Twitter). For Telegram, send a one-time code to @geasstrade_bot — no wallet needed. For X, a standard OAuth flow logs you in through your Twitter account." },
               { q: "Can I run GEASS on mobile?",
-                a: "Yes. The web app is fully mobile-responsive. On mobile, Connect Phantom opens the Phantom mobile app via deep link, signs there, and returns to GEASS. The mobile bottom nav exposes the core flows (Scanner, KOL, Launch)." },
+                a: "Yes. The web app is fully mobile-responsive. On mobile, Connect Phantom opens the Phantom mobile app via deep link, signs there, and returns to GEASS. You can also log in via Telegram or X without any wallet app." },
             ].map((f, i) => (
               <details key={i} style={{ background: "#0a0a0d", border: "1px solid #111115", borderRadius: 12, padding: "16px 20px", cursor: "pointer" }}>
                 <summary style={{ fontSize: 12, fontWeight: 700, color: "#e4e4e7", listStyle: "none", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
@@ -495,9 +620,9 @@ export function LandingPage({ onConnect, connecting }: Props) {
                   </li>
                 ))}
               </ul>
-              <button onClick={handleConnect} disabled={connecting}
+              <button onClick={openLogin}
                 style={{ width: "100%", padding: "11px", borderRadius: 9, border: "1px solid #1e1e24", background: "transparent", color: "#71717a", fontSize: 12, fontWeight: 700, cursor: "pointer", letterSpacing: ".3px" }}>
-                {connecting ? "Connecting…" : "Start Free →"}
+                Start Free →
               </button>
             </div>
 
@@ -519,9 +644,9 @@ export function LandingPage({ onConnect, connecting }: Props) {
                     </li>
                   ))}
                 </ul>
-                <button onClick={handleConnect} disabled={connecting}
-                  style={{ width: "100%", padding: "11px", borderRadius: 9, border: "none", background: "linear-gradient(135deg, #dc2626, #7c3aed)", color: "#fff", fontSize: 12, fontWeight: 800, cursor: connecting ? "wait" : "pointer", letterSpacing: ".3px", boxShadow: "0 0 24px #dc262630" }}>
-                  {connecting ? "Connecting…" : "Connect & Upgrade →"}
+                <button onClick={openLogin}
+                  style={{ width: "100%", padding: "11px", borderRadius: 9, border: "none", background: "linear-gradient(135deg, #dc2626, #7c3aed)", color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer", letterSpacing: ".3px", boxShadow: "0 0 24px #dc262630" }}>
+                  Enter & Upgrade →
                 </button>
               </div>
             </div>
@@ -538,13 +663,12 @@ export function LandingPage({ onConnect, connecting }: Props) {
             <div style={{ marginBottom: 20 }}><GeassLogo size={48} /></div>
             <h2 style={{ fontSize: "clamp(20px,4vw,28px)", fontWeight: 900, letterSpacing: "-0.5px", marginBottom: 12 }}>Ready to see the alpha?</h2>
             <p style={{ fontSize: 12, color: "#3f3f46", lineHeight: 1.7, marginBottom: 32, maxWidth: 340, margin: "0 auto 32px" }}>
-              Connect your Phantom wallet and enter GEASS in 5 seconds. No registration. No email. Just on-chain.
+              Enter GEASS in seconds — Phantom, Telegram, or X. No registration. No email. Just on-chain.
             </p>
-            <button onClick={handleConnect} disabled={connecting}
-              style={{ padding: "14px 40px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #dc2626, #7c3aed)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: connecting ? "wait" : "pointer", boxShadow: "0 0 60px #dc262630", display: "inline-flex", alignItems: "center", gap: 10, letterSpacing: ".3px" }}>
-              {connecting ? "Connecting…" : <><IconSolana size={15} /> Connect Phantom</>}
+            <button onClick={openLogin}
+              style={{ padding: "14px 40px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #dc2626, #7c3aed)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 0 60px #dc262630", letterSpacing: ".3px" }}>
+              Enter GEASS →
             </button>
-            {connectError && <div style={{ marginTop: 12, fontSize: 11, color: "#ef4444" }}>{connectError}</div>}
             <p style={{ marginTop: 16, fontSize: 10, color: "#1e1e24" }}>Free · No KYC · Solana mainnet</p>
           </div>
         </div>

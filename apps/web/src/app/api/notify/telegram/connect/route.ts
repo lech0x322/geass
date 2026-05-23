@@ -52,8 +52,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Store Telegram connection in Redis
-  await redis.set(`tg:chat:${wallet}`, { chatId, connectedAt: Date.now() });
+  // Store both directions so the webhook can resolve wallet ↔ chatId
+  await redis.set(`tg:chat:${wallet}`, chatId);
+  await redis.set(`tg:wallet:${chatId}`, wallet);
 
   // Send welcome message
   await sendTelegramAlert(chatId, {
