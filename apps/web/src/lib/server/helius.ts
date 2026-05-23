@@ -3,6 +3,24 @@ import { HELIUS_RPC, HELIUS_API, HELIUS_KEY, PUMP_PROG, SKIP_MINTS } from "../en
 import { cached } from "./cache";
 import type { HeliusEnhancedTransaction } from "@/types/helius";
 
+/** Marker for errors that must not be retried (auth failures, bad request). */
+class FatalHeliusError extends Error {
+  constructor(msg: string) { super(msg); this.name = "FatalHeliusError"; }
+}
+
+function heliusHttpError(status: number, scope: string): Error {
+  if (status === 401 || status === 403) {
+    return new FatalHeliusError(
+      `Helius ${scope} ${status}: HELIUS_API_KEY invalid, expired, or out of credits. ` +
+      `Verify the key in your Helius dashboard and the HELIUS_API_KEY env var.`,
+    );
+  }
+  if (status === 429) {
+    return new FatalHeliusError(`Helius ${scope} 429: rate limit exceeded for this API key.`);
+  }
+  return new Error(`Helius ${scope} ${status}`);
+}
+
 /** Retry an async fn up to `attempts` times with exponential backoff. */
 async function withRetry<T>(fn: () => Promise<T>, attempts = 3, baseDelayMs = 400): Promise<T> {
   let lastErr: unknown;
@@ -10,6 +28,7 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3, baseDelayMs = 40
     try { return await fn(); }
     catch (e) {
       lastErr = e;
+      if (e instanceof FatalHeliusError) break; // do not retry auth/quota
       if (i === attempts - 1) break;
       // backoff: 400ms, 800ms, 1600ms
       await new Promise(r => setTimeout(r, baseDelayMs * Math.pow(2, i)));
@@ -29,7 +48,7 @@ export async function heliusRpc<T = any>(method: string, params: unknown[]): Pro
       signal: AbortSignal.timeout(10_000),
       cache: "no-store",
     });
-    if (!r.ok) throw new Error(`Helius RPC ${r.status}`);
+    if (!r.ok) throw heliusHttpError(r.status, "RPC");
     const d = await r.json();
     if (d.error) throw new Error(d.error.message);
     return d.result;
@@ -66,7 +85,7 @@ export async function parseTransactions(signatures: string[]): Promise<HeliusEnh
       signal: AbortSignal.timeout(12_000),
       cache: "no-store",
     });
-    if (!r.ok) throw new Error(`Helius parse ${r.status}`);
+    if (!r.ok) throw heliusHttpError(r.status, "parse");
     const data = await r.json();
     return Array.isArray(data) ? data : [];
   });
@@ -98,7 +117,7 @@ export async function getTransactionHistory(
       signal: AbortSignal.timeout(12_000),
       cache: "no-store",
     });
-    if (!r.ok) throw new Error(`Helius history ${r.status}`);
+    if (!r.ok) throw heliusHttpError(r.status, "history");
     const data = await r.json();
     return Array.isArray(data) ? data : [];
   });
