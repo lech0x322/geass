@@ -2,6 +2,57 @@
 import type { Gem } from "./types";
 import type { TradeRecord } from "./types/trade";
 
+// ── LP Lock ──────────────────────────────────────────────────────────────────
+
+export interface LpLockResult {
+  mint: string;
+  locked: boolean;
+  lockProgram: string | null;
+  lockedPct: number | null;
+  burnedPct: number | null;
+}
+
+export async function checkLpLock(mint: string): Promise<LpLockResult> {
+  const r = await fetch(`/api/token/lp-lock?mint=${encodeURIComponent(mint)}`, {
+    cache: "no-store",
+  });
+  if (!r.ok) {
+    let msg = `lp-lock ${r.status}`;
+    try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+// ── Trade Tracker ────────────────────────────────────────────────────────────
+
+export async function fetchTrades(wallet: string, limit = 50): Promise<TradeRecord[]> {
+  const r = await fetch(
+    `/api/trades?wallet=${encodeURIComponent(wallet)}&limit=${limit}`,
+    { cache: "no-store" },
+  );
+  if (!r.ok) {
+    let msg = `trades ${r.status}`;
+    try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  const d = await r.json() as { trades?: TradeRecord[] };
+  return d.trades ?? [];
+}
+
+export async function recordTrade(trade: Omit<TradeRecord, "id">): Promise<void> {
+  const r = await fetch("/api/trades", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ trade }),
+  });
+  if (!r.ok) {
+    let msg = `recordTrade ${r.status}`;
+    try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+}
+
 export interface ScanResult {
   gems: Gem[];
   source: string;
