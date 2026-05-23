@@ -8,7 +8,7 @@ import {
   IconChart, IconShield, IconBroadcast, IconRocket, IconSpeaker, IconLock,
 } from "./icons";
 
-/* ─── Global CSS animations ───────────────────────────────────── */
+/* ─── Global CSS — animations + responsive breakpoints ───────── */
 const GLOBAL_CSS = `
 @keyframes geass-float  { 0%,100%{transform:translateY(0) rotate(-1deg)} 50%{transform:translateY(-10px) rotate(1deg)} }
 @keyframes geass-pulse  { 0%,100%{opacity:1} 50%{opacity:.4} }
@@ -28,6 +28,52 @@ details > summary            { list-style:none }
 details > summary::-webkit-details-marker { display:none }
 .faq-icon                    { transition:transform .2s ease; display:inline-block }
 details[open] .faq-icon      { transform:rotate(45deg) }
+
+/* ── Layout helpers ── */
+.g-hero     { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:clamp(32px,5vw,64px); align-items:center }
+.g-bento    { display:grid; grid-template-columns:repeat(3,1fr); gap:12px }
+.g-2col     { display:grid; grid-template-columns:1fr 1fr; gap:14px }
+.g-4col     { display:grid; grid-template-columns:repeat(4,1fr) }
+.g-steps    { display:grid; grid-template-columns:repeat(4,1fr); gap:0; position:relative }
+.g-tg-inner { display:grid; grid-template-columns:1fr auto; gap:24px; align-items:start }
+.span-2     { grid-column:span 2 }
+
+.nav-links      { display:flex; gap:24px; align-items:center }
+.nav-hamburger  { display:none !important }
+.nav-mobile-cta { display:none !important }
+.hero-scanner   { display:flex; justify-content:center }
+.tg-mockup      {}
+.steps-line     { display:block }
+
+/* ── Tablet (≤1024px) ── */
+@media (max-width:1024px) {
+  .g-bento  { grid-template-columns:repeat(2,1fr) }
+  .g-steps  { grid-template-columns:repeat(2,1fr); gap:32px }
+  .steps-line { display:none }
+}
+
+/* ── Mobile (≤680px) ── */
+@media (max-width:680px) {
+  .g-hero     { grid-template-columns:1fr }
+  .g-bento    { grid-template-columns:1fr }
+  .g-2col     { grid-template-columns:1fr }
+  .g-4col     { grid-template-columns:1fr 1fr }
+  .g-steps    { grid-template-columns:1fr 1fr; gap:24px }
+  .g-tg-inner { grid-template-columns:1fr }
+  .span-2     { grid-column:span 1 }
+  .nav-links       { display:none !important }
+  .nav-hamburger   { display:flex !important }
+  .nav-mobile-cta  { display:flex !important }
+  .hero-scanner    { display:none }
+  .tg-mockup       { display:none }
+  .steps-line      { display:none }
+}
+
+/* ── Very small (≤380px) ── */
+@media (max-width:380px) {
+  .g-4col  { grid-template-columns:1fr }
+  .g-steps { grid-template-columns:1fr }
+}
 `;
 
 /* ─── Constants ───────────────────────────────────────────────── */
@@ -50,7 +96,7 @@ const Label = ({ children }: { children: string }) => (
 
 const H2 = ({ children, sub }: { children: string; sub?: string }) => (
   <div style={{ textAlign:"center", marginBottom:52 }}>
-    <h2 style={{ fontSize:"clamp(24px,4vw,40px)", fontWeight:900, letterSpacing:"-1.5px", lineHeight:1.08, marginBottom: sub?12:0 }}>{children}</h2>
+    <h2 style={{ fontSize:"clamp(22px,4vw,40px)", fontWeight:900, letterSpacing:"-1.5px", lineHeight:1.08, marginBottom: sub?12:0 }}>{children}</h2>
     {sub && <p style={{ fontSize:13, color:"#52525b", maxWidth:500, margin:"0 auto", lineHeight:1.7 }}>{sub}</p>}
   </div>
 );
@@ -95,9 +141,7 @@ function ScannerPreview() {
   ];
   return (
     <div className="geass-float" style={{ background:"#0c0c11", border:"1px solid #1e1e2c", borderRadius:18, overflow:"hidden", boxShadow:"0 48px 120px #00000099, 0 0 0 1px #ffffff07 inset", width:"100%", maxWidth:560, position:"relative" }}>
-      {/* scanning line */}
       <div style={{ position:"absolute", left:0, right:0, height:1, background:"linear-gradient(90deg,transparent,#dc262650,transparent)", animation:"geass-scan 2.8s linear infinite", zIndex:2, pointerEvents:"none" }} />
-      {/* titlebar */}
       <div style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 16px", borderBottom:"1px solid #111118", background:"#09090e" }}>
         {["#ef4444","#f59e0b","#10b981"].map(c => <div key={c} style={{ width:8, height:8, borderRadius:"50%", background:c }} />)}
         <span style={{ marginLeft:10, fontSize:9, color:"#242433", letterSpacing:"1.5px", fontWeight:700 }}>ALPHA SCANNER · GEASS</span>
@@ -106,7 +150,6 @@ function ScannerPreview() {
           STREAMING
         </span>
       </div>
-      {/* col headers */}
       <div style={{ display:"grid", gridTemplateColumns:"36px 1fr 56px 52px 40px 52px", gap:0, padding:"5px 16px", borderBottom:"1px solid #0e0e18" }}>
         {["","TOKEN","MC","KOL","CHG","SCORE"].map(h => (
           <span key={h} style={{ fontSize:8, color:"#242433", fontWeight:700, letterSpacing:"1px" }}>{h}</span>
@@ -247,7 +290,7 @@ function BCard({ icon, color, title, desc, badge, span2 }: {
   icon: React.ReactNode; color: string; title: string; desc: string; badge?: string; span2?: boolean;
 }) {
   return (
-    <div style={{ gridColumn: span2 ? "span 2" : undefined, background:"#0c0c11", border:"1px solid #1a1a26", borderRadius:18, padding:"24px 22px", position:"relative", overflow:"hidden" }}>
+    <div className={span2 ? "span-2" : undefined} style={{ background:"#0c0c11", border:"1px solid #1a1a26", borderRadius:18, padding:"24px 22px", position:"relative", overflow:"hidden" }}>
       <div style={{ position:"absolute", top:0, left:0, right:0, height:1, background:`linear-gradient(90deg,transparent,${color}35,transparent)` }} />
       <div style={{ display:"flex", alignItems:"center", gap:9, marginBottom:13 }}>
         <div style={{ width:36, height:36, borderRadius:10, background:`${color}14`, border:`1px solid ${color}28`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
@@ -295,6 +338,7 @@ interface Props { onConnect: () => Promise<void>; connecting: boolean; }
 export function LandingPage({ onConnect, connecting }: Props) {
   const [showLogin, setShowLogin] = useState(false);
   const [loginErr,  setLoginErr]  = useState("");
+  const [mobileNav, setMobileNav] = useState(false);
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
@@ -302,7 +346,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
     if (e) { setLoginErr(decodeURIComponent(e)); setShowLogin(true); window.history.replaceState({}, "", window.location.pathname); }
   }, []);
 
-  const open = () => { setLoginErr(""); setShowLogin(true); };
+  const open = () => { setLoginErr(""); setShowLogin(true); setMobileNav(false); };
 
   return (
     <div style={{ background:"#07070b", color:"#f4f4f5", fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", overflowX:"hidden" }}>
@@ -311,37 +355,64 @@ export function LandingPage({ onConnect, connecting }: Props) {
       {showLogin && <LoginModal onClose={() => setShowLogin(false)} onConnect={onConnect} connecting={connecting} initError={loginErr} />}
 
       {/* ─── NAV ──────────────────────────────────────── */}
-      <nav style={{ position:"sticky", top:0, zIndex:100, background:"#07070bdc", backdropFilter:"blur(20px)", borderBottom:"1px solid #111118", display:"flex", alignItems:"center", padding:"0 clamp(16px,4vw,48px)", height:56, gap:32 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10, flex:1 }}>
-          <GeassLogo size={26} />
-          <span style={{ fontWeight:900, fontSize:13, letterSpacing:"2px" }}>GEASS</span>
-          <span style={{ fontSize:7, color:"#1c1c28", letterSpacing:"3px" }}>ALPHA RECON</span>
-        </div>
-        <div style={{ display:"flex", gap:24, alignItems:"center" }}>
-          {(["#features","#security","#pricing"] as const).map((h, i) => (
-            <a key={h} href={h} style={{ fontSize:11, color:"#3f3f46", textDecoration:"none", letterSpacing:".3px" }}>
-              {["Features","Security","Pricing"][i]}
-            </a>
-          ))}
-          <button onClick={open} style={{ padding:"7px 20px", borderRadius:8, border:"1px solid #dc262650", background:"linear-gradient(135deg,#dc262614,#7c3aed14)", color:"#ef4444", fontSize:11, fontWeight:800, cursor:"pointer", letterSpacing:".5px" }}>
-            Enter App →
+      <nav style={{ position:"sticky", top:0, zIndex:100, background:"#07070bdc", backdropFilter:"blur(20px)", borderBottom:"1px solid #111118" }}>
+        <div style={{ display:"flex", alignItems:"center", padding:"0 clamp(16px,4vw,48px)", height:56, gap:12 }}>
+          {/* Logo */}
+          <div style={{ display:"flex", alignItems:"center", gap:10, flex:1, minWidth:0 }}>
+            <GeassLogo size={26} />
+            <span style={{ fontWeight:900, fontSize:13, letterSpacing:"2px", whiteSpace:"nowrap" }}>GEASS</span>
+            <span style={{ fontSize:7, color:"#1c1c28", letterSpacing:"3px", whiteSpace:"nowrap" }}>ALPHA RECON</span>
+          </div>
+
+          {/* Desktop nav */}
+          <div className="nav-links">
+            {(["#features","#security","#pricing"] as const).map((h, i) => (
+              <a key={h} href={h} style={{ fontSize:11, color:"#3f3f46", textDecoration:"none", letterSpacing:".3px", whiteSpace:"nowrap" }}>
+                {["Features","Security","Pricing"][i]}
+              </a>
+            ))}
+            <button onClick={open} style={{ padding:"7px 20px", borderRadius:8, border:"1px solid #dc262650", background:"linear-gradient(135deg,#dc262614,#7c3aed14)", color:"#ef4444", fontSize:11, fontWeight:800, cursor:"pointer", letterSpacing:".5px", whiteSpace:"nowrap" }}>
+              Enter App →
+            </button>
+          </div>
+
+          {/* Mobile: CTA + hamburger */}
+          <button onClick={open} className="nav-mobile-cta" style={{ padding:"7px 14px", borderRadius:8, border:"1px solid #dc262650", background:"linear-gradient(135deg,#dc262614,#7c3aed14)", color:"#ef4444", fontSize:11, fontWeight:800, cursor:"pointer", alignItems:"center", justifyContent:"center" }}>
+            Enter →
+          </button>
+          <button
+            onClick={() => setMobileNav(v => !v)}
+            className="nav-hamburger"
+            aria-label="Menu"
+            style={{ padding:"8px 10px", borderRadius:8, border:"1px solid #1e1e28", background:"transparent", color:"#71717a", cursor:"pointer", fontSize:18, lineHeight:1, alignItems:"center", justifyContent:"center" }}
+          >
+            {mobileNav ? "×" : "☰"}
           </button>
         </div>
+
+        {/* Mobile dropdown */}
+        {mobileNav && (
+          <div style={{ borderTop:"1px solid #111118", background:"#07070b", padding:"12px clamp(16px,4vw,48px) 16px" }}>
+            {(["#features","#security","#pricing"] as const).map((h, i) => (
+              <a key={h} href={h} onClick={() => setMobileNav(false)} style={{ display:"block", padding:"12px 0", fontSize:15, color:"#71717a", textDecoration:"none", borderBottom:"1px solid #0f0f18" }}>
+                {["Features","Security","Pricing"][i]}
+              </a>
+            ))}
+          </div>
+        )}
       </nav>
 
       <Ticker />
 
       {/* ─── HERO ─────────────────────────────────────── */}
-      <section style={{ position:"relative", padding:"clamp(64px,9vw,120px) clamp(16px,5vw,64px) clamp(48px,6vw,80px)", overflow:"hidden" }}>
-        {/* orbs */}
+      <section style={{ position:"relative", padding:"clamp(56px,8vw,120px) clamp(16px,5vw,64px) clamp(40px,6vw,80px)", overflow:"hidden" }}>
         <div style={{ position:"absolute", top:-160, left:"50%", transform:"translateX(-50%)", width:900, height:600, background:"radial-gradient(ellipse,#dc262610 0%,transparent 65%)", filter:"blur(80px)", pointerEvents:"none" }} />
         <div style={{ position:"absolute", bottom:0, right:"-5%", width:500, height:500, background:"radial-gradient(ellipse,#7c3aed0c 0%,transparent 70%)", filter:"blur(100px)", pointerEvents:"none" }} />
-        {/* grid */}
         {Array.from({length:7}).map((_,i)=>(
           <div key={i} style={{ position:"absolute", top:0, bottom:0, left:`${(i+1)*14.28}%`, width:1, background:"#ffffff03", pointerEvents:"none" }} />
         ))}
 
-        <div style={{ maxWidth:1100, margin:"0 auto", display:"grid", gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)", gap:"clamp(32px,5vw,64px)", alignItems:"center" }}>
+        <div className="g-hero" style={{ maxWidth:1100, margin:"0 auto" }}>
           {/* Left copy */}
           <div className="geass-fade-up">
             <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#10b98112", border:"1px solid #10b98130", borderRadius:24, padding:"5px 16px", fontSize:9, color:"#10b981", fontWeight:800, marginBottom:28, letterSpacing:"1.5px" }}>
@@ -349,7 +420,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
               SOLANA MAINNET · LIVE · 48ms LATENCY
             </div>
 
-            <h1 style={{ fontSize:"clamp(36px,5.2vw,72px)", fontWeight:900, lineHeight:1.02, marginBottom:22, letterSpacing:"-2.5px" }}>
+            <h1 style={{ fontSize:"clamp(34px,5.2vw,72px)", fontWeight:900, lineHeight:1.02, marginBottom:22, letterSpacing:"-2px" }}>
               See the alpha<br />
               <span style={{ background:"linear-gradient(125deg,#ef4444 0%,#a855f7 45%,#7c3aed 100%)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", display:"inline-block" }}>
                 before anyone else
@@ -361,7 +432,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
             </p>
 
             <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:28 }}>
-              <button onClick={open} className="geass-glow" style={{ padding:"14px 36px", borderRadius:11, border:"none", background:"linear-gradient(135deg,#dc2626,#7c3aed)", color:"#fff", fontSize:14, fontWeight:800, cursor:"pointer", letterSpacing:".3px" }}>
+              <button onClick={open} className="geass-glow" style={{ padding:"14px clamp(22px,4vw,36px)", borderRadius:11, border:"none", background:"linear-gradient(135deg,#dc2626,#7c3aed)", color:"#fff", fontSize:14, fontWeight:800, cursor:"pointer", letterSpacing:".3px" }}>
                 Enter GEASS →
               </button>
               <a href="#features" style={{ padding:"14px 22px", borderRadius:11, border:"1px solid #1e1e28", background:"transparent", color:"#71717a", fontSize:13, fontWeight:600, textDecoration:"none", display:"inline-flex", alignItems:"center" }}>
@@ -369,26 +440,25 @@ export function LandingPage({ onConnect, connecting }: Props) {
               </a>
             </div>
 
-            {/* Hero stats */}
             <div style={{ display:"flex", gap:28, flexWrap:"wrap" }}>
               {[{ v:"48ms", l:"Detection" },{ v:"3.2k+", l:"Tokens/day" },{ v:"94%", l:"Accuracy" }].map(s => (
                 <div key={s.l}>
-                  <div style={{ fontSize:22, fontWeight:900, letterSpacing:"-1px", background:"linear-gradient(135deg,#ef4444,#a855f7)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>{s.v}</div>
+                  <div style={{ fontSize:"clamp(18px,3vw,22px)", fontWeight:900, letterSpacing:"-1px", background:"linear-gradient(135deg,#ef4444,#a855f7)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>{s.v}</div>
                   <div style={{ fontSize:9, color:"#3f3f46", letterSpacing:".5px", marginTop:2 }}>{s.l}</div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Right — scanner preview */}
-          <div style={{ display:"flex", justifyContent:"center" }}>
+          {/* Right — scanner preview (hidden on mobile via CSS) */}
+          <div className="hero-scanner">
             <ScannerPreview />
           </div>
         </div>
       </section>
 
       {/* ─── FEATURE BENTO ────────────────────────────── */}
-      <section id="features" style={{ padding:"clamp(48px,6vw,88px) clamp(16px,5vw,64px)" }}>
+      <section id="features" style={{ padding:"clamp(40px,6vw,88px) clamp(16px,5vw,64px)" }}>
         <div style={{ maxWidth:1100, margin:"0 auto" }}>
           <div style={{ textAlign:"center", marginBottom:52 }}>
             <Label>ALL FEATURES</Label>
@@ -397,10 +467,9 @@ export function LandingPage({ onConnect, connecting }: Props) {
             </H2>
           </div>
 
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
-
-            {/* Alpha Scanner — 2 cols, with live mini-feed */}
-            <div style={{ gridColumn:"span 2", background:"#0c0c11", border:"1px solid #1a1a26", borderRadius:18, padding:"26px 26px 20px", position:"relative", overflow:"hidden" }}>
+          <div className="g-bento">
+            {/* Alpha Scanner — span 2 */}
+            <div className="span-2" style={{ background:"#0c0c11", border:"1px solid #1a1a26", borderRadius:18, padding:"26px 26px 20px", position:"relative", overflow:"hidden" }}>
               <div style={{ position:"absolute", top:0, left:0, right:0, height:1, background:"linear-gradient(90deg,transparent,#10b98145,transparent)" }} />
               <div style={{ display:"flex", alignItems:"center", gap:9, marginBottom:14 }}>
                 <div style={{ width:36, height:36, borderRadius:10, background:"#10b98114", border:"1px solid #10b98130", display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -418,12 +487,12 @@ export function LandingPage({ onConnect, connecting }: Props) {
                   { name:"WIF2", mc:"$5.4M",score:97,tier:"S",chg:"+512%",c:"#10b981"},
                   { name:"BONK3",mc:"$840K",score:81,tier:"A",chg:"+91%", c:"#3b82f6"},
                 ].map((r,i)=>(
-                  <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 14px", borderBottom:i<2?"1px solid #0d0d16":"none" }}>
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 14px", borderBottom:i<2?"1px solid #0d0d16":"none", flexWrap:"wrap" }}>
                     <span style={{ fontSize:8,fontWeight:800,color:r.c,background:r.c+"18",padding:"2px 5px",borderRadius:4,flexShrink:0 }}>{r.tier}</span>
-                    <span style={{ fontSize:11,fontWeight:700,color:"#e4e4e7",flex:1 }}>{r.name}</span>
-                    <span style={{ fontSize:9,color:"#3f3f46" }}>{r.mc}</span>
-                    <span style={{ fontSize:10,fontWeight:800,color:"#10b981" }}>{r.chg}</span>
-                    <div style={{ width:52,height:3,borderRadius:2,background:"#1a1a26",overflow:"hidden" }}>
+                    <span style={{ fontSize:11,fontWeight:700,color:"#e4e4e7",flex:1,minWidth:60 }}>{r.name}</span>
+                    <span style={{ fontSize:9,color:"#3f3f46",flexShrink:0 }}>{r.mc}</span>
+                    <span style={{ fontSize:10,fontWeight:800,color:"#10b981",flexShrink:0 }}>{r.chg}</span>
+                    <div style={{ width:48,height:3,borderRadius:2,background:"#1a1a26",overflow:"hidden",flexShrink:0 }}>
                       <div style={{ width:`${r.score}%`,height:"100%",background:`linear-gradient(90deg,${r.c}80,${r.c})`,borderRadius:2 }} />
                     </div>
                   </div>
@@ -435,10 +504,10 @@ export function LandingPage({ onConnect, connecting }: Props) {
 
             <BCard icon={<IconRocket size={18}/>} color="#a855f7" title="Token Launch" desc="Deploy tokens directly on Pump.fun in under 60 seconds. IPFS metadata upload, bonding curve configuration, all on-chain via Phantom." />
 
-            {/* Telegram Alerts — 2 cols */}
-            <div style={{ gridColumn:"span 2", background:"#0c0c11", border:"1px solid #1a1a26", borderRadius:18, padding:"26px 26px 24px", position:"relative", overflow:"hidden" }}>
+            {/* Telegram Alerts — span 2 */}
+            <div className="span-2" style={{ background:"#0c0c11", border:"1px solid #1a1a26", borderRadius:18, padding:"26px 26px 24px", position:"relative", overflow:"hidden" }}>
               <div style={{ position:"absolute", top:0, left:0, right:0, height:1, background:"linear-gradient(90deg,transparent,#38bdf845,transparent)" }} />
-              <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:24, alignItems:"start" }}>
+              <div className="g-tg-inner">
                 <div>
                   <div style={{ display:"flex", alignItems:"center", gap:9, marginBottom:12 }}>
                     <div style={{ width:36, height:36, borderRadius:10, background:"#38bdf814", border:"1px solid #38bdf830", display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -456,13 +525,13 @@ export function LandingPage({ onConnect, connecting }: Props) {
                     ))}
                   </div>
                 </div>
-                {/* Message mockup */}
-                <div style={{ background:"#0a1e2e", border:"1px solid #1e4060", borderRadius:14, padding:"14px 16px", minWidth:188, flexShrink:0 }}>
+                {/* Message mockup — hidden on mobile via CSS */}
+                <div className="tg-mockup" style={{ background:"#0a1e2e", border:"1px solid #1e4060", borderRadius:14, padding:"14px 16px", minWidth:188, flexShrink:0 }}>
                   <div style={{ fontSize:9, color:"#38bdf8", fontWeight:700, marginBottom:10, letterSpacing:".5px" }}>@geasstrade_bot</div>
                   {[
-                    { e:"🎯", msg:"TP hit: WIF2 +120%",    c:"#10b981" },
-                    { e:"⚡", msg:"Snipe ok: PEPE2",         c:"#38bdf8" },
-                    { e:"🐋", msg:"Whale buy: $340K BOME",  c:"#a855f7" },
+                    { e:"🎯", msg:"TP hit: WIF2 +120%",   c:"#10b981" },
+                    { e:"⚡", msg:"Snipe ok: PEPE2",        c:"#38bdf8" },
+                    { e:"🐋", msg:"Whale buy: $340K BOME", c:"#a855f7" },
                   ].map((m,i)=>(
                     <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:i<2?"1px solid #1e3a50":"none" }}>
                       <span style={{ fontSize:14 }}>{m.e}</span>
@@ -474,17 +543,16 @@ export function LandingPage({ onConnect, connecting }: Props) {
               </div>
             </div>
 
-            <BCard icon={<IconSearch size={18}/>} color="#f59e0b" title="Bundle Detector" desc="Groups early-block buys by wallet cluster. Flags coordinated launches with a risk score before you open any position." badge="NEW" />
-            <BCard icon={<IconTarget size={18}/>} color="#ef4444" title="TP / SL Alerts" desc="Set take-profit and stop-loss % on any trade. GEASS monitors price on-chain and fires a Telegram alert the moment a threshold is hit." badge="NEW" />
-            <BCard icon={<IconChart size={18}/>}  color="#10b981" title="PnL Tracker"    desc="Track realized gains and losses across all GEASS trades. Token-by-token breakdown and cumulative SOL P&L in the Trades tab." badge="NEW" />
-            <BCard icon={<IconLock size={18}/>}   color="#8b5cf6" title="LP Lock Verifier" desc="Checks burn address, Fluxbeam, and Streamflow in parallel. Shows locked% and burn% so you can assess rug risk at a glance." badge="NEW" />
-
+            <BCard icon={<IconSearch size={18}/>}  color="#f59e0b" title="Bundle Detector"   desc="Groups early-block buys by wallet cluster. Flags coordinated launches with a risk score before you open any position." badge="NEW" />
+            <BCard icon={<IconTarget size={18}/>}  color="#ef4444" title="TP / SL Alerts"   desc="Set take-profit and stop-loss % on any trade. GEASS monitors price on-chain and fires a Telegram alert the moment a threshold is hit." badge="NEW" />
+            <BCard icon={<IconChart size={18}/>}   color="#10b981" title="PnL Tracker"      desc="Track realized gains and losses across all GEASS trades. Token-by-token breakdown and cumulative SOL P&L in the Trades tab." badge="NEW" />
+            <BCard icon={<IconLock size={18}/>}    color="#8b5cf6" title="LP Lock Verifier" desc="Checks burn address, Fluxbeam, and Streamflow in parallel. Shows locked% and burn% so you can assess rug risk at a glance." badge="NEW" />
           </div>
         </div>
       </section>
 
       {/* ─── SAFETY SPOTLIGHT ─────────────────────────── */}
-      <section id="security" style={{ padding:"clamp(48px,6vw,88px) clamp(16px,5vw,64px)", position:"relative", overflow:"hidden" }}>
+      <section id="security" style={{ padding:"clamp(40px,6vw,88px) clamp(16px,5vw,64px)", position:"relative", overflow:"hidden" }}>
         <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse 70% 50% at 50% 50%,#f59e0b06 0%,transparent 70%)", pointerEvents:"none" }} />
         <div style={{ maxWidth:1100, margin:"0 auto", position:"relative" }}>
           <div style={{ textAlign:"center", marginBottom:52 }}>
@@ -493,7 +561,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
               Know before you trade
             </H2>
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+          <div className="g-2col">
             <Spot color="#f59e0b" icon={<IconSearch size={22}/>} badge="BUNDLE DETECTOR"
               title="Spot coordinated launches instantly"
               desc="GEASS groups early-block transactions by wallet cluster. If 3+ wallets bought in the same slot with the same deployer signature pattern — it's flagged as a bundle before you even see the token card."
@@ -509,7 +577,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
       </section>
 
       {/* ─── AUTOMATION SPOTLIGHT ─────────────────────── */}
-      <section style={{ padding:"clamp(48px,6vw,88px) clamp(16px,5vw,64px)", position:"relative", overflow:"hidden" }}>
+      <section style={{ padding:"clamp(40px,6vw,88px) clamp(16px,5vw,64px)", position:"relative", overflow:"hidden" }}>
         <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse 70% 50% at 50% 50%,#dc262606 0%,transparent 70%)", pointerEvents:"none" }} />
         <div style={{ maxWidth:1100, margin:"0 auto", position:"relative" }}>
           <div style={{ textAlign:"center", marginBottom:52 }}>
@@ -518,7 +586,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
               Trade smarter, not harder
             </H2>
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+          <div className="g-2col">
             <Spot color="#ef4444" icon={<IconTarget size={22}/>} badge="TP / SL ALERTS"
               title="Never miss your exit again"
               desc="After any snipe in GEASS, set a take-profit % and a stop-loss %. The system watches the bonding curve price and fires an instant Telegram notification the moment either threshold is crossed."
@@ -534,7 +602,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
       </section>
 
       {/* ─── HOW IT WORKS ─────────────────────────────── */}
-      <section style={{ padding:"clamp(48px,6vw,88px) clamp(16px,5vw,64px)" }}>
+      <section style={{ padding:"clamp(40px,6vw,88px) clamp(16px,5vw,64px)" }}>
         <div style={{ maxWidth:960, margin:"0 auto" }}>
           <div style={{ textAlign:"center", marginBottom:52 }}>
             <Label>HOW IT WORKS</Label>
@@ -542,8 +610,8 @@ export function LandingPage({ onConnect, connecting }: Props) {
               From mint to position in seconds
             </H2>
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:0, position:"relative" }}>
-            <div style={{ position:"absolute", top:34, left:"12%", right:"12%", height:1, background:"linear-gradient(90deg,#ef444422,#f59e0b22,#3b82f622,#10b98122)", pointerEvents:"none" }} />
+          <div className="g-steps">
+            <div className="steps-line" style={{ position:"absolute", top:34, left:"12%", right:"12%", height:1, background:"linear-gradient(90deg,#ef444422,#f59e0b22,#3b82f622,#10b98122)", pointerEvents:"none" }} />
             {[
               { n:"01", title:"Detect",  color:"#ef4444", desc:"Helius WebSocket pushes new mints in ~48ms — first to know, first to act." },
               { n:"02", title:"Enrich",  color:"#f59e0b", desc:"Bonding curve, holder count, mint authority, LP lock status — scored in parallel." },
@@ -564,18 +632,18 @@ export function LandingPage({ onConnect, connecting }: Props) {
       </section>
 
       {/* ─── STATS ────────────────────────────────────── */}
-      <section style={{ padding:"0 clamp(16px,5vw,64px) clamp(48px,6vw,88px)" }}>
+      <section style={{ padding:"0 clamp(16px,5vw,64px) clamp(40px,6vw,88px)" }}>
         <div style={{ maxWidth:1100, margin:"0 auto", background:"#0c0c11", border:"1px solid #1a1a26", borderRadius:20, overflow:"hidden", position:"relative" }}>
           <div style={{ position:"absolute", top:0, left:0, right:0, height:1, background:"linear-gradient(90deg,transparent,#dc262638,#7c3aed38,transparent)" }} />
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)" }}>
+          <div className="g-4col">
             {[
               { v:"48ms",  l:"Detection latency",    s:"p99 WebSocket push"   },
               { v:"3.2k+", l:"Tokens detected / day", s:"Solana mainnet"       },
               { v:"94%",   l:"Signal accuracy",       s:"S-tier 30d hit rate"  },
               { v:"12×",   l:"Avg return on S-tier",  s:"30-day trailing"      },
             ].map((s,i) => (
-              <div key={s.l} style={{ padding:"32px 24px", textAlign:"center", borderRight:i<3?"1px solid #131320":"none" }}>
-                <div style={{ fontSize:"clamp(28px,4vw,46px)", fontWeight:900, letterSpacing:"-2px", background:"linear-gradient(135deg,#ef4444,#a855f7)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", marginBottom:6 }}>{s.v}</div>
+              <div key={s.l} style={{ padding:"clamp(20px,3vw,32px) clamp(12px,2vw,24px)", textAlign:"center", borderRight:i<3?"1px solid #131320":"none" }}>
+                <div style={{ fontSize:"clamp(24px,4vw,46px)", fontWeight:900, letterSpacing:"-2px", background:"linear-gradient(135deg,#ef4444,#a855f7)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", marginBottom:6 }}>{s.v}</div>
                 <div style={{ fontSize:11, color:"#a1a1aa", fontWeight:600, marginBottom:3 }}>{s.l}</div>
                 <div style={{ fontSize:9, color:"#2a2a38" }}>{s.s}</div>
               </div>
@@ -585,7 +653,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
       </section>
 
       {/* ─── PRICING ──────────────────────────────────── */}
-      <section id="pricing" style={{ padding:"clamp(48px,6vw,88px) clamp(16px,5vw,64px)", position:"relative", overflow:"hidden" }}>
+      <section id="pricing" style={{ padding:"clamp(40px,6vw,88px) clamp(16px,5vw,64px)", position:"relative", overflow:"hidden" }}>
         <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse 60% 70% at 50% 50%,#7c3aed07 0%,transparent 70%)", pointerEvents:"none" }} />
         <div style={{ maxWidth:800, margin:"0 auto", position:"relative" }}>
           <div style={{ textAlign:"center", marginBottom:52 }}>
@@ -594,7 +662,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
               Simple. On-chain. Transparent.
             </H2>
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+          <div className="g-2col">
 
             {/* Free */}
             <div style={{ background:"#0c0c11", border:"1px solid #1a1a26", borderRadius:22, padding:"32px 28px" }}>
@@ -612,7 +680,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
                   </li>
                 ))}
               </ul>
-              <button onClick={open} style={{ width:"100%", padding:"12px", borderRadius:11, border:"1px solid #1e1e28", background:"transparent", color:"#71717a", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+              <button onClick={open} style={{ width:"100%", padding:"13px", borderRadius:11, border:"1px solid #1e1e28", background:"transparent", color:"#71717a", fontSize:12, fontWeight:700, cursor:"pointer" }}>
                 Start Free →
               </button>
             </div>
@@ -652,7 +720,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
                     </li>
                   ))}
                 </ul>
-                <button onClick={open} style={{ width:"100%", padding:"12px", borderRadius:11, border:"none", background:"linear-gradient(135deg,#dc2626,#7c3aed)", color:"#fff", fontSize:12, fontWeight:800, cursor:"pointer", boxShadow:"0 0 32px #dc262628" }}>
+                <button onClick={open} style={{ width:"100%", padding:"13px", borderRadius:11, border:"none", background:"linear-gradient(135deg,#dc2626,#7c3aed)", color:"#fff", fontSize:12, fontWeight:800, cursor:"pointer", boxShadow:"0 0 32px #dc262628" }}>
                   Enter & Upgrade →
                 </button>
               </div>
@@ -663,7 +731,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
       </section>
 
       {/* ─── FAQ ──────────────────────────────────────── */}
-      <section style={{ padding:"clamp(48px,6vw,88px) clamp(16px,5vw,64px)" }}>
+      <section style={{ padding:"clamp(40px,6vw,88px) clamp(16px,5vw,64px)" }}>
         <div style={{ maxWidth:720, margin:"0 auto" }}>
           <div style={{ textAlign:"center", marginBottom:48 }}>
             <Label>FAQ</Label>
@@ -693,18 +761,18 @@ export function LandingPage({ onConnect, connecting }: Props) {
       </section>
 
       {/* ─── FINAL CTA ────────────────────────────────── */}
-      <section style={{ padding:"clamp(48px,6vw,88px) clamp(16px,5vw,64px)" }}>
+      <section style={{ padding:"clamp(40px,6vw,88px) clamp(16px,5vw,64px)" }}>
         <div style={{ maxWidth:700, margin:"0 auto" }}>
-          <div style={{ background:"#0c0c11", border:"1px solid #1e1e2c", borderRadius:26, padding:"clamp(48px,6vw,80px) clamp(24px,5vw,64px)", textAlign:"center", position:"relative", overflow:"hidden" }}>
+          <div style={{ background:"#0c0c11", border:"1px solid #1e1e2c", borderRadius:26, padding:"clamp(40px,6vw,80px) clamp(24px,5vw,64px)", textAlign:"center", position:"relative", overflow:"hidden" }}>
             <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse 80% 55% at 50% 0%,#dc262610 0%,transparent 65%)", pointerEvents:"none" }} />
             <div style={{ position:"absolute", top:0, left:0, right:0, height:1, background:"linear-gradient(90deg,transparent,#dc262645,#7c3aed45,transparent)" }} />
             <div style={{ position:"relative" }}>
               <GeassLogo size={54} />
-              <h2 style={{ fontSize:"clamp(22px,4vw,34px)", fontWeight:900, letterSpacing:"-1.5px", margin:"20px 0 14px" }}>Ready to see the alpha?</h2>
+              <h2 style={{ fontSize:"clamp(20px,4vw,34px)", fontWeight:900, letterSpacing:"-1.5px", margin:"20px 0 14px" }}>Ready to see the alpha?</h2>
               <p style={{ fontSize:13, color:"#52525b", lineHeight:1.75, maxWidth:400, margin:"0 auto 36px" }}>
                 Enter in 5 seconds — Phantom, Telegram, or X. No registration. No KYC. Just on-chain intelligence on Solana.
               </p>
-              <button onClick={open} className="geass-glow" style={{ padding:"16px 52px", borderRadius:12, border:"none", background:"linear-gradient(135deg,#dc2626,#7c3aed)", color:"#fff", fontSize:15, fontWeight:800, cursor:"pointer", letterSpacing:".3px" }}>
+              <button onClick={open} className="geass-glow" style={{ padding:"16px clamp(32px,6vw,52px)", borderRadius:12, border:"none", background:"linear-gradient(135deg,#dc2626,#7c3aed)", color:"#fff", fontSize:15, fontWeight:800, cursor:"pointer", letterSpacing:".3px" }}>
                 Enter GEASS →
               </button>
               <p style={{ marginTop:18, fontSize:10, color:"#1a1a28" }}>Free · No KYC · Solana mainnet · non-custodial</p>
@@ -715,7 +783,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
 
       {/* ─── FOOTER ───────────────────────────────────── */}
       <footer style={{ borderTop:"1px solid #0f0f18", padding:"clamp(20px,3vw,36px) clamp(16px,5vw,64px)" }}>
-        <div style={{ maxWidth:1100, margin:"0 auto", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:16 }}>
+        <div style={{ maxWidth:1100, margin:"0 auto", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
             <GeassLogo size={16} />
             <span style={{ fontSize:11, fontWeight:900, letterSpacing:"2px", color:"#27272a" }}>GEASS</span>
