@@ -18,6 +18,8 @@ import { SnipeModal } from "./SnipeModal";
 import { TokenModal } from "./TokenModal";
 import { InternalWalletPanel } from "./InternalWalletPanel";
 import { useInternalWallet } from "@/lib/useInternalWallet";
+import { useTrades } from "@/lib/useTrades";
+import type { TradePnL } from "@/lib/types/trade";
 import {
   IconBroadcast, IconFlame, IconRocket, IconZap, IconTarget, IconUsers,
   IconCog, IconCrown, IconChevronDown, IconSolana, IconSearch, IconX,
@@ -80,6 +82,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [isMobile, setIsMobile] = useState(false);
   const pro = useProStatus(wallet);
   const iw = useInternalWallet();
+  const { trades: _trades, pnl, loading: tradesLoading } = useTrades(wallet);
   const [portfolio, setPortfolio] = useState<PortfolioResult | null>(null);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [portfolioErr, setPortfolioErr] = useState("");
@@ -111,6 +114,11 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [refCopied, setRefCopied] = useState(false);
   const [refStats, setRefStats] = useState<{ clicks: number; referrals: number } | null>(null);
   const freeMonths = refStats ? Math.floor(refStats.referrals / 3) : 0;
+
+  // Telegram connect state
+  const [tgChatId, setTgChatId] = useState("");
+  const [tgStatus, setTgStatus] = useState<{ connected: boolean; chatId?: string } | null>(null);
+  const [tgLoading, setTgLoading] = useState(false);
 
   // Launch state
   const [ct, setCt]           = useState({ name: "", sym: "", desc: "", img: "", devBuy: "0.5" });

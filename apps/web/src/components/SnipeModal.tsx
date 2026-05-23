@@ -35,6 +35,10 @@ export function SnipeModal({
   const [mode, setMode]     = useState<Mode>("phantom");
   const [step, setStep]     = useState<"form" | "loading" | "done">("form");
   const [msg, setMsg]       = useState("");
+  const [showTpsl, setShowTpsl]   = useState(false);
+  const [tpPct, setTpPct]         = useState("200");
+  const [slPct, setSlPct]         = useState("30");
+  const [tpslSaved, setTpslSaved] = useState(false);
 
   if (!gem) return null;
 
@@ -107,6 +111,69 @@ export function SnipeModal({
                 Verify at <a href="https://explorer.jito.wtf" target="_blank" rel="noopener noreferrer" style={{ color: "#a855f7" }}>explorer.jito.wtf</a>
               </div>
             )}
+
+            {/* TP/SL Alert section */}
+            {!showTpsl ? (
+              <button
+                onClick={() => setShowTpsl(true)}
+                style={{ marginTop: 10, background: "transparent", border: "1px solid #a855f7", color: "#a855f7", padding: "7px 16px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+              >
+                Set TP/SL Alert →
+              </button>
+            ) : (
+              <div style={{ marginTop: 12, textAlign: "left" }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", marginBottom: 4 }}>TAKE PROFIT %</div>
+                    <input
+                      type="number"
+                      value={tpPct}
+                      placeholder="200"
+                      onChange={e => setTpPct(e.target.value)}
+                      style={{ background: "#111113", border: "1px solid #27272a", borderRadius: 7, color: "#f4f4f5", padding: "8px 10px", fontSize: 12, width: "100%", outline: "none", boxSizing: "border-box" }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", marginBottom: 4 }}>STOP LOSS %</div>
+                    <input
+                      type="number"
+                      value={slPct}
+                      placeholder="30"
+                      onChange={e => setSlPct(e.target.value)}
+                      style={{ background: "#111113", border: "1px solid #27272a", borderRadius: 7, color: "#f4f4f5", padding: "8px 10px", fontSize: 12, width: "100%", outline: "none", boxSizing: "border-box" }}
+                    />
+                  </div>
+                </div>
+                {tpslSaved ? (
+                  <div style={{ fontSize: 11, color: "#10b981", textAlign: "center", marginBottom: 4 }}>
+                    ✓ Alert set — you&apos;ll be notified via Telegram
+                  </div>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      await fetch("/api/tpsl", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          rule: {
+                            mint: gem.contractAddress,
+                            symbol: gem.sym,
+                            takeProfitPct: Number(tpPct),
+                            stopLossPct: Number(slPct),
+                            createdAt: Date.now(),
+                          },
+                        }),
+                      });
+                      setTpslSaved(true);
+                    }}
+                    style={{ width: "100%", background: "#a855f7", border: "none", color: "#fff", padding: "9px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                  >
+                    Save Alert
+                  </button>
+                )}
+              </div>
+            )}
+
             <button onClick={onClose} style={{ marginTop: 10, background: "#ef4444", border: "none", color: "#fff", padding: "9px 22px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
               Close
             </button>

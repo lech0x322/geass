@@ -23,7 +23,7 @@ export type NavIconId =
   | "broadcast" | "flame" | "rocket" | "zap" | "target"
   | "users" | "cog" | "crown";
 
-export type SettingsSection = "sounds" | "referral" | "wallet";
+export type SettingsSection = "sounds" | "referral" | "wallet" | "notifications";
 /** Settings sub-items that navigate to a different tab entirely. */
 export const SETTINGS_TAB_OVERRIDES: Partial<Record<SettingsSection, NavId>> = {
   referral: "referral",
@@ -58,6 +58,7 @@ export const NAV: NavItem[] = [
       { id: "sounds",   label: "Sound Alerts" },
       { id: "referral", label: "Referral" },
       { id: "wallet",   label: "Wallet" },
+      { id: "notifications", label: "Notifications" },
     ],
   },
   { id: "pro",       label: "GEASS Pro",                                          pro: true, iconId: "crown" },
