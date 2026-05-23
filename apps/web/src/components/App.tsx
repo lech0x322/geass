@@ -1478,10 +1478,17 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                           const r = await fetch("/api/notify/telegram/connect", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ chatId: tgChatId.trim() }),
+                            body: JSON.stringify({ chatId: tgChatId.trim(), wallet }),
                           });
-                          if (r.ok) setTgStatus({ connected: true, chatId: tgChatId.trim() });
-                        } catch {}
+                          if (r.ok) {
+                            setTgStatus({ connected: true, chatId: tgChatId.trim() });
+                          } else {
+                            const j = await r.json().catch(() => ({}));
+                            alert((j as { error?: string }).error ?? `Error ${r.status}`);
+                          }
+                        } catch (e) {
+                          alert(e instanceof Error ? e.message : "Connection failed");
+                        }
                         setTgLoading(false);
                       }}
                       style={{ padding: "9px 14px", borderRadius: 7, border: "none", background: tgLoading || !tgChatId.trim() ? "#1e1e21" : "#10b981", color: tgLoading || !tgChatId.trim() ? "#52525b" : "#fff", fontSize: 11, fontWeight: 700, cursor: tgLoading || !tgChatId.trim() ? "not-allowed" : "pointer" }}>
