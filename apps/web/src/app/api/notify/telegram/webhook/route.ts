@@ -40,6 +40,20 @@ export async function POST(request: Request) {
   const escapedName   = name.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, c => `\\${c}`);
   const escapedChatId = chatId.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, c => `\\${c}`);
 
+  // 6-digit OTP → login verification
+  if (/^\d{6}$/.test(text)) {
+    const { redis } = await import("@/lib/server/redis");
+    const stored = await redis.get<{ verified: boolean; chatId: string | null }>(`tg:otp:${text}`);
+    if (stored && !stored.verified) {
+      await redis.set(`tg:otp:${text}`, { verified: true, chatId }, 300);
+      await sendTelegramMessage(
+        chatId,
+        `✅ *Cod confirmat\\!*\n\nRevino în GEASS — sesiunea ta se activează automat\\.`,
+      );
+      return NextResponse.json({ ok: true });
+    }
+  }
+
   if (text === "/start" || text.startsWith("/start ")) {
     await sendTelegramMessage(
       chatId,

@@ -88,8 +88,14 @@ function ScanGrid() {
 
 export function LandingPage({ onConnect, connecting }: Props) {
   const [connectError, setConnectError] = useState("");
-  const [connectHint, setConnectHint] = useState("");
+  const [connectHint, setConnectHint]   = useState("");
   const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Telegram OTP login
+  const [tgStep, setTgStep]   = useState<"idle" | "waiting" | "done">("idle");
+  const [tgCode, setTgCode]   = useState("");
+  const [tgError, setTgError] = useState("");
+  const tgPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleConnect = async () => {
     setConnectError("");
@@ -103,6 +109,45 @@ export function LandingPage({ onConnect, connecting }: Props) {
     } finally {
       if (hintTimer.current) clearTimeout(hintTimer.current);
       setConnectHint("");
+    }
+  };
+
+  const handleTelegramLogin = async () => {
+    setTgError("");
+    try {
+      const r = await fetch("/api/auth/telegram/init", { method: "POST" });
+      if (!r.ok) { setTgError("Nu s-a putut genera codul. Încearcă din nou."); return; }
+      const { code } = await r.json() as { code: string };
+      setTgCode(code);
+      setTgStep("waiting");
+
+      // Poll every 2s for up to 5 minutes
+      tgPollRef.current = setInterval(async () => {
+        try {
+          const pr = await fetch(`/api/auth/telegram/poll?code=${code}`);
+          const data = await pr.json() as { verified: boolean; address?: string; error?: string };
+          if (data.verified) {
+            clearInterval(tgPollRef.current!);
+            setTgStep("done");
+            window.location.reload();
+          }
+          if (data.error === "Code expired") {
+            clearInterval(tgPollRef.current!);
+            setTgStep("idle");
+            setTgError("Codul a expirat. Încearcă din nou.");
+          }
+        } catch { /* network hiccup — keep polling */ }
+      }, 2000);
+
+      setTimeout(() => {
+        if (tgPollRef.current) {
+          clearInterval(tgPollRef.current);
+          setTgStep("idle");
+          setTgError("Timp expirat — încearcă din nou.");
+        }
+      }, 300_000);
+    } catch {
+      setTgError("Eroare de conexiune. Încearcă din nou.");
     }
   };
 
@@ -169,9 +214,34 @@ export function LandingPage({ onConnect, connecting }: Props) {
           </a>
         </div>
 
+        {/* Telegram OTP login */}
+        {tgStep === "idle" && (
+          <div style={{ marginTop: 14 }}>
+            <button onClick={handleTelegramLogin}
+              style={{ padding: "10px 24px", borderRadius: 9, border: "1px solid #2291d040", background: "#2291d012", color: "#38bdf8", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 15 }}>✈</span> Login with Telegram
+            </button>
+          </div>
+        )}
+        {tgStep === "waiting" && (
+          <div style={{ marginTop: 16, background: "#0e1a24", border: "1px solid #2291d030", borderRadius: 12, padding: "16px 20px", maxWidth: 340, margin: "16px auto 0", textAlign: "center" }}>
+            <div style={{ fontSize: 11, color: "#71717a", marginBottom: 8 }}>Trimite codul următor la <span style={{ color: "#38bdf8", fontWeight: 700 }}>@geasstrade_bot</span> pe Telegram:</div>
+            <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: 6, color: "#f4f4f5", fontFamily: "ui-monospace,monospace", margin: "8px 0" }}>{tgCode}</div>
+            <div style={{ fontSize: 10, color: "#52525b" }}>Se verifică automat după ce trimiți codul…</div>
+            <button onClick={() => { if (tgPollRef.current) clearInterval(tgPollRef.current); setTgStep("idle"); setTgCode(""); }}
+              style={{ marginTop: 10, fontSize: 10, color: "#52525b", background: "transparent", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+              Anulează
+            </button>
+          </div>
+        )}
+        {tgStep === "done" && (
+          <div style={{ marginTop: 14, fontSize: 12, color: "#10b981", fontWeight: 600 }}>✓ Autentificat — se încarcă…</div>
+        )}
+        {tgError && <div style={{ marginTop: 8, fontSize: 11, color: "#ef4444" }}>{tgError}</div>}
+
         {connectHint  && <div style={{ marginTop: 14, fontSize: 11, color: "#f59e0b", fontWeight: 600 }}>{connectHint}</div>}
         {connectError && <div style={{ marginTop: 10,  fontSize: 11, color: "#ef4444" }}>{connectError}</div>}
-        <p style={{ marginTop: 16, fontSize: 10, color: "#27272a", letterSpacing: ".3px" }}>No registration · Sign with Phantom · Free to start</p>
+        <p style={{ marginTop: 16, fontSize: 10, color: "#27272a", letterSpacing: ".3px" }}>No registration · Phantom or Telegram · Free to start</p>
 
         {/* Decorative scanner preview */}
         <div style={{ marginTop: 72, position: "relative", maxWidth: 680, margin: "72px auto 0" }}>
