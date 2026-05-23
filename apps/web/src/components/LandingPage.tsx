@@ -214,13 +214,17 @@ export function LandingPage({ onConnect, connecting }: Props) {
           </a>
         </div>
 
-        {/* Telegram OTP login */}
+        {/* Alternative logins */}
         {tgStep === "idle" && (
-          <div style={{ marginTop: 14 }}>
+          <div style={{ marginTop: 14, display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
             <button onClick={handleTelegramLogin}
-              style={{ padding: "10px 24px", borderRadius: 9, border: "1px solid #2291d040", background: "#2291d012", color: "#38bdf8", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8 }}>
+              style={{ padding: "10px 20px", borderRadius: 9, border: "1px solid #2291d040", background: "#2291d012", color: "#38bdf8", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 15 }}>✈</span> Login with Telegram
             </button>
+            <a href="/api/auth/twitter"
+              style={{ padding: "10px 20px", borderRadius: 9, border: "1px solid #ffffff20", background: "#ffffff08", color: "#e2e8f0", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
+              <span style={{ fontSize: 15, fontWeight: 900 }}>𝕏</span> Login with X
+            </a>
           </div>
         )}
         {tgStep === "waiting" && (

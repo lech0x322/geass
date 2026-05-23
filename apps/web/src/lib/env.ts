@@ -43,3 +43,8 @@ export const SIWS_DOMAIN = process.env.NEXT_PUBLIC_APP_DOMAIN ?? "geass.app";
 
 // Telegram Bot
 export const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? "";
+
+// Twitter / X OAuth 2.0 PKCE
+export const TWITTER_CLIENT_ID     = process.env.TWITTER_CLIENT_ID     ?? "";
+export const TWITTER_CLIENT_SECRET = process.env.TWITTER_CLIENT_SECRET ?? "";
+export const TWITTER_CALLBACK_URL  = `https://${process.env.NEXT_PUBLIC_APP_DOMAIN ?? "geass.app"}/api/auth/twitter/callback`;
