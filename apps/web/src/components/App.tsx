@@ -1456,8 +1456,10 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    <div style={{ fontSize: 10, color: "#71717a", lineHeight: 1.6 }}>
-                      Open @geasstrade_bot on Telegram, send /start, paste your Chat ID below.
+                    <div style={{ fontSize: 10, color: "#71717a", lineHeight: 1.8 }}>
+                      1. Deschide <span style={{ color: "#a1a1aa", fontWeight: 600 }}>@geasstrade_bot</span> pe Telegram<br/>
+                      2. Trimite <span style={{ color: "#10b981", fontFamily: "ui-monospace,monospace" }}>/start</span> — botul răspunde cu Chat ID‑ul tău<br/>
+                      3. Copiază numărul și lipește‑l mai jos
                     </div>
                     <input
                       value={tgChatId}
