@@ -33,7 +33,22 @@ async function verifyTx(signature: string, wallet: string): Promise<{ ok: true; 
     { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" },
   ]);
 
-  if (!tx) return { ok: false, error: "Transaction not found or not yet confirmed" };
+  if (!tx) {
+    // getTransaction can lag minutes behind actual on-chain confirmation. Use
+    // getSignatureStatuses (faster index) to distinguish "tx confirmed, data
+    // not yet indexed" from "tx not found at all".
+    type SigStatus = { slot: number; confirmations: number | null; err: unknown; confirmationStatus: string } | null;
+    const statuses = await heliusRpc<{ value: SigStatus[] }>("getSignatureStatuses", [
+      [signature],
+      { searchTransactionHistory: true },
+    ]).catch(() => null);
+    const status = statuses?.value?.[0];
+    if (status && !status.err) {
+      // Tx confirmed on-chain — Helius hasn't indexed the full detail yet.
+      return { ok: false, error: "Transaction confirmed but not yet indexed — please wait" };
+    }
+    return { ok: false, error: "Transaction not found or not yet confirmed" };
+  }
   if (tx.meta?.err) return { ok: false, error: "Transaction failed on-chain" };
 
   // Accept ≥ 90 % of full price to allow the referral discount
