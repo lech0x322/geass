@@ -371,6 +371,28 @@ export async function fetchMemeSignals(): Promise<{ signals: MemeSignal[]; fetch
   }
 }
 
+// ── X / Social Narrative Signals ─────────────────────────────────────────────
+
+export interface XSignal {
+  id:      string;
+  text:    string;
+  author:  string;
+  url:     string;
+  score:   number;
+  source:  "x" | "news";
+  pubDate: number;
+}
+
+export async function fetchXSignals(): Promise<{ signals: XSignal[]; fetchedAt: number }> {
+  try {
+    const r = await fetch("/api/trends/x-signals", { cache: "no-store" });
+    if (!r.ok) return { signals: [], fetchedAt: Date.now() };
+    return r.json();
+  } catch {
+    return { signals: [], fetchedAt: Date.now() };
+  }
+}
+
 // ── Helius Enhanced Transactions (client) ───────────────────────────────────
 
 import type { HeliusEnhancedTransaction } from "@/types/helius";

@@ -5,7 +5,7 @@ import { Keypair, VersionedTransaction } from "@solana/web3.js";
 import bs58 from "bs58";
 import { KOLS, NAV, TIER, SETTINGS_TAB_OVERRIDES } from "@/lib/config";
 import { fmtAge, shortAddr } from "@/lib/utils";
-import { scan, fetchBalance, pumpTradeTx, pumpIpfs, fetchPortfolio, autoSnipe, jitoLaunchBundle, jitoSubmit, fetchTrending, fetchMemeSignals, type PortfolioResult, type AutoSnipeResult, type TrendingToken, type TrendingMeta, type MemeSignal } from "@/lib/api";
+import { scan, fetchBalance, pumpTradeTx, pumpIpfs, fetchPortfolio, autoSnipe, jitoLaunchBundle, jitoSubmit, fetchTrending, fetchMemeSignals, fetchXSignals, type PortfolioResult, type AutoSnipeResult, type TrendingToken, type TrendingMeta, type MemeSignal, type XSignal } from "@/lib/api";
 import { signAllWithPhantom } from "@/lib/wallet";
 import { signAndSendBytes } from "@/lib/wallet";
 import { useGemStream } from "@/lib/useGemStream";
@@ -126,7 +126,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [trendingLoading, setTrendingLoading] = useState(false);
   const [memeSignals,    setMemeSignals]    = useState<MemeSignal[]>([]);
   const [memeLoading,    setMemeLoading]    = useState(false);
-  const [memeTab,        setMemeTab]        = useState<"dex" | "meme">("dex");
+  const [xSignals,       setXSignals]       = useState<XSignal[]>([]);
+  const [xLoading,       setXLoading]       = useState(false);
+  const [memeTab,        setMemeTab]        = useState<"dex" | "meme" | "x">("dex");
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -176,42 +178,58 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // ── Sound helpers — each alert has a distinct timbre + pitch shape ───────────
-  // Gem: sine, bright rising double-chime (880 → 1320 → 1760)
-  function playSoundGem() {
+  // ── Sound helpers ─────────────────────────────────────────────────────────
+  // One shared AudioContext per page. Browsers suspend new contexts created
+  // outside a user-gesture; resume() before every note lets automatic alerts
+  // play once the user has clicked the page at least once.
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  function getAudioCtx(): AudioContext {
+    if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
+      audioCtxRef.current = new AudioContext();
+    }
+    return audioCtxRef.current;
+  }
+  useEffect(() => {
+    const unlock = () => { try { getAudioCtx().resume().catch(() => {}); } catch {} };
+    document.addEventListener("click", unlock, { once: true });
+    return () => document.removeEventListener("click", unlock);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Gem: sine, bright rising double-chime (880→1320, then 1760→2640)
+  async function playSoundGem() {
     try {
-      const ctx = new AudioContext(); const t = ctx.currentTime;
-      [0, 0.18].forEach((offset, i) => {
+      const ctx = getAudioCtx(); await ctx.resume(); const t = ctx.currentTime;
+      [0, 0.20].forEach((offset, i) => {
         const osc = ctx.createOscillator(); const gain = ctx.createGain();
         osc.type = "sine";
         osc.frequency.setValueAtTime(880 * (i + 1), t + offset);
-        osc.frequency.linearRampToValueAtTime(1320 * (i + 1), t + offset + 0.12);
-        gain.gain.setValueAtTime(0.10, t + offset);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.28);
+        osc.frequency.linearRampToValueAtTime(1320 * (i + 1), t + offset + 0.14);
+        gain.gain.setValueAtTime(0.11, t + offset);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.30);
         osc.connect(gain); gain.connect(ctx.destination);
-        osc.start(t + offset); osc.stop(t + offset + 0.28);
+        osc.start(t + offset); osc.stop(t + offset + 0.30);
       });
     } catch {}
   }
-  // KOL: triangle wave, punchy double-tap at 660 Hz then 990 Hz
-  function playSoundKol() {
+  // KOL: triangle, punchy double-tap (660 Hz then 990 Hz)
+  async function playSoundKol() {
     try {
-      const ctx = new AudioContext(); const t = ctx.currentTime;
-      [{ f: 660, o: 0 }, { f: 990, o: 0.16 }].forEach(({ f, o }) => {
+      const ctx = getAudioCtx(); await ctx.resume(); const t = ctx.currentTime;
+      [{ f: 660, o: 0 }, { f: 990, o: 0.18 }].forEach(({ f, o }) => {
         const osc = ctx.createOscillator(); const gain = ctx.createGain();
         osc.type = "triangle";
         osc.frequency.setValueAtTime(f, t + o);
-        gain.gain.setValueAtTime(0.15, t + o);
+        gain.gain.setValueAtTime(0.14, t + o);
         gain.gain.exponentialRampToValueAtTime(0.001, t + o + 0.22);
         osc.connect(gain); gain.connect(ctx.destination);
         osc.start(t + o); osc.stop(t + o + 0.22);
       });
     } catch {}
   }
-  // Meme: sawtooth (retro/buzzy), descending sweep 1047 → 523 → 698
-  function playSoundMeme() {
+  // Meme: sawtooth retro buzz, descending 1047→523→698
+  async function playSoundMeme() {
     try {
-      const ctx = new AudioContext(); const t = ctx.currentTime;
+      const ctx = getAudioCtx(); await ctx.resume(); const t = ctx.currentTime;
       const osc = ctx.createOscillator(); const gain = ctx.createGain();
       osc.type = "sawtooth";
       osc.frequency.setValueAtTime(1047, t);
@@ -535,6 +553,8 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     }).finally(() => setTrendingLoading(false));
     setMemeLoading(true);
     fetchMemeSignals().then(d => setMemeSignals(d.signals)).finally(() => setMemeLoading(false));
+    setXLoading(true);
+    fetchXSignals().then(d => setXSignals(d.signals)).finally(() => setXLoading(false));
   }, [tab]);
 
   // ── Stream status ───────────────────────────────────────────
@@ -1494,9 +1514,10 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   <IconFlame size={isMobile ? 16 : 18} /> Trending
                 </h1>
                 <button onClick={() => {
-                  setTrendingLoading(true); setMemeLoading(true);
+                  setTrendingLoading(true); setMemeLoading(true); setXLoading(true);
                   fetchTrending().then(d => { setTrendingTokens(d.tokens); setTrendingMetas(d.metas); }).finally(() => setTrendingLoading(false));
                   fetchMemeSignals().then(d => setMemeSignals(d.signals)).finally(() => setMemeLoading(false));
+                  fetchXSignals().then(d => setXSignals(d.signals)).finally(() => setXLoading(false));
                 }} style={{ marginLeft: "auto", fontSize: 9, padding: "4px 10px", borderRadius: 6, border: "1px solid #27272a", background: "transparent", color: "#52525b", cursor: "pointer" }}>
                   ↻ Refresh
                 </button>
@@ -1504,9 +1525,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
               {/* Sub-tab switcher */}
               <div style={{ display: "flex", gap: 4, marginBottom: 18, background: "#0a0a0b", borderRadius: 10, padding: 4, width: "fit-content" }}>
-                {([["dex", "🔥 DEX Boosted"], ["meme", "🧠 Meme Signals"]] as [typeof memeTab, string][]).map(([id, label]) => (
+                {([["dex", "🔥 DEX"], ["meme", "🧠 Meme"], ["x", "𝕏 Narrative"]] as [typeof memeTab, string][]).map(([id, label]) => (
                   <button key={id} onClick={() => setMemeTab(id)}
-                    style={{ padding: "6px 16px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700,
+                    style={{ padding: "6px 14px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700,
                       background: memeTab === id ? "#1a1a1d" : "transparent",
                       color: memeTab === id ? "#f4f4f5" : "#52525b" }}>
                     {label}
@@ -1683,6 +1704,76 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   {memeSignals.length > 0 && (
                     <div style={{ marginTop: 14, fontSize: 9, color: "#27272a", textAlign: "center" }}>
                       Signals from Pump.fun · Score 60+ = high meme potential · Data refreshes on demand
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* X NARRATIVE sub-tab */}
+              {memeTab === "x" && (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 8, color: "#1d9bf0", background: "#1d9bf020", border: "1px solid #1d9bf040", padding: "2px 8px", borderRadius: 8, fontWeight: 700 }}>𝕏 · NITTER RSS</span>
+                    <span style={{ fontSize: 8, color: "#52525b", background: "#27272a20", border: "1px solid #27272a40", padding: "2px 8px", borderRadius: 8, fontWeight: 700 }}>CRYPTO NEWS</span>
+                    {xLoading && <span style={{ fontSize: 9, color: "#52525b" }} className="pulse">Fetching...</span>}
+                  </div>
+                  <p style={{ fontSize: 11, color: "#3f3f46", marginBottom: 18 }}>
+                    Social narrative detector — posts from key CT accounts &amp; crypto news scored for meme coin potential.
+                  </p>
+
+                  {!xLoading && xSignals.length === 0 && (
+                    <div style={{ textAlign: "center", padding: "40px 20px", color: "#3f3f46" }}>
+                      <div style={{ fontSize: 24, marginBottom: 8 }}>𝕏</div>
+                      <div style={{ fontSize: 12 }}>No signals — Nitter may be temporarily unavailable</div>
+                      <div style={{ fontSize: 10, color: "#27272a", marginTop: 6 }}>Crypto news RSS will still appear when available</div>
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {xSignals.map(s => {
+                      const isX    = s.source === "x";
+                      const accent = isX ? "#1d9bf0" : "#f59e0b";
+                      const accentBg = isX ? "#1d9bf010" : "#f59e0b10";
+                      const scoreColor = s.score >= 60 ? "#10b981" : s.score >= 35 ? "#eab308" : "#52525b";
+                      const age = Math.round((Date.now() - s.pubDate) / 60000);
+                      const ageLabel = age < 60 ? `${age}m ago` : age < 1440 ? `${Math.round(age/60)}h ago` : `${Math.round(age/1440)}d ago`;
+                      return (
+                        <div key={s.id} style={{ background: "#111113", border: `1px solid ${s.score >= 60 ? "#10b98125" : "#1e1e21"}`, borderRadius: 12, padding: "12px 14px" }}>
+                          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                            {/* Source badge */}
+                            <div style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 8, background: accentBg, border: `1px solid ${accent}30`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, marginTop: 1 }}>
+                              {isX ? "𝕏" : "📰"}
+                            </div>
+                            {/* Content */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: accent }}>{s.author}</span>
+                                <span style={{ fontSize: 9, color: "#3f3f46" }}>{ageLabel}</span>
+                              </div>
+                              <div style={{ fontSize: 11, color: "#d4d4d8", lineHeight: 1.5 }}>{s.text}</div>
+                            </div>
+                            {/* Score */}
+                            <div style={{ flexShrink: 0, textAlign: "center", minWidth: 38 }}>
+                              <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "0.5px" }}>SIGNAL</div>
+                              <div style={{ fontSize: 15, fontWeight: 900, color: scoreColor }}>{s.score}</div>
+                            </div>
+                          </div>
+                          {s.url && (
+                            <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #1e1e21" }}>
+                              <a href={s.url} target="_blank" rel="noopener noreferrer"
+                                style={{ fontSize: 9, color: accent, textDecoration: "none", opacity: 0.7 }}>
+                                {s.url.length > 60 ? s.url.slice(0, 60) + "…" : s.url} ↗
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {xSignals.length > 0 && (
+                    <div style={{ marginTop: 14, fontSize: 9, color: "#27272a", textAlign: "center" }}>
+                      Sources: Nitter RSS (X/Twitter) · CoinTelegraph · Decrypt · Refreshes on demand
                     </div>
                   )}
                 </>
