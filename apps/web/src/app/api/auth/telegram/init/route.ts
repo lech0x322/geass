@@ -14,12 +14,14 @@ async function ensureWebhookRegistered() {
     const info = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo`);
     const { result } = await info.json() as { result?: { url?: string } };
     if (result?.url === WEBHOOK_URL) { webhookRegistered = true; return; }
-    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook`, {
+    const setRes  = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ url: WEBHOOK_URL, allowed_updates: ["message"] }),
     });
-    webhookRegistered = true;
+    const setData = await setRes.json() as { ok: boolean; description?: string };
+    if (setData.ok) webhookRegistered = true;
+    else console.error("[tg] setWebhook failed:", setData.description);
   } catch { /* non-fatal */ }
 }
 

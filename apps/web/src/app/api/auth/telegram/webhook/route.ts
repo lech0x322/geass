@@ -48,6 +48,20 @@ export async function POST(request: Request) {
   }
 
   if (text === "/start" || text.startsWith("/start ")) {
+    // Deep link: /start 123456 — treat payload as OTP code
+    const payload = text.startsWith("/start ") ? text.slice(7).trim() : "";
+    if (/^\d{6}$/.test(payload)) {
+      const value = await redis.get<string>(`tg:otp:${payload}`);
+      if (value === "pending") {
+        await redis.set(`tg:otp:${payload}`, String(chatId), 300);
+        await sendMessage(chatId, `✅ <b>Logged in to GEASS!</b>\n\nYour session is now active. Return to the app.`);
+      } else if (value === null) {
+        await sendMessage(chatId, `⚠️ Code <b>${payload}</b> has expired. Request a new code from the GEASS app.`);
+      } else {
+        await sendMessage(chatId, `ℹ️ This code has already been used.`);
+      }
+      return NextResponse.json({ ok: true });
+    }
     await sendMessage(chatId, `👋 <b>Welcome to GEASS Bot!</b>\n\nTo log in, open the GEASS app, click <b>Login with Telegram</b>, and send the 6-digit code shown.\n\n📊 Once linked you'll receive trade alerts and TP/SL notifications here.`);
     return NextResponse.json({ ok: true });
   }

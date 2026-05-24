@@ -268,6 +268,14 @@ function LoginModal({ onClose, onConnect, connecting, initError }: {
                 Open <span style={{ color:"#38bdf8", fontWeight:700 }}>@geasstrade_bot</span> on Telegram and send:
               </div>
               <div style={{ fontSize:36, fontWeight:800, letterSpacing:10, color:"#f4f4f5", fontFamily:"ui-monospace,monospace", background:"#0c1e2e", border:"1px solid #1e4060", borderRadius:12, padding:"16px 0", marginBottom:12 }}>{tgCode}</div>
+              <a
+                href={`https://t.me/geasstrade_bot?start=${tgCode}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ display:"inline-block", background:"#0088cc", color:"#fff", fontWeight:700, fontSize:13, borderRadius:10, padding:"10px 22px", marginBottom:12, textDecoration:"none" }}
+              >
+                Open in Telegram →
+              </a>
               <p style={{ fontSize:10, color:"#52525b", marginBottom:16 }}>Auto-verified once you send it…</p>
               <button onClick={() => { if (pollRef.current) clearInterval(pollRef.current); setTgStep("idle"); setTgCode(""); }} style={{ fontSize:11, color:"#3f3f46", background:"transparent", border:"none", cursor:"pointer", textDecoration:"underline" }}>Cancel</button>
             </div>
