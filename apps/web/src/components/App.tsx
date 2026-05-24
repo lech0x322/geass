@@ -11,6 +11,7 @@ import { signAndSendBytes } from "@/lib/wallet";
 import { useGemStream } from "@/lib/useGemStream";
 import { useProStatus } from "@/lib/pro";
 import { useKolFeed } from "@/lib/useKolFeed";
+import { useSignalSocket } from "@/lib/signal-socket";
 import type { Gem } from "@/lib/types";
 import { GeassLogo } from "./GeassLogo";
 import { GemCard } from "./GemCard";
@@ -490,7 +491,23 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     } catch {}
   }, [soundGems, soundKol, soundMeme]);
 
+  // Real-time price + signal push from Elixir signal server (falls back to polling if not configured)
+  useSignalSocket({
+    onPrice: ({ price, change }) => {
+      if (price) setSolPrice(price);
+      setSolChange(change ?? 0);
+    },
+    onMeme: ({ signals }) => {
+      setMemeSignals(signals as MemeSignal[]);
+    },
+    onXSignals: ({ signals }) => {
+      setXSignals(signals as XSignal[]);
+    },
+  });
+
   useEffect(() => {
+    // Fallback polling — only active when NEXT_PUBLIC_SIGNAL_SERVER_URL is not set
+    if (process.env.NEXT_PUBLIC_SIGNAL_SERVER_URL) return;
     const load = () => fetch("/api/sol-price").then(r => r.json()).then((d: { price: number | null; change: number }) => {
       if (d.price) setSolPrice(d.price);
       setSolChange(d.change ?? 0);
