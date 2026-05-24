@@ -20,6 +20,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ verified: false });
   }
 
+  if (value === "used") {
+    return NextResponse.json({ error: "Code expired" });
+  }
+
   // value is the Telegram chatId — login complete
   const chatId = value;
   await redis.set(`tg:otp:${code}`, "used", 10);

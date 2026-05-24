@@ -39,4 +39,5 @@ export const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? "";
 export const TWITTER_CLIENT_ID     = process.env.TWITTER_CLIENT_ID ?? "";
 export const TWITTER_CLIENT_SECRET = process.env.TWITTER_CLIENT_SECRET ?? "";
 export const APP_BASE_URL = process.env.APP_BASE_URL
+  ?? process.env.WEBHOOK_BASE_URL
   ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
