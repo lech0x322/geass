@@ -133,6 +133,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
   const [soundGems, setSoundGems]   = useState(true);
   const [soundKol, setSoundKol]     = useState(true);
+  const [soundMeme, setSoundMeme]   = useState(true);
   const [solPrice, setSolPrice]     = useState<number | null>(null);
   const [solChange, setSolChange]   = useState(0);
 
@@ -175,18 +176,52 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // ── Sound helper ─────────────────────────────────────────────
-  function playBeep(freq1: number, freq2: number) {
+  // ── Sound helpers — each alert has a distinct timbre + pitch shape ───────────
+  // Gem: sine, bright rising double-chime (880 → 1320 → 1760)
+  function playSoundGem() {
     try {
-      const ctx = new AudioContext();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+      const ctx = new AudioContext(); const t = ctx.currentTime;
+      [0, 0.18].forEach((offset, i) => {
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880 * (i + 1), t + offset);
+        osc.frequency.linearRampToValueAtTime(1320 * (i + 1), t + offset + 0.12);
+        gain.gain.setValueAtTime(0.10, t + offset);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.28);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(t + offset); osc.stop(t + offset + 0.28);
+      });
+    } catch {}
+  }
+  // KOL: triangle wave, punchy double-tap at 660 Hz then 990 Hz
+  function playSoundKol() {
+    try {
+      const ctx = new AudioContext(); const t = ctx.currentTime;
+      [{ f: 660, o: 0 }, { f: 990, o: 0.16 }].forEach(({ f, o }) => {
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(f, t + o);
+        gain.gain.setValueAtTime(0.15, t + o);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + o + 0.22);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(t + o); osc.stop(t + o + 0.22);
+      });
+    } catch {}
+  }
+  // Meme: sawtooth (retro/buzzy), descending sweep 1047 → 523 → 698
+  function playSoundMeme() {
+    try {
+      const ctx = new AudioContext(); const t = ctx.currentTime;
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(1047, t);
+      osc.frequency.exponentialRampToValueAtTime(523, t + 0.18);
+      osc.frequency.setValueAtTime(523, t + 0.20);
+      osc.frequency.linearRampToValueAtTime(698, t + 0.38);
+      gain.gain.setValueAtTime(0.08, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
       osc.connect(gain); gain.connect(ctx.destination);
-      gain.gain.setValueAtTime(0.12, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-      osc.frequency.setValueAtTime(freq1, ctx.currentTime);
-      osc.frequency.setValueAtTime(freq2, ctx.currentTime + 0.1);
-      osc.start(); osc.stop(ctx.currentTime + 0.35);
+      osc.start(t); osc.stop(t + 0.45);
     } catch {}
   }
 
@@ -201,8 +236,8 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     asRef.current = { enabled: asEnabled, amount: asAmount, minScore: asMinScore, method: asMethod };
   }, [asEnabled, asAmount, asMinScore, asMethod]);
 
-  const soundRef = useRef({ gems: true, kol: true });
-  useEffect(() => { soundRef.current = { gems: soundGems, kol: soundKol }; }, [soundGems, soundKol]);
+  const soundRef = useRef({ gems: true, kol: true, meme: true });
+  useEffect(() => { soundRef.current = { gems: soundGems, kol: soundKol, meme: soundMeme }; }, [soundGems, soundKol, soundMeme]);
 
   useEffect(() => {
     if (!stream.newGems.length) return;
@@ -224,7 +259,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
       if (!source || source === "NONE") setSource("STREAM");
       return next;
     });
-    if (soundRef.current.gems && freshGems.length > 0) playBeep(880, 1320);
+    if (soundRef.current.gems && freshGems.length > 0) playSoundGem();
     stream.clear();
     // Auto-snipe newly detected gems if enabled
     const cfg = asRef.current;
@@ -423,16 +458,19 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     try {
       const sg = localStorage.getItem("geass_sound_gems");
       const sk = localStorage.getItem("geass_sound_kol");
+      const sm = localStorage.getItem("geass_sound_meme");
       if (sg !== null) setSoundGems(sg !== "0");
       if (sk !== null) setSoundKol(sk !== "0");
+      if (sm !== null) setSoundMeme(sm !== "0");
     } catch {}
   }, []);
   useEffect(() => {
     try {
       localStorage.setItem("geass_sound_gems", soundGems ? "1" : "0");
       localStorage.setItem("geass_sound_kol",  soundKol  ? "1" : "0");
+      localStorage.setItem("geass_sound_meme", soundMeme ? "1" : "0");
     } catch {}
-  }, [soundGems, soundKol]);
+  }, [soundGems, soundKol, soundMeme]);
 
   useEffect(() => {
     const load = () => fetch("/api/sol-price").then(r => r.json()).then((d: { price: number | null; change: number }) => {
@@ -461,10 +499,20 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const prevKolCount = useRef(0);
   useEffect(() => {
     if (feedTrades.length > prevKolCount.current && prevKolCount.current > 0) {
-      if (soundRef.current.kol) playBeep(660, 990);
+      if (soundRef.current.kol) playSoundKol();
     }
     prevKolCount.current = feedTrades.length;
   }, [feedTrades.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Meme signal sound trigger — fires when high-score signals arrive
+  const prevMemeCount = useRef(0);
+  useEffect(() => {
+    const highScore = memeSignals.filter(s => s.score >= 60).length;
+    if (highScore > prevMemeCount.current && prevMemeCount.current >= 0) {
+      if (soundRef.current.meme) playSoundMeme();
+    }
+    prevMemeCount.current = highScore;
+  }, [memeSignals]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Portfolio ───────────────────────────────────────────────
   const loadPortfolio = useCallback(async () => {
@@ -1391,18 +1439,25 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   <IconSpeaker size={11} /> SOUND ALERTS
                 </div>
                 {([
-                  [soundGems, setSoundGems, "New Gem Detected", "Plays a chime when a new token is detected by the Alpha Scanner"],
-                  [soundKol,  setSoundKol,  "KOL Trade Alert",  "Plays a tone when a tracked KOL wallet makes a new trade"],
-                ] as [boolean, React.Dispatch<React.SetStateAction<boolean>>, string, string][]).map(([val, set, label, desc]) => (
+                  [soundGems, setSoundGems, "New Gem Detected",  "Plays a rising double-chime when a new token is detected by the Alpha Scanner", playSoundGem],
+                  [soundKol,  setSoundKol,  "KOL Trade Alert",   "Plays a punchy double-tap when a tracked KOL wallet makes a new trade",          playSoundKol],
+                  [soundMeme, setSoundMeme, "🧠 Meme Signals",   "Plays a retro buzz when a high-score meme opportunity is detected",               playSoundMeme],
+                ] as [boolean, React.Dispatch<React.SetStateAction<boolean>>, string, string, () => void][]).map(([val, set, label, desc, preview]) => (
                   <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                    <div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: "#e2d9f3" }}>{label}</div>
                       <div style={{ fontSize: 10, color: "#52525b", marginTop: 2 }}>{desc}</div>
                     </div>
-                    <button onClick={() => set(v => !v)}
-                      style={{ width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", position: "relative", background: val ? "#10b981" : "#27272a", transition: "background .2s", flexShrink: 0 }}>
-                      <span style={{ position: "absolute", top: 2, left: val ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
-                    </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                      <button onClick={preview} title="Preview sound"
+                        style={{ fontSize: 10, padding: "3px 8px", borderRadius: 6, border: "1px solid #27272a", background: "transparent", color: "#52525b", cursor: "pointer" }}>
+                        ▶
+                      </button>
+                      <button onClick={() => set(v => !v)}
+                        style={{ width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", position: "relative", background: val ? "#10b981" : "#27272a", transition: "background .2s" }}>
+                        <span style={{ position: "absolute", top: 2, left: val ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
