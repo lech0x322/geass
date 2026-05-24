@@ -39,17 +39,13 @@ export async function POST() {
     return NextResponse.json({ error: "Bot not configured" }, { status: 503 });
   }
 
+  console.log("[tg] init: APP_BASE_URL =", APP_BASE_URL, "| webhookUrl =", webhookUrl());
+
   const webhook = await registerWebhook();
-  if (!webhook.ok && !webhook.alreadySet) {
-    console.error("[tg] init: webhook not ready. description:", webhook.description);
-  }
+  console.log("[tg] init: webhook result:", JSON.stringify(webhook));
 
   const code = randomCode();
   await redis.set(`tg:otp:${code}`, "pending", 300);
 
-  return NextResponse.json({
-    code,
-    webhookUrl: webhookUrl(),
-    webhookOk:  webhook.ok || !!webhook.alreadySet,
-  });
+  return NextResponse.json({ code });
 }

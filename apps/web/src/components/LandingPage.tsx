@@ -202,11 +202,7 @@ function LoginModal({ onClose, onConnect, connecting, initError }: {
     try {
       const r = await fetch("/api/auth/telegram/init", { method:"POST" });
       if (!r.ok) { setTgErr("Could not generate code. Try again."); return; }
-      const { code, webhookOk } = await r.json() as { code:string; webhookOk?:boolean };
-      if (webhookOk === false) {
-        setTgErr("Bot webhook error — please visit /api/auth/telegram/debug then retry.");
-        return;
-      }
+      const { code } = await r.json() as { code:string };
       setTgCode(code); setTgStep("waiting");
       pollRef.current = setInterval(async () => {
         try {
@@ -282,6 +278,7 @@ function LoginModal({ onClose, onConnect, connecting, initError }: {
               </a>
               <p style={{ fontSize:10, color:"#52525b", marginBottom:16 }}>Auto-verified once you send it…</p>
               <button onClick={() => { if (pollRef.current) clearInterval(pollRef.current); setTgStep("idle"); setTgCode(""); }} style={{ fontSize:11, color:"#3f3f46", background:"transparent", border:"none", cursor:"pointer", textDecoration:"underline" }}>Cancel</button>
+              <p style={{ fontSize:10, color:"#3f3f46", marginTop:10 }}>Bot doesn&apos;t respond? <a href="/api/auth/telegram/debug" target="_blank" rel="noopener noreferrer" style={{ color:"#38bdf8", textDecoration:"none" }}>Run diagnostics</a></p>
             </div>
           )}
 
