@@ -41,15 +41,28 @@ export async function GET() {
       ok: boolean;
       result?: { url?: string; last_error_message?: string; pending_update_count?: number };
     };
-    const current = d.result?.url ?? "";
+    const current  = d.result?.url ?? "";
+    const expected = `${APP_BASE_URL}/api/auth/telegram/webhook`;
+    const matched  = current === expected;
     r.webhook = {
       ok:             d.ok,
       current,
-      expected:       `${APP_BASE_URL}/api/auth/telegram/webhook`,
-      matched:        current === `${APP_BASE_URL}/api/auth/telegram/webhook`,
+      expected,
+      matched,
       lastError:      d.result?.last_error_message ?? null,
       pendingUpdates: d.result?.pending_update_count ?? 0,
     };
+
+    // Auto-fix: if webhook URL doesn't match, register the correct one now
+    if (!matched) {
+      const fix     = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ url: expected, allowed_updates: ["message"] }),
+      });
+      const fixData = await fix.json() as { ok: boolean; description?: string };
+      r.autoFixed   = { ok: fixData.ok, registeredUrl: expected, description: fixData.description ?? null };
+    }
   } catch (e) {
     r.webhook = { ok: false, error: String(e) };
   }

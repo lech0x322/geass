@@ -202,7 +202,11 @@ function LoginModal({ onClose, onConnect, connecting, initError }: {
     try {
       const r = await fetch("/api/auth/telegram/init", { method:"POST" });
       if (!r.ok) { setTgErr("Could not generate code. Try again."); return; }
-      const { code } = await r.json() as { code:string };
+      const { code, webhookOk } = await r.json() as { code:string; webhookOk?:boolean };
+      if (webhookOk === false) {
+        setTgErr("Bot webhook error — please visit /api/auth/telegram/debug then retry.");
+        return;
+      }
       setTgCode(code); setTgStep("waiting");
       pollRef.current = setInterval(async () => {
         try {
