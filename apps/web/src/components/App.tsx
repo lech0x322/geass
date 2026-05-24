@@ -5,7 +5,7 @@ import { Keypair, VersionedTransaction } from "@solana/web3.js";
 import bs58 from "bs58";
 import { KOLS, NAV, TIER, SETTINGS_TAB_OVERRIDES } from "@/lib/config";
 import { fmtAge, shortAddr } from "@/lib/utils";
-import { scan, fetchBalance, pumpTradeTx, pumpIpfs, fetchPortfolio, autoSnipe, jitoLaunchBundle, jitoSubmit, fetchTrending, type PortfolioResult, type AutoSnipeResult, type TrendingToken, type TrendingMeta } from "@/lib/api";
+import { scan, fetchBalance, pumpTradeTx, pumpIpfs, fetchPortfolio, autoSnipe, jitoLaunchBundle, jitoSubmit, fetchTrending, fetchMemeSignals, type PortfolioResult, type AutoSnipeResult, type TrendingToken, type TrendingMeta, type MemeSignal } from "@/lib/api";
 import { signAllWithPhantom } from "@/lib/wallet";
 import { signAndSendBytes } from "@/lib/wallet";
 import { useGemStream } from "@/lib/useGemStream";
@@ -124,6 +124,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [trendingTokens, setTrendingTokens] = useState<TrendingToken[]>([]);
   const [trendingMetas,  setTrendingMetas]  = useState<TrendingMeta[]>([]);
   const [trendingLoading, setTrendingLoading] = useState(false);
+  const [memeSignals,    setMemeSignals]    = useState<MemeSignal[]>([]);
+  const [memeLoading,    setMemeLoading]    = useState(false);
+  const [memeTab,        setMemeTab]        = useState<"dex" | "meme">("dex");
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -482,6 +485,8 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
       setTrendingTokens(d.tokens);
       setTrendingMetas(d.metas);
     }).finally(() => setTrendingLoading(false));
+    setMemeLoading(true);
+    fetchMemeSignals().then(d => setMemeSignals(d.signals)).finally(() => setMemeLoading(false));
   }, [tab]);
 
   // ── Stream status ───────────────────────────────────────────
@@ -1428,112 +1433,204 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           {/* TRENDING TAB */}
           {tab === "trending" && (
             <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8 }}>
-                  <IconFlame size={isMobile ? 16 : 18} /> Trending on Solana
+                  <IconFlame size={isMobile ? 16 : 18} /> Trending
                 </h1>
-                <span style={{ fontSize: 8, color: "#f97316", background: "#f9731620", border: "1px solid #f9731640", padding: "2px 8px", borderRadius: 8, fontWeight: 700 }}>DEX SCREENER</span>
-                {trendingLoading && <span style={{ fontSize: 9, color: "#52525b" }} className="pulse">Loading...</span>}
-                <button onClick={() => { setTrendingLoading(true); fetchTrending().then(d => { setTrendingTokens(d.tokens); setTrendingMetas(d.metas); }).finally(() => setTrendingLoading(false)); }}
-                  disabled={trendingLoading} style={{ marginLeft: "auto", fontSize: 9, padding: "4px 10px", borderRadius: 6, border: "1px solid #27272a", background: "transparent", color: "#52525b", cursor: trendingLoading ? "wait" : "pointer" }}>
+                <button onClick={() => {
+                  setTrendingLoading(true); setMemeLoading(true);
+                  fetchTrending().then(d => { setTrendingTokens(d.tokens); setTrendingMetas(d.metas); }).finally(() => setTrendingLoading(false));
+                  fetchMemeSignals().then(d => setMemeSignals(d.signals)).finally(() => setMemeLoading(false));
+                }} style={{ marginLeft: "auto", fontSize: 9, padding: "4px 10px", borderRadius: 6, border: "1px solid #27272a", background: "transparent", color: "#52525b", cursor: "pointer" }}>
                   ↻ Refresh
                 </button>
               </div>
-              <p style={{ fontSize: 11, color: "#3f3f46", marginBottom: 18 }}>Top boosted tokens · ranked by community activity, volume &amp; trust signals</p>
 
-              {/* Trending Metas / Categories */}
-              {trendingMetas.length > 0 && (
-                <div style={{ marginBottom: 22 }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: "#52525b", letterSpacing: "1.5px", marginBottom: 10 }}>TRENDING CATEGORIES</div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {trendingMetas.map(m => (
-                      <div key={m.slug} style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 10, padding: "8px 14px", display: "flex", alignItems: "center", gap: 8 }}>
-                        {m.icon?.type === "emoji" && <span style={{ fontSize: 16 }}>{m.icon.value}</span>}
-                        <div>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: "#f4f4f5" }}>{m.name}</div>
-                          <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
-                            <span style={{ fontSize: 9, color: "#3f3f46" }}>{m.tokenCount} tokens</span>
-                            {m.mcChange24 !== 0 && (
-                              <span style={{ fontSize: 9, fontWeight: 600, color: m.mcChange24 >= 0 ? "#10b981" : "#ef4444" }}>
-                                {m.mcChange24 >= 0 ? "+" : ""}{m.mcChange24.toFixed(1)}% 24h
-                              </span>
+              {/* Sub-tab switcher */}
+              <div style={{ display: "flex", gap: 4, marginBottom: 18, background: "#0a0a0b", borderRadius: 10, padding: 4, width: "fit-content" }}>
+                {([["dex", "🔥 DEX Boosted"], ["meme", "🧠 Meme Signals"]] as [typeof memeTab, string][]).map(([id, label]) => (
+                  <button key={id} onClick={() => setMemeTab(id)}
+                    style={{ padding: "6px 16px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700,
+                      background: memeTab === id ? "#1a1a1d" : "transparent",
+                      color: memeTab === id ? "#f4f4f5" : "#52525b" }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* DEX SCREENER sub-tab */}
+              {memeTab === "dex" && (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 8, color: "#f97316", background: "#f9731620", border: "1px solid #f9731640", padding: "2px 8px", borderRadius: 8, fontWeight: 700 }}>DEX SCREENER</span>
+                    {trendingLoading && <span style={{ fontSize: 9, color: "#52525b" }} className="pulse">Loading...</span>}
+                  </div>
+                  <p style={{ fontSize: 11, color: "#3f3f46", marginBottom: 18 }}>Top boosted tokens · ranked by community activity, volume &amp; trust signals</p>
+
+                  {trendingMetas.length > 0 && (
+                    <div style={{ marginBottom: 22 }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: "#52525b", letterSpacing: "1.5px", marginBottom: 10 }}>TRENDING CATEGORIES</div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {trendingMetas.map(m => (
+                          <div key={m.slug} style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 10, padding: "8px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+                            {m.icon?.type === "emoji" && <span style={{ fontSize: 16 }}>{m.icon.value}</span>}
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: "#f4f4f5" }}>{m.name}</div>
+                              <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
+                                <span style={{ fontSize: 9, color: "#3f3f46" }}>{m.tokenCount} tokens</span>
+                                {m.mcChange24 !== 0 && (
+                                  <span style={{ fontSize: 9, fontWeight: 600, color: m.mcChange24 >= 0 ? "#10b981" : "#ef4444" }}>
+                                    {m.mcChange24 >= 0 ? "+" : ""}{m.mcChange24.toFixed(1)}% 24h
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {!trendingLoading && trendingTokens.length === 0 && (
+                    <div style={{ textAlign: "center", padding: "40px 20px", color: "#3f3f46" }}>
+                      <div style={{ color: "#f97316", marginBottom: 8, display: "flex", justifyContent: "center" }}><IconFlame size={24} /></div>
+                      <div style={{ fontSize: 12 }}>No trending data — try refreshing</div>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {trendingTokens.map((t, i) => (
+                      <div key={t.address} style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ width: 24, textAlign: "center", fontSize: 11, fontWeight: 800, color: i < 3 ? "#f97316" : "#3f3f46", flexShrink: 0 }}>#{i + 1}</div>
+                        {t.icon
+                          ? <img src={t.icon} alt={t.symbol} width={32} height={32} style={{ borderRadius: "50%", flexShrink: 0, objectFit: "cover" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                          : <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#27272a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#52525b", flexShrink: 0 }}>{t.symbol[0]}</div>
+                        }
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: "#f4f4f5" }}>${t.symbol}</div>
+                          <div style={{ fontSize: 9, color: "#3f3f46", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name} · {t.address.slice(0, 12)}…</div>
+                        </div>
+                        {!isMobile && (
+                          <div style={{ textAlign: "right", flexShrink: 0, minWidth: 80 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "#f4f4f5" }}>
+                              {t.priceUsd !== null ? (t.priceUsd < 0.0001 ? t.priceUsd.toExponential(2) : `$${t.priceUsd.toFixed(6)}`) : "—"}
+                            </div>
+                            {t.priceChange24 !== null && (
+                              <div style={{ fontSize: 10, fontWeight: 600, color: t.priceChange24 >= 0 ? "#10b981" : "#ef4444" }}>
+                                {t.priceChange24 >= 0 ? "+" : ""}{t.priceChange24.toFixed(1)}%
+                              </div>
                             )}
                           </div>
+                        )}
+                        {!isMobile && t.volume24 !== null && (
+                          <div style={{ textAlign: "right", flexShrink: 0, minWidth: 80 }}>
+                            <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px" }}>VOL 24H</div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: "#eab308" }}>
+                              {t.volume24 >= 1e6 ? `$${(t.volume24/1e6).toFixed(1)}M` : t.volume24 >= 1e3 ? `$${(t.volume24/1e3).toFixed(0)}K` : `$${t.volume24.toFixed(0)}`}
+                            </div>
+                          </div>
+                        )}
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px" }}>BOOST</div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#f97316" }}>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                              <IconFlame size={9} />
+                              {t.boostAmount >= 1000 ? `${(t.boostAmount/1000).toFixed(0)}k` : t.boostAmount}
+                            </span>
+                          </div>
                         </div>
+                        <a href={t.dexUrl} target="_blank" rel="noopener noreferrer"
+                          style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 7, border: "1px solid #f9731630", background: "#f9731610", color: "#f97316", fontSize: 10, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}>
+                          DEX ↗
+                        </a>
                       </div>
                     ))}
                   </div>
-                </div>
+                  {trendingTokens.length > 0 && (
+                    <div style={{ marginTop: 14, fontSize: 9, color: "#27272a", textAlign: "center" }}>
+                      Data from DEX Screener · Top boosted Solana tokens · Updates every 60s
+                    </div>
+                  )}
+                </>
               )}
 
-              {/* Trending Tokens list */}
-              {!trendingLoading && trendingTokens.length === 0 && (
-                <div style={{ textAlign: "center", padding: "40px 20px", color: "#3f3f46" }}>
-                  <div style={{ color: "#f97316", marginBottom: 8, display: "flex", justifyContent: "center" }}><IconFlame size={24} /></div>
-                  <div style={{ fontSize: 12 }}>No trending data — try refreshing</div>
-                </div>
-              )}
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {trendingTokens.map((t, i) => (
-                  <div key={t.address} style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
-                    {/* Rank */}
-                    <div style={{ width: 24, textAlign: "center", fontSize: 11, fontWeight: 800, color: i < 3 ? "#f97316" : "#3f3f46", flexShrink: 0 }}>
-                      #{i + 1}
-                    </div>
-                    {/* Icon */}
-                    {t.icon
-                      ? <img src={t.icon} alt={t.symbol} width={32} height={32} style={{ borderRadius: "50%", flexShrink: 0, objectFit: "cover" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                      : <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#27272a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#52525b", flexShrink: 0 }}>{t.symbol[0]}</div>
-                    }
-                    {/* Name + address */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: "#f4f4f5" }}>${t.symbol}</div>
-                      <div style={{ fontSize: 9, color: "#3f3f46", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name} · {t.address.slice(0, 12)}…</div>
-                    </div>
-                    {/* Price + change */}
-                    {!isMobile && (
-                      <div style={{ textAlign: "right", flexShrink: 0, minWidth: 80 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: "#f4f4f5" }}>
-                          {t.priceUsd !== null ? (t.priceUsd < 0.0001 ? t.priceUsd.toExponential(2) : `$${t.priceUsd.toFixed(6)}`) : "—"}
-                        </div>
-                        {t.priceChange24 !== null && (
-                          <div style={{ fontSize: 10, fontWeight: 600, color: t.priceChange24 >= 0 ? "#10b981" : "#ef4444" }}>
-                            {t.priceChange24 >= 0 ? "+" : ""}{t.priceChange24.toFixed(1)}%
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {/* Volume */}
-                    {!isMobile && t.volume24 !== null && (
-                      <div style={{ textAlign: "right", flexShrink: 0, minWidth: 80 }}>
-                        <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px" }}>VOL 24H</div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#eab308" }}>
-                          {t.volume24 >= 1e6 ? `$${(t.volume24/1e6).toFixed(1)}M` : t.volume24 >= 1e3 ? `$${(t.volume24/1e3).toFixed(0)}K` : `$${t.volume24.toFixed(0)}`}
-                        </div>
-                      </div>
-                    )}
-                    {/* Boost */}
-                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px" }}>BOOST</div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "#f97316" }}>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                          <IconFlame size={9} />
-                          {t.boostAmount >= 1000 ? `${(t.boostAmount/1000).toFixed(0)}k` : t.boostAmount}
-                        </span>
-                      </div>
-                    </div>
-                    {/* View link */}
-                    <a href={t.dexUrl} target="_blank" rel="noopener noreferrer"
-                      style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 7, border: "1px solid #f9731630", background: "#f9731610", color: "#f97316", fontSize: 10, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}>
-                      DEX ↗
-                    </a>
+              {/* MEME SIGNALS sub-tab */}
+              {memeTab === "meme" && (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 8, color: "#a855f7", background: "#a855f720", border: "1px solid #a855f740", padding: "2px 8px", borderRadius: 8, fontWeight: 700 }}>PUMP.FUN · LIVE</span>
+                    {memeLoading && <span style={{ fontSize: 9, color: "#52525b" }} className="pulse">Scanning...</span>}
                   </div>
-                ))}
-              </div>
-              {trendingTokens.length > 0 && (
-                <div style={{ marginTop: 14, fontSize: 9, color: "#27272a", textAlign: "center" }}>
-                  Data from DEX Screener · Top boosted Solana tokens · Updates every 60s
-                </div>
+                  <p style={{ fontSize: 11, color: "#3f3f46", marginBottom: 18 }}>
+                    Meme potential detector — scores new tokens by name pattern, community replies &amp; 1h volume. High score = meme narrative forming.
+                  </p>
+
+                  {!memeLoading && memeSignals.length === 0 && (
+                    <div style={{ textAlign: "center", padding: "40px 20px", color: "#3f3f46" }}>
+                      <div style={{ fontSize: 24, marginBottom: 8 }}>🧠</div>
+                      <div style={{ fontSize: 12 }}>No signals detected — try refreshing</div>
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {memeSignals.map((s, i) => {
+                      const scoreColor = s.score >= 60 ? "#10b981" : s.score >= 35 ? "#eab308" : "#3f3f46";
+                      const scoreBg   = s.score >= 60 ? "#10b98115" : s.score >= 35 ? "#eab30815" : "#27272a15";
+                      return (
+                        <div key={s.address} style={{ background: "#111113", border: `1px solid ${s.score >= 60 ? "#10b98130" : "#1e1e21"}`, borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "flex-start", gap: 12 }}>
+                          {/* Rank */}
+                          <div style={{ width: 22, textAlign: "center", fontSize: 11, fontWeight: 800, color: i < 3 ? "#a855f7" : "#3f3f46", flexShrink: 0, paddingTop: 2 }}>#{i + 1}</div>
+                          {/* Icon */}
+                          {s.icon
+                            ? <img src={s.icon} alt={s.symbol} width={36} height={36} style={{ borderRadius: 8, flexShrink: 0, objectFit: "cover" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                            : <div style={{ width: 36, height: 36, borderRadius: 8, background: "#27272a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: "#52525b", flexShrink: 0 }}>{s.symbol[0]}</div>
+                          }
+                          {/* Info */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                              <span style={{ fontSize: 13, fontWeight: 800, color: "#f4f4f5" }}>${s.symbol}</span>
+                              <span style={{ fontSize: 10, color: "#71717a" }}>{s.name}</span>
+                            </div>
+                            {s.description && (
+                              <div style={{ fontSize: 10, color: "#52525b", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.description}</div>
+                            )}
+                            <div style={{ display: "flex", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
+                              {s.volume1h !== null && (
+                                <span style={{ fontSize: 9, color: "#eab308" }}>
+                                  VOL 1H: {s.volume1h >= 1000 ? `$${(s.volume1h/1000).toFixed(0)}K` : `$${s.volume1h.toFixed(0)}`}
+                                </span>
+                              )}
+                              {s.marketCap !== null && s.marketCap > 0 && (
+                                <span style={{ fontSize: 9, color: "#3f3f46" }}>
+                                  MC: {s.marketCap >= 1e6 ? `$${(s.marketCap/1e6).toFixed(1)}M` : s.marketCap >= 1e3 ? `$${(s.marketCap/1e3).toFixed(0)}K` : `$${s.marketCap.toFixed(0)}`}
+                                </span>
+                              )}
+                              {s.replyCount > 0 && (
+                                <span style={{ fontSize: 9, color: "#3f3f46" }}>💬 {s.replyCount}</span>
+                              )}
+                            </div>
+                          </div>
+                          {/* Meme score */}
+                          <div style={{ textAlign: "center", flexShrink: 0, background: scoreBg, borderRadius: 8, padding: "6px 10px" }}>
+                            <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 2 }}>MEME</div>
+                            <div style={{ fontSize: 16, fontWeight: 900, color: scoreColor }}>{s.score}</div>
+                          </div>
+                          {/* Launch link */}
+                          <a href={s.pumpUrl} target="_blank" rel="noopener noreferrer"
+                            style={{ flexShrink: 0, padding: "6px 10px", borderRadius: 7, border: "1px solid #a855f730", background: "#a855f710", color: "#a855f7", fontSize: 10, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap", alignSelf: "center" }}>
+                            PUMP ↗
+                          </a>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {memeSignals.length > 0 && (
+                    <div style={{ marginTop: 14, fontSize: 9, color: "#27272a", textAlign: "center" }}>
+                      Signals from Pump.fun · Score 60+ = high meme potential · Data refreshes on demand
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

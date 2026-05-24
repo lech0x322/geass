@@ -345,6 +345,32 @@ export async function fetchTrending(): Promise<{ tokens: TrendingToken[]; metas:
   }
 }
 
+// ── Meme Signal Detector ─────────────────────────────────────────────────────
+
+export interface MemeSignal {
+  address:     string;
+  name:        string;
+  symbol:      string;
+  score:       number;
+  volume1h:    number | null;
+  marketCap:   number | null;
+  replyCount:  number;
+  description: string | null;
+  icon:        string | null;
+  pumpUrl:     string;
+  createdAt:   number;
+}
+
+export async function fetchMemeSignals(): Promise<{ signals: MemeSignal[]; fetchedAt: number }> {
+  try {
+    const r = await fetch("/api/trends/meme", { cache: "no-store" });
+    if (!r.ok) return { signals: [], fetchedAt: Date.now() };
+    return r.json();
+  } catch {
+    return { signals: [], fetchedAt: Date.now() };
+  }
+}
+
 // ── Helius Enhanced Transactions (client) ───────────────────────────────────
 
 import type { HeliusEnhancedTransaction } from "@/types/helius";

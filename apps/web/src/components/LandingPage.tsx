@@ -207,8 +207,8 @@ function LoginModal({ onClose, onConnect, connecting, initError }: {
       pollRef.current = setInterval(async () => {
         try {
           const pr = await fetch(`/api/auth/telegram/poll?code=${code}`);
-          const d  = await pr.json() as { verified:boolean; error?:string };
-          if (d.verified)              { clearInterval(pollRef.current!); setTgStep("done"); setTimeout(() => window.location.reload(), 800); }
+          const d  = await pr.json() as { verified:boolean; wallet?:string; error?:string };
+          if (d.verified)              { clearInterval(pollRef.current!); setTgStep("done"); try { if (d.wallet) localStorage.setItem("geass_wallet", d.wallet); } catch {/* noop */} setTimeout(() => window.location.reload(), 800); }
           if (d.error==="Code expired"){ clearInterval(pollRef.current!); setTgStep("idle"); setTgErr("Code expired — try again."); }
         } catch {/* keep polling */}
       }, 2000);
