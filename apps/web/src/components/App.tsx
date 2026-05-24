@@ -37,6 +37,42 @@ const NAV_ICON: Record<NavIconId, React.FC<{ size?: number }>> = {
   crown:     IconCrown,
 };
 
+const APP_CSS = `
+@keyframes dot-pulse    { 0%,100%{opacity:1} 50%{opacity:.25} }
+@keyframes ticker-scroll{ 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+@keyframes spin         { to{transform:rotate(360deg)} }
+@keyframes pulse-anim   { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+.live-dot     { width:7px;height:7px;border-radius:50%;flex-shrink:0;display:inline-block;animation:dot-pulse 2s ease-in-out infinite }
+.ticker-track { display:flex;animation:ticker-scroll 24s linear infinite;width:max-content }
+.ticker-track:hover { animation-play-state:paused }
+.spin  { animation:spin 1s linear infinite;display:inline-block }
+.pulse { animation:pulse-anim 1.5s ease-in-out infinite }
+
+::-webkit-scrollbar       { width:4px;height:4px }
+::-webkit-scrollbar-track { background:transparent }
+::-webkit-scrollbar-thumb { background:#27272a;border-radius:4px }
+::-webkit-scrollbar-thumb:hover { background:#3f3f46 }
+
+input[type=range] { -webkit-appearance:none;width:100%;height:4px;border-radius:2px;background:#27272a;outline:none;cursor:pointer }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#ef4444;border:2px solid #09090b;cursor:pointer }
+input[type=range]::-moz-range-thumb     { width:14px;height:14px;border-radius:50%;background:#ef4444;border:2px solid #09090b;cursor:pointer;border:none }
+
+.nav-item:hover { background:#ffffff06 !important }
+
+/* Responsive grid helpers */
+.app-g4 { display:grid;grid-template-columns:repeat(4,1fr);gap:8px }
+.app-g3 { display:grid;grid-template-columns:repeat(3,1fr);gap:10px }
+.app-g2 { display:grid;grid-template-columns:1fr 1fr;gap:14px }
+
+@media (max-width:768px) {
+  .app-g4 { grid-template-columns:1fr 1fr !important;gap:6px !important }
+  .app-g3 { grid-template-columns:1fr 1fr !important;gap:8px !important }
+  .app-g2 { grid-template-columns:1fr !important;gap:10px !important }
+  .desktop-col { display:none !important }
+}
+`;
+
 const NavIcon = ({ id, size = 14 }: { id: NavIconId; size?: number }) => {
   const C = NAV_ICON[id];
   return <C size={size} />;
@@ -635,6 +671,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
   return (
     <div style={{ display: "flex", height: "100dvh", background: "#09090b", color: "#f4f4f5", fontFamily: "'Inter',system-ui,sans-serif", overflow: "hidden", position: "relative" }}>
+      <style dangerouslySetInnerHTML={{ __html: APP_CSS }} />
 
       {/* Mobile overlay backdrop */}
       {isMobile && sidebarOpen && (
@@ -826,7 +863,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
               {scanMsg && <div className="pulse" style={{ textAlign: "center", fontSize: 10, color: "#dc262680", marginBottom: 10 }}>{scanMsg}</div>}
 
               {/* Stats */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: isMobile ? 6 : 8, marginBottom: 14 }}>
+              <div className="app-g4" style={{ marginBottom: 14 }}>
                 {[
                   { l: "S-Tier",     v: gems.filter(g => g.tier === "S_TIER").length, c: "#10b981" },
                   { l: "A-Tier",     v: gems.filter(g => g.tier === "A_TIER").length, c: "#3b82f6" },
@@ -1280,7 +1317,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
               </div>
 
               {/* Stats row */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 20 }}>
+              <div className="app-g3" style={{ marginBottom: 20 }}>
                 {[
                   { l: "Link Clicks",    v: refStats?.clicks    ?? "—", c: "#3b82f6" },
                   { l: "Paid Referrals", v: refStats?.referrals ?? "—", c: "#a855f7" },
@@ -1542,7 +1579,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   {portfolioErr && <div style={{ fontSize: 10, color: "#ef4444", marginBottom: 8 }}>{portfolioErr}</div>}
                   {portfolio && (
                     <>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 10 }}>
+                      <div className="app-g3" style={{ marginBottom: 10 }}>
                         {[
                           { l: "SOL Balance", v: `${portfolio.sol.toFixed(4)} SOL`, c: "#10b981" },
                           { l: "Tokens", v: String(portfolio.holdings.length), c: "#a855f7" },
