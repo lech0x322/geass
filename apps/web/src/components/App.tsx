@@ -23,8 +23,9 @@ import {
   IconBroadcast, IconFlame, IconRocket, IconZap, IconTarget, IconUsers,
   IconCog, IconCrown, IconChevronDown, IconSolana, IconSearch, IconX,
   IconMenu, IconRefresh, IconLock, IconSpeaker, IconWallet, IconPower,
-  IconCheck, IconChart, IconArrowUpRight, IconCopy,
+  IconCheck, IconChart, IconArrowUpRight, IconCopy, IconUser,
 } from "./icons";
+import { ProfileTab } from "./ProfileTab";
 import type { NavIconId, SettingsSection } from "@/lib/config";
 
 const NAV_ICON: Record<NavIconId, React.FC<{ size?: number }>> = {
@@ -36,6 +37,7 @@ const NAV_ICON: Record<NavIconId, React.FC<{ size?: number }>> = {
   users:     IconUsers,
   cog:       IconCog,
   crown:     IconCrown,
+  user:      IconUser,
 };
 
 const APP_CSS = `
@@ -96,7 +98,7 @@ interface Props {
 }
 
 export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
-  const [tab, setTab]         = useState<"trades" | "launch" | "gems" | "autosnipe" | "referral" | "pro" | "settings" | "trending">("trades");
+  const [tab, setTab]         = useState<"trades" | "launch" | "gems" | "autosnipe" | "referral" | "pro" | "settings" | "trending" | "profile">("trades");
   const [gems, setGems]       = useState<Gem[]>([]);
   const [loading, setLoading] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
@@ -1941,6 +1943,16 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 </div>
               )}
             </div>
+          )}
+
+          {tab === "profile" && (
+            <ProfileTab
+              wallet={wallet}
+              solBalance={wBal}
+              solPrice={solPrice}
+              isPro={pro.active}
+              isMobile={isMobile}
+            />
           )}
         </main>
 

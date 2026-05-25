@@ -228,6 +228,13 @@ export const IconCopy = (p: IconProps) => (
   </Svg>
 );
 
+export const IconUser = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+  </Svg>
+);
+
 /** Solana brand mark — three diagonal gradient bars. */
 export const IconSolana = ({ size = 16, style, className }: IconProps) => (
   <svg
