@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { IconUser, IconWallet, IconActivity, IconCopy, IconCheck, IconRefresh, IconArrowUpRight, IconCrown, IconChart } from "./icons";
+import JupiterSwapModal from "./JupiterSwapModal";
 
 const CARD: React.CSSProperties = {
   background: "#111113",
@@ -49,6 +50,9 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile }: Pr
   const [activity, setActivity]     = useState<ActivityTx[]>([]);
   const [actLoading, setActLoading] = useState(false);
   const [actLoaded, setActLoaded]   = useState(false);
+  const [jupModal, setJupModal]     = useState<{ mint: string; symbol: string; mode: "buy" | "sell" } | null>(null);
+  const [swapMint, setSwapMint]     = useState("");
+  const [swapMode, setSwapMode]     = useState<"buy" | "sell">("buy");
 
   useEffect(() => {
     try {
@@ -221,6 +225,42 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile }: Pr
             Solscan <IconArrowUpRight size={10} />
           </a>
         </div>
+      </div>
+
+      {/* Jupiter Quick Swap */}
+      {jupModal && (
+        <JupiterSwapModal
+          wallet={wallet}
+          mint={jupModal.mint}
+          symbol={jupModal.symbol}
+          mode={jupModal.mode}
+          onClose={() => setJupModal(null)}
+        />
+      )}
+      <div style={{ ...CARD, border: "1px solid #a855f730" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#a855f7" }}>Quick Swap</div>
+          <div style={{ display: "flex", gap: 4 }}>
+            {(["buy", "sell"] as const).map(m => (
+              <button key={m} onClick={() => setSwapMode(m)}
+                style={{ padding: "3px 10px", borderRadius: 5, fontSize: 10, fontWeight: 700, cursor: "pointer", border: "1px solid", borderColor: swapMode === m ? "#a855f7" : "#27272a", background: swapMode === m ? "#a855f720" : "transparent", color: swapMode === m ? "#a855f7" : "#52525b" }}>
+                {m === "buy" ? "Buy" : "Sell"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <input
+          value={swapMint}
+          onChange={e => setSwapMint(e.target.value.trim())}
+          placeholder="Token mint address…"
+          style={{ width: "100%", background: "#0c0c0e", border: "1px solid #27272a", borderRadius: 8, padding: "8px 12px", color: "#f4f4f5", fontSize: 11, outline: "none", boxSizing: "border-box", marginBottom: 8 }}
+        />
+        <button
+          disabled={swapMint.length < 32}
+          onClick={() => setJupModal({ mint: swapMint, symbol: swapMint.slice(0, 6), mode: swapMode })}
+          style={{ width: "100%", padding: "9px 0", borderRadius: 8, border: "none", background: swapMint.length >= 32 ? "linear-gradient(135deg,#a855f7,#7c3aed)" : "#1e1e21", color: swapMint.length >= 32 ? "#fff" : "#52525b", fontSize: 12, fontWeight: 700, cursor: swapMint.length >= 32 ? "pointer" : "not-allowed" }}>
+          Open Swap
+        </button>
       </div>
 
       {/* Activity */}

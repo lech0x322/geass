@@ -28,6 +28,7 @@ import {
 import { ProfileTab } from "./ProfileTab";
 import { ProfilePanel } from "./ProfilePanel";
 import { HomeTab } from "./HomeTab";
+import JupiterSwapModal from "./JupiterSwapModal";
 import type { NavIconId, SettingsSection } from "@/lib/config";
 
 const NAV_ICON: Record<NavIconId, React.FC<{ size?: number }>> = {
@@ -110,6 +111,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [newIds, setNewIds]   = useState<Set<string>>(new Set());
   const [snipeGem, setSnipeGem] = useState<Gem | null>(null);
   const [dexToken, setDexToken] = useState<{ address: string; symbol: string } | null>(null);
+  const [jupModal, setJupModal] = useState<{ mint: string; symbol: string; mode: "buy" | "sell" } | null>(null);
   const [searchQ, setSearchQ] = useState("");
   const [searchResults, setSearchResults] = useState<{ baseToken: { address: string; name: string; symbol: string }; priceUsd: string | null; priceChange: Record<string, number> | null; volume: Record<string, number>; liquidity: { usd: number | null } | null; url: string }[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -900,6 +902,15 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
         <main style={{ flex: 1, overflow: "auto" }}>
           {snipeGem && <SnipeModal gem={snipeGem} wallet={wallet} onClose={() => setSnipeGem(null)} />}
+          {jupModal && (
+            <JupiterSwapModal
+              wallet={wallet}
+              mint={jupModal.mint}
+              symbol={jupModal.symbol}
+              mode={jupModal.mode}
+              onClose={() => setJupModal(null)}
+            />
+          )}
           {dexToken && (
             <TokenModal
               address={dexToken.address}
@@ -1082,13 +1093,23 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                         {kTrades.length === 0
                           ? <div style={{ padding: 14, textAlign: "center", fontSize: 9, color: "#27272a" }}>Waiting...</div>
                           : kTrades.map(t => (
-                            <div key={t.id} style={{ display: "grid", gridTemplateColumns: "30px 1fr 1fr 24px", gap: 3, padding: "4px 10px", borderBottom: "1px solid #111", alignItems: "center", fontSize: 9 }}>
+                            <div key={t.id} style={{ display: "grid", gridTemplateColumns: "30px 1fr 1fr auto", gap: 3, padding: "4px 10px", borderBottom: "1px solid #111", alignItems: "center", fontSize: 9 }}>
                               <span style={{ fontWeight: 700, color: t.type === "buy" ? "#10b981" : "#ef4444" }}>{t.type === "buy" ? "Buy" : "Sell"}</span>
                               {t.type === "buy"
                                 ? <><span style={{ color: "#d4d4d8", fontWeight: 600 }}>{t.sol} <span style={{ color: "#52525b" }}>Sol</span></span><span style={{ color: "#f4f4f5" }}>{t.tokAmt} <span style={{ color: "#10b981", fontWeight: 700 }}>{t.sym}</span></span></>
                                 : <><span style={{ color: "#f4f4f5" }}>{t.tokAmt} <span style={{ color: "#ef4444", fontWeight: 700 }}>{t.sym}</span></span><span style={{ color: "#d4d4d8", fontWeight: 600 }}>{t.sol} <span style={{ color: "#52525b" }}>Sol</span></span></>
                               }
-                              <span style={{ color: "#3f3f46", textAlign: "right" }}>{fmtAge(t.ago)}</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "flex-end" }}>
+                                <span style={{ color: "#3f3f46" }}>{fmtAge(t.ago)}</span>
+                                {t.mint && (
+                                  <button
+                                    onClick={() => setJupModal({ mint: t.mint!, symbol: t.sym, mode: "buy" })}
+                                    style={{ padding: "2px 6px", borderRadius: 4, border: "1px solid #a855f740", background: "#a855f710", color: "#a855f7", fontSize: 8, fontWeight: 700, cursor: "pointer", lineHeight: 1.4 }}
+                                  >
+                                    BUY
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           ))}
                       </div>
