@@ -1,4 +1,4 @@
-app = "geass-signals"
+app = "geass"
 primary_region = "fra"
 
 [build]
