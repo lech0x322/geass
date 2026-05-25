@@ -3,7 +3,7 @@
 import React from "react";
 import { KOLS } from "@/lib/config";
 import type { FeedTrade } from "@/lib/types";
-import type { TrendingToken, MemeSignal } from "@/lib/api";
+import type { TrendingToken, MemeSignal, XSignal } from "@/lib/api";
 import { IconBroadcast, IconFlame, IconZap, IconRocket, IconSolana, IconArrowUpRight, IconCrown, IconTarget, IconActivity } from "./icons";
 
 const CARD: React.CSSProperties = {
@@ -31,12 +31,13 @@ interface Props {
   feedTrades: FeedTrade[];
   trendingTokens: TrendingToken[];
   memeSignals: MemeSignal[];
+  xSignals: XSignal[];
   trendingLoading: boolean;
   isMobile: boolean;
   onNavigate: (tab: string) => void;
 }
 
-export function HomeTab({ solPrice, solChange, feedTrades, trendingTokens, memeSignals, trendingLoading, isMobile, onNavigate }: Props) {
+export function HomeTab({ solPrice, solChange, feedTrades, trendingTokens, memeSignals, xSignals, trendingLoading, isMobile, onNavigate }: Props) {
   const recentTrades   = feedTrades.slice(0, 6);
   const topMemecoins   = [...trendingTokens].sort((a, b) => b.boostAmount - a.boostAmount).slice(0, 5);
   const topMemeSignals = [...memeSignals].sort((a, b) => b.score - a.score).slice(0, 5);
@@ -280,6 +281,38 @@ export function HomeTab({ solPrice, solChange, feedTrades, trendingTokens, memeS
           </button>
         ))}
       </div>
+
+      {/* Latest Memecoin News */}
+      {xSignals.length > 0 && (
+        <div style={CARD}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 6 }}>
+              📰 Latest Memecoin News
+              <span style={{ fontSize: 7, fontWeight: 700, color: "#10b981", background: "#10b98120", border: "1px solid #10b98140", padding: "1px 5px", borderRadius: 4 }}>LIVE</span>
+            </div>
+            <button onClick={() => onNavigate("trending")} style={{ background: "transparent", border: "none", color: "#52525b", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
+              All news <IconArrowUpRight size={10} />
+            </button>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            {xSignals.slice(0, 4).map(s => {
+              const age = Math.round((Date.now() - s.pubDate) / 60000);
+              const ageLabel = age < 60 ? `${age}m ago` : age < 1440 ? `${Math.round(age / 60)}h ago` : `${Math.round(age / 1440)}d ago`;
+              return (
+                <a key={s.id} href={s.url} target="_blank" rel="noopener noreferrer"
+                  style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: "#0c0c0e", borderRadius: 9, border: "1px solid #1e1e21" }}>
+                  <span style={{ fontSize: 13, flexShrink: 0 }}>{s.icon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#e4e4e7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.text}</div>
+                    <div style={{ fontSize: 9, color: "#52525b", marginTop: 2 }}>{s.author} · {ageLabel}</div>
+                  </div>
+                  <span style={{ fontSize: 10, color: "#3f3f46", flexShrink: 0 }}>↗</span>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
     </div>
   );

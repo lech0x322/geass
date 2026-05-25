@@ -587,10 +587,17 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     }).finally(() => setTrendingLoading(false));
     setMemeLoading(true);
     fetchMemeSignals().then(d => { setMemeSignals(d.signals); setMemeNarratives(d.narratives ?? []); }).finally(() => setMemeLoading(false));
-    if (tab === "trending") {
-      setXLoading(true);
-      fetchXSignals().then(d => setXSignals(d.signals)).finally(() => setXLoading(false));
-    }
+    setXLoading(true);
+    fetchXSignals().then(d => setXSignals(d.signals)).finally(() => setXLoading(false));
+  }, [tab]);
+
+  // Auto-refresh news every 60s on home and trending tabs
+  useEffect(() => {
+    if (tab !== "home" && tab !== "trending") return;
+    const id = setInterval(() => {
+      fetchXSignals().then(d => setXSignals(d.signals)).catch(() => {});
+    }, 60_000);
+    return () => clearInterval(id);
   }, [tab]);
 
   // ── Stream status ───────────────────────────────────────────
@@ -1140,6 +1147,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 feedTrades={feedTrades}
                 trendingTokens={trendingTokens}
                 memeSignals={memeSignals}
+                xSignals={xSignals}
                 trendingLoading={trendingLoading}
                 isMobile={isMobile}
                 onNavigate={(id) => setTab(id as typeof tab)}
@@ -1495,108 +1503,154 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           )}
 
           {/* REFERRAL TAB */}
-          {tab === "referral" && (
-            <div style={{ padding: isMobile ? "14px 14px 80px" : "24px 28px", maxWidth: 680 }}>
+          {tab === "referral" && (() => {
+            const refs = refStats?.referrals ?? 0;
+            const progressToNext = refs % 3;
+            const nextMilestone  = 3 - progressToNext;
+            const tierLabel =
+              refs >= 10 ? { l: "🏆 Platinum", c: "#a855f7" } :
+              refs >= 6  ? { l: "🥇 Gold",     c: "#eab308" } :
+              refs >= 3  ? { l: "🥈 Silver",   c: "#94a3b8" } :
+                           { l: "🥉 Bronze",   c: "#f97316" };
+            const shareUrl  = refLink || `https://geass.app/?ref=${refCode}`;
+            const shareText = `Join GEASS — real-time Solana alpha intel. Use my link and get 10% off Pro:`;
+            return (
+              <div style={{ padding: isMobile ? "14px 14px 80px" : "24px 28px", maxWidth: 700 }}>
 
-              {/* Hero card */}
-              <div style={{ position: "relative", background: "linear-gradient(135deg,#12101e,#0d1520)", border: "1px solid #7c3aed50", borderRadius: 18, padding: isMobile ? "22px 18px" : "32px 28px", marginBottom: 20, overflow: "hidden" }}>
-                <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg,#dc2626,#7c3aed,#10b981)" }} />
-                <div style={{ position: "absolute", right: -30, bottom: -30, width: 180, height: 180, background: "#7c3aed08", borderRadius: "50%", border: "1px solid #7c3aed15" }} />
+                {/* Hero */}
+                <div style={{ position: "relative", background: "linear-gradient(135deg,#12101e,#0d1520)", border: "1px solid #7c3aed50", borderRadius: 18, padding: isMobile ? "22px 18px" : "32px 28px", marginBottom: 20, overflow: "hidden" }}>
+                  <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg,#dc2626,#7c3aed,#10b981)" }} />
+                  <div style={{ position: "absolute", right: -30, bottom: -30, width: 180, height: 180, background: "#7c3aed08", borderRadius: "50%", border: "1px solid #7c3aed15" }} />
 
-                <div style={{ fontSize: 8, fontWeight: 700, color: "#10b981", letterSpacing: "2.5px", marginBottom: 10 }}>GEASS REFERRAL PROGRAM</div>
-                <h1 style={{ fontSize: isMobile ? 22 : 30, fontWeight: 900, color: "#f4f4f5", marginBottom: 8, lineHeight: 1.1 }}>
-                  Invite traders.<br />
-                  <span style={{ background: "linear-gradient(90deg,#a855f7,#dc2626)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Earn free Pro access.</span>
-                </h1>
-                <p style={{ fontSize: 12, color: "#71717a", lineHeight: 1.7, maxWidth: 440, marginBottom: 24 }}>
-                  Share your link. Friends get <strong style={{ color: "#10b981" }}>10% off</strong> their first month — and you earn <strong style={{ color: "#a855f7" }}>1 free month</strong> for every 3 paid referrals.
-                </p>
-
-                {/* Conditions pills */}
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
-                  {[
-                    { l: "Friend saves", v: "10% — 2.7 SOL/mo", c: "#10b981" },
-                    { l: "You earn", v: "1 free month / 3 refs", c: "#a855f7" },
-                    { l: "Payout", v: "Automatic, on-chain", c: "#eab308" },
-                  ].map(p => (
-                    <div key={p.l} style={{ background: p.c + "12", border: `1px solid ${p.c}35`, borderRadius: 10, padding: "8px 14px" }}>
-                      <div style={{ fontSize: 8, color: p.c, letterSpacing: "1px", fontWeight: 700, marginBottom: 2 }}>{p.l}</div>
-                      <div style={{ fontSize: 11, color: "#e2d9f3", fontWeight: 600 }}>{p.v}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Referral link */}
-                <div>
-                  <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 6 }}>YOUR UNIQUE REFERRAL LINK</div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <div style={{ flex: 1, background: "#09090b", border: "1px solid #7c3aed50", borderRadius: 9, padding: "11px 14px", fontFamily: "monospace", fontSize: isMobile ? 9 : 11, color: "#a855f7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {refLink || `https://geass.app/?ref=${refCode}`}
-                    </div>
-                    <button onClick={copyRefLink}
-                      style={{ padding: "0 18px", borderRadius: 9, border: "none", fontWeight: 700, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap",
-                        background: refCopied ? "#10b981" : "linear-gradient(135deg,#7c3aed,#a855f7)",
-                        color: "#fff", transition: "background .2s" }}>
-                      {refCopied ? "Copied!" : "Copy"}
-                    </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                    <div style={{ fontSize: 8, fontWeight: 700, color: "#10b981", letterSpacing: "2.5px" }}>GEASS REFERRAL PROGRAM</div>
+                    <div style={{ padding: "2px 10px", borderRadius: 20, background: tierLabel.c + "20", border: `1px solid ${tierLabel.c}40`, fontSize: 10, fontWeight: 800, color: tierLabel.c }}>{tierLabel.l}</div>
                   </div>
-                </div>
-              </div>
+                  <h1 style={{ fontSize: isMobile ? 22 : 30, fontWeight: 900, color: "#f4f4f5", marginBottom: 8, lineHeight: 1.1 }}>
+                    Invite traders.<br />
+                    <span style={{ background: "linear-gradient(90deg,#a855f7,#dc2626)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Earn free Pro access.</span>
+                  </h1>
+                  <p style={{ fontSize: 12, color: "#71717a", lineHeight: 1.7, maxWidth: 440, marginBottom: 20 }}>
+                    Share your link. Friends get <strong style={{ color: "#10b981" }}>10% off</strong> their first month — you earn <strong style={{ color: "#a855f7" }}>1 free month</strong> for every 3 paid referrals.
+                  </p>
 
-              {/* Stats row */}
-              <div className="app-g3" style={{ marginBottom: 20 }}>
-                {[
-                  { l: "Link Clicks",    v: refStats?.clicks    ?? "—", c: "#3b82f6" },
-                  { l: "Paid Referrals", v: refStats?.referrals ?? "—", c: "#a855f7" },
-                  { l: "Free Months",    v: freeMonths || "—",          c: "#10b981" },
-                ].map(s => (
-                  <div key={s.l} style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 12, padding: "14px 16px", textAlign: "center" }}>
-                    <div style={{ fontSize: isMobile ? 20 : 26, fontWeight: 900, color: s.c, marginBottom: 4 }}>{s.v}</div>
-                    <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px" }}>{s.l}</div>
+                  {/* Progress bar */}
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 9 }}>
+                      <span style={{ color: "#52525b", letterSpacing: "1px", fontWeight: 700 }}>PROGRESS TO NEXT FREE MONTH</span>
+                      <span style={{ color: "#a855f7", fontWeight: 700 }}>{progressToNext}/3 referrals</span>
+                    </div>
+                    <div style={{ height: 6, background: "#1e1e21", borderRadius: 6, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${(progressToNext / 3) * 100}%`, background: "linear-gradient(90deg,#7c3aed,#a855f7)", borderRadius: 6, transition: "width .4s ease" }} />
+                    </div>
+                    {progressToNext < 3 && (
+                      <div style={{ fontSize: 9, color: "#52525b", marginTop: 4 }}>{nextMilestone} more paid referral{nextMilestone !== 1 ? "s" : ""} to unlock your next free month</div>
+                    )}
                   </div>
-                ))}
-              </div>
 
-              {/* Share buttons */}
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-                <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`I've been using GEASS — the sharpest Solana alpha intel tool out there. Join using my link and get 10% off Pro:\n${refLink || `https://geass.app/?ref=${refCode}`}`)}`}
-                  target="_blank" rel="noopener noreferrer"
-                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 9, border: "1px solid #1d9bf030", background: "#1d9bf012", color: "#1d9bf0", textDecoration: "none", fontSize: 11, fontWeight: 700 }}>
-                  Share on X (Twitter)
-                </a>
-                <a href={`https://t.me/share/url?url=${encodeURIComponent(refLink || `https://geass.app/?ref=${refCode}`)}&text=${encodeURIComponent("Join GEASS — real-time Solana alpha intel. Use my link for 10% off Pro:")}`}
-                  target="_blank" rel="noopener noreferrer"
-                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 9, border: "1px solid #24a1de30", background: "#24a1de12", color: "#24a1de", textDecoration: "none", fontSize: 11, fontWeight: 700 }}>
-                  Share on Telegram
-                </a>
-                <button onClick={copyRefLink}
-                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 9, border: "1px solid #27272a", background: "transparent", color: "#71717a", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-                  {refCopied ? "Copied to clipboard!" : "Copy link"}
-                </button>
-              </div>
-
-              {/* How it works */}
-              <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 20px" }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: "#52525b", letterSpacing: "1.5px", marginBottom: 14 }}>HOW IT WORKS</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  {[
-                    { n: "01", t: "Share your link", d: "Send your unique link to traders, Crypto Twitter, or Telegram groups." },
-                    { n: "02", t: "Friend joins & upgrades", d: "They connect Phantom and pay 2.7 SOL (10% off). Activation is instant." },
-                    { n: "03", t: "You earn free Pro", d: "Every 3 paid referrals give you 1 free month added to your account." },
-                  ].map(s => (
-                    <div key={s.n} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#7c3aed18", border: "1px solid #7c3aed40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "#a855f7", flexShrink: 0 }}>{s.n}</div>
-                      <div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#e2d9f3", marginBottom: 2 }}>{s.t}</div>
-                        <div style={{ fontSize: 10, color: "#52525b", lineHeight: 1.6 }}>{s.d}</div>
+                  {/* Referral link */}
+                  <div>
+                    <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 6 }}>YOUR UNIQUE REFERRAL LINK</div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <div style={{ flex: 1, background: "#09090b", border: "1px solid #7c3aed50", borderRadius: 9, padding: "11px 14px", fontFamily: "monospace", fontSize: isMobile ? 9 : 11, color: "#a855f7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {shareUrl}
                       </div>
+                      <button onClick={copyRefLink}
+                        style={{ padding: "0 18px", borderRadius: 9, border: "none", fontWeight: 700, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap",
+                          background: refCopied ? "#10b981" : "linear-gradient(135deg,#7c3aed,#a855f7)",
+                          color: "#fff", transition: "background .2s" }}>
+                        {refCopied ? "✓ Copied!" : "Copy"}
+                      </button>
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: 9, color: "#3f3f46" }}>
+                      Your referral code: <span style={{ fontFamily: "monospace", color: "#a855f7", fontWeight: 700 }}>{refCode}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stats */}
+                <div className="app-g3" style={{ marginBottom: 20 }}>
+                  {[
+                    { l: "Link Clicks",    v: refStats?.clicks    ?? "—", c: "#3b82f6", sub: "total visits" },
+                    { l: "Paid Referrals", v: refs || "—",                c: "#a855f7", sub: `${3 - progressToNext} more for next reward` },
+                    { l: "Free Months",    v: freeMonths || "—",          c: "#10b981", sub: "earned so far" },
+                  ].map(s => (
+                    <div key={s.l} style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 12, padding: "14px 16px", textAlign: "center" }}>
+                      <div style={{ fontSize: isMobile ? 22 : 28, fontWeight: 900, color: s.c, marginBottom: 2 }}>{s.v}</div>
+                      <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 3 }}>{s.l}</div>
+                      <div style={{ fontSize: 8, color: "#3f3f46" }}>{s.sub}</div>
                     </div>
                   ))}
                 </div>
-              </div>
 
-            </div>
-          )}
+                {/* Tier ladder */}
+                <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "16px 18px", marginBottom: 20 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "#52525b", letterSpacing: "1.5px", marginBottom: 12 }}>REFERRAL TIERS</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {[
+                      { t: "🥉 Bronze",   r: "0–2 refs",  reward: "Thank you!",         c: "#f97316", reached: refs >= 0  },
+                      { t: "🥈 Silver",   r: "3–5 refs",  reward: "+1 free month",      c: "#94a3b8", reached: refs >= 3  },
+                      { t: "🥇 Gold",     r: "6–9 refs",  reward: "+2 more free months", c: "#eab308", reached: refs >= 6  },
+                      { t: "🏆 Platinum", r: "10+ refs",  reward: "Lifetime Pro deal",  c: "#a855f7", reached: refs >= 10 },
+                    ].map(tier => (
+                      <div key={tier.t} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 10px", borderRadius: 9, background: tier.reached ? tier.c + "10" : "transparent", border: `1px solid ${tier.reached ? tier.c + "30" : "#1e1e21"}` }}>
+                        <span style={{ fontSize: 15, flexShrink: 0 }}>{tier.t.split(" ")[0]}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: tier.reached ? tier.c : "#52525b" }}>{tier.t.split(" ")[1]} <span style={{ fontSize: 9, fontWeight: 400, color: "#3f3f46" }}>({tier.r})</span></div>
+                          <div style={{ fontSize: 10, color: tier.reached ? "#d4d4d8" : "#3f3f46" }}>{tier.reward}</div>
+                        </div>
+                        {tier.reached && <span style={{ fontSize: 10, color: tier.c, fontWeight: 700 }}>✓</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Share buttons */}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+                  <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${shareText}\n${shareUrl}`)}`}
+                    target="_blank" rel="noopener noreferrer"
+                    style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 9, border: "1px solid #1d9bf030", background: "#1d9bf012", color: "#1d9bf0", textDecoration: "none", fontSize: 11, fontWeight: 700 }}>
+                    𝕏 Share on X
+                  </a>
+                  <a href={`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`}
+                    target="_blank" rel="noopener noreferrer"
+                    style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 9, border: "1px solid #24a1de30", background: "#24a1de12", color: "#24a1de", textDecoration: "none", fontSize: 11, fontWeight: 700 }}>
+                    ✈️ Telegram
+                  </a>
+                  <a href={`https://wa.me/?text=${encodeURIComponent(`${shareText}\n${shareUrl}`)}`}
+                    target="_blank" rel="noopener noreferrer"
+                    style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 9, border: "1px solid #25d36630", background: "#25d36612", color: "#25d366", textDecoration: "none", fontSize: 11, fontWeight: 700 }}>
+                    💬 WhatsApp
+                  </a>
+                  <button onClick={copyRefLink}
+                    style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 9, border: "1px solid #27272a", background: "transparent", color: refCopied ? "#10b981" : "#71717a", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                    {refCopied ? "✓ Copied!" : "Copy link"}
+                  </button>
+                </div>
+
+                {/* How it works */}
+                <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 20px" }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "#52525b", letterSpacing: "1.5px", marginBottom: 14 }}>HOW IT WORKS</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    {[
+                      { n: "01", t: "Share your link", d: "Send your unique link to traders, Crypto Twitter, Telegram, or WhatsApp groups." },
+                      { n: "02", t: "Friend joins & upgrades", d: "They connect Phantom and pay 2.7 SOL (10% off). Activation is instant." },
+                      { n: "03", t: "You earn free Pro", d: "Every 3 paid referrals unlock 1 free month added to your account automatically." },
+                    ].map(s => (
+                      <div key={s.n} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+                        <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#7c3aed18", border: "1px solid #7c3aed40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "#a855f7", flexShrink: 0 }}>{s.n}</div>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#e2d9f3", marginBottom: 2 }}>{s.t}</div>
+                          <div style={{ fontSize: 10, color: "#52525b", lineHeight: 1.6 }}>{s.d}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+            );
+          })()}
 
           {/* SETTINGS TAB */}
           {tab === "settings" && (

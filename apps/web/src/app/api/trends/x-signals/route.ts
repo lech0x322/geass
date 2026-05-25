@@ -13,10 +13,12 @@ const NEWS_SOURCES: { url: string; name: string; icon: string }[] = [
   { url: "https://bitcoinmagazine.com/.rss/full/",          name: "BTC Magazine",  icon: "🟡" },
 ];
 
+// Only strict memecoin / meme-token keywords — articles without these are excluded
 const RELEVANCE_KEYWORDS = [
-  "meme","memecoin","solana","pump.fun","doge","pepe","shib","bonk","wif","altcoin",
-  "token launch","new coin","narrative","solana meme","rug pull","airdrop",
-  "100x","gem","kol","alpha","degen","on-chain","defi","blockchain",
+  "memecoin","meme coin","meme token","pump.fun","doge","pepe","shib","bonk","wif",
+  "dog coin","cat coin","frog","rug pull","airdrop","solana meme","token launch",
+  "new token","100x","alpha","degen","kol","narrative","meme rally","meme season",
+  "memecoin season","viral token","moonshot","on-chain meme",
 ];
 
 function scoreArticle(title: string, desc: string): number {
@@ -80,8 +82,10 @@ export async function GET() {
   const seen = new Set<string>();
   const signals = all
     .filter(s => { if (seen.has(s.id)) return false; seen.add(s.id); return true; })
+    .filter(s => s.score >= 23) // drop articles without any meme keyword
+    .sort((a, b) => b.score - b.score || b.pubDate - a.pubDate)
     .sort((a, b) => b.pubDate - a.pubDate)
-    .slice(0, 40);
+    .slice(0, 30);
 
   return NextResponse.json({ signals, fetchedAt: Date.now() });
 }
