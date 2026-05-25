@@ -102,7 +102,7 @@ export function ProfilePanel({ wallet, solBalance, solPrice, isPro, onClose }: P
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <span style={{ fontSize: 13, fontWeight: 800, color: "#f4f4f5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{username}</span>
-              {isPro && <IconVerified size={14} title="Pro Verified" />}
+              {isPro && <IconVerified size={14} />}
               {isPro && <IconCrown size={11} style={{ color: "#a855f7", flexShrink: 0 }} />}
             </div>
             <button onClick={copy}

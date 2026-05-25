@@ -75,7 +75,7 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile }: Pr
     try {
       const raw = localStorage.getItem("geass_profile");
       if (raw) {
-        const p = JSON.parse(raw) as { username?: string; emoji?: string };
+        const p = JSON.parse(raw) as { username?: string; emoji?: string; avatar?: string };
         if (p.username) { setUsername(p.username); setDraftName(p.username); }
         if (p.emoji)    { setEmoji(p.emoji); setDraftEmoji(p.emoji); }
         if (p.avatar)   { setAvatar(p.avatar); }
@@ -151,7 +151,7 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile }: Pr
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <span style={{ fontSize: 16, fontWeight: 800, color: "#f4f4f5" }}>{username}</span>
-              {isPro && <IconVerified size={18} title="Pro Verified" />}
+              {isPro && <IconVerified size={18} />}
               {isPro && (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 700, color: "#a855f7", background: "#a855f720", border: "1px solid #a855f740", padding: "2px 7px", borderRadius: 8 }}>
                   <IconCrown size={9} /> PRO
