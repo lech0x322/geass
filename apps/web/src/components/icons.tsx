@@ -242,6 +242,22 @@ export const IconUser = (p: IconProps) => (
   </Svg>
 );
 
+export const IconSwap = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M7 16H3m0 0 4-4M3 16l4 4" />
+    <path d="M17 8h4m0 0-4-4m4 4-4 4" />
+  </Svg>
+);
+
+export const IconRepeat = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M17 2l4 4-4 4" />
+    <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+    <path d="M7 22l-4-4 4-4" />
+    <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+  </Svg>
+);
+
 /** Solana brand mark — three diagonal gradient bars. */
 export const IconSolana = ({ size = 16, style, className }: IconProps) => (
   <svg
