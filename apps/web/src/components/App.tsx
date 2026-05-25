@@ -236,61 +236,67 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     return () => document.removeEventListener("click", unlock);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function playSound(id: SoundId) {
+  function playSound(id: SoundId) {
     if (id === "off") return;
     try {
-      const ctx = getAudioCtx(); await ctx.resume(); const t = ctx.currentTime;
-      const note = (type: OscillatorType, freq: number, start: number, dur: number, vol = 0.11) => {
-        const osc = ctx.createOscillator(); const gain = ctx.createGain();
-        osc.type = type; osc.frequency.setValueAtTime(freq, t + start);
-        gain.gain.setValueAtTime(vol, t + start);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + start + dur);
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.start(t + start); osc.stop(t + start + dur);
-      };
-      switch (id) {
-        case "chime":
-          [0, 0.20].forEach((off, i) => {
+      const ctx = getAudioCtx();
+      const doPlay = () => {
+        try {
+          const t = ctx.currentTime;
+          const note = (type: OscillatorType, freq: number, start: number, dur: number, vol = 0.11) => {
             const osc = ctx.createOscillator(); const gain = ctx.createGain();
-            osc.type = "sine";
-            osc.frequency.setValueAtTime(880 * (i + 1), t + off);
-            osc.frequency.linearRampToValueAtTime(1320 * (i + 1), t + off + 0.14);
-            gain.gain.setValueAtTime(0.11, t + off);
-            gain.gain.exponentialRampToValueAtTime(0.001, t + off + 0.30);
+            osc.type = type; osc.frequency.setValueAtTime(freq, t + start);
+            gain.gain.setValueAtTime(vol, t + start);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + start + dur);
             osc.connect(gain); gain.connect(ctx.destination);
-            osc.start(t + off); osc.stop(t + off + 0.30);
-          }); break;
-        case "ping":
-          note("sine", 1760, 0, 0.25, 0.10); break;
-        case "bell": {
-          const osc = ctx.createOscillator(); const gain = ctx.createGain();
-          osc.type = "sine"; osc.frequency.setValueAtTime(880, t);
-          gain.gain.setValueAtTime(0.15, t);
-          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
-          osc.connect(gain); gain.connect(ctx.destination);
-          osc.start(t); osc.stop(t + 0.8); break;
-        }
-        case "buzz": {
-          const osc = ctx.createOscillator(); const gain = ctx.createGain();
-          osc.type = "sawtooth";
-          osc.frequency.setValueAtTime(1047, t);
-          osc.frequency.exponentialRampToValueAtTime(523, t + 0.18);
-          osc.frequency.setValueAtTime(523, t + 0.20);
-          osc.frequency.linearRampToValueAtTime(698, t + 0.38);
-          gain.gain.setValueAtTime(0.08, t);
-          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
-          osc.connect(gain); gain.connect(ctx.destination);
-          osc.start(t); osc.stop(t + 0.45); break;
-        }
-        case "tap":
-          [{ f: 660, o: 0 }, { f: 990, o: 0.18 }].forEach(({ f, o }) => note("triangle", f, o, 0.22, 0.14)); break;
-        case "arcade":
-          [523, 659, 784, 1047].forEach((f, i) => note("square", f, i * 0.08, 0.10, 0.07)); break;
-        case "alert":
-          note("sine", 1320, 0, 0.15, 0.12); note("sine", 880, 0.18, 0.20, 0.10); break;
-        case "soft":
-          note("sine", 528, 0, 0.5, 0.07); note("sine", 660, 0.15, 0.4, 0.05); break;
-      }
+            osc.start(t + start); osc.stop(t + start + dur);
+          };
+          switch (id) {
+            case "chime":
+              [0, 0.20].forEach((off, i) => {
+                const osc = ctx.createOscillator(); const gain = ctx.createGain();
+                osc.type = "sine";
+                osc.frequency.setValueAtTime(880 * (i + 1), t + off);
+                osc.frequency.linearRampToValueAtTime(1320 * (i + 1), t + off + 0.14);
+                gain.gain.setValueAtTime(0.11, t + off);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + off + 0.30);
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.start(t + off); osc.stop(t + off + 0.30);
+              }); break;
+            case "ping":
+              note("sine", 1760, 0, 0.25, 0.10); break;
+            case "bell": {
+              const osc = ctx.createOscillator(); const gain = ctx.createGain();
+              osc.type = "sine"; osc.frequency.setValueAtTime(880, t);
+              gain.gain.setValueAtTime(0.15, t);
+              gain.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+              osc.connect(gain); gain.connect(ctx.destination);
+              osc.start(t); osc.stop(t + 0.8); break;
+            }
+            case "buzz": {
+              const osc = ctx.createOscillator(); const gain = ctx.createGain();
+              osc.type = "sawtooth";
+              osc.frequency.setValueAtTime(1047, t);
+              osc.frequency.exponentialRampToValueAtTime(523, t + 0.18);
+              osc.frequency.setValueAtTime(523, t + 0.20);
+              osc.frequency.linearRampToValueAtTime(698, t + 0.38);
+              gain.gain.setValueAtTime(0.08, t);
+              gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+              osc.connect(gain); gain.connect(ctx.destination);
+              osc.start(t); osc.stop(t + 0.45); break;
+            }
+            case "tap":
+              [{ f: 660, o: 0 }, { f: 990, o: 0.18 }].forEach(({ f, o }) => note("triangle", f, o, 0.22, 0.14)); break;
+            case "arcade":
+              [523, 659, 784, 1047].forEach((f, i) => note("square", f, i * 0.08, 0.10, 0.07)); break;
+            case "alert":
+              note("sine", 1320, 0, 0.15, 0.12); note("sine", 880, 0.18, 0.20, 0.10); break;
+            case "soft":
+              note("sine", 528, 0, 0.5, 0.07); note("sine", 660, 0.15, 0.4, 0.05); break;
+          }
+        } catch {}
+      };
+      if (ctx.state === "running") { doPlay(); } else { ctx.resume().then(doPlay).catch(() => {}); }
     } catch {}
   }
 
@@ -1707,9 +1713,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 {([
                   [gemSoundId,        setGemSoundId,        "New Gem Detected",    "Alpha Scanner token alert"],
                   [kolSoundId,        setKolSoundId,        "KOL Trade Alert",     "Tracked KOL wallet trade"],
-                  [memeSoundId,       setMemeSoundId,       "🧠 Meme Signals",     "High-score meme opportunity"],
-                  [communitySoundId,  setCommunitySoundId,  "💬 Community",        "New community message"],
-                  [geassAlertSoundId, setGeassAlertSoundId, "⚡ GEASS Alerts",     "System notifications & tx confirmations"],
+                  [memeSoundId,       setMemeSoundId,       "Meme Signals",  "High-score meme opportunity"],
+                  [communitySoundId,  setCommunitySoundId,  "Community",     "New community message"],
+                  [geassAlertSoundId, setGeassAlertSoundId, "GEASS Alerts",  "System notifications & tx confirmations"],
                 ] as [SoundId, React.Dispatch<React.SetStateAction<SoundId>>, string, string][]).map(([val, set, label, desc]) => {
                   const isOpen = soundExpandedKey === label;
                   const opt = SOUND_OPTIONS.find(o => o.id === val);
