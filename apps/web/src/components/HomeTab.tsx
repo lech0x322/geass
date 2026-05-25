@@ -93,7 +93,7 @@ export function HomeTab({ solPrice, solChange, feedTrades, trendingTokens, memeS
         <div style={{ ...CARD, cursor: "pointer" }} onClick={() => onNavigate("launch")}>
           <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 5 }}>QUICK LAUNCH</div>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#f97316", display: "flex", alignItems: "center", gap: 5 }}>
-            <IconRocket size={13} /> Deploy
+            <IconRocket size={13} /> Launch
           </div>
           <div style={{ fontSize: 10, color: "#3f3f46", marginTop: 2 }}>New Pump.fun token</div>
         </div>
@@ -195,6 +195,15 @@ export function HomeTab({ solPrice, solChange, feedTrades, trendingTokens, memeS
                 <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 6px", borderRadius: 7, background: "#0c0c0e" }}>
                   <div style={{ width: 5, height: 5, borderRadius: "50%", background: t.type === "buy" ? "#10b981" : "#ef4444", flexShrink: 0 }} />
                   <div style={{ width: 7, height: 7, borderRadius: "50%", background: t.kolC, flexShrink: 0 }} />
+                  {t.mint ? (
+                    <img
+                      src={`https://dd.dexscreener.com/ds-data/tokens/solana/${t.mint}.png`}
+                      alt={t.sym}
+                      width={18} height={18}
+                      style={{ borderRadius: "50%", flexShrink: 0 }}
+                      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                  ) : null}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: "#f4f4f5" }}>{t.kol}</span>
                     <span style={{ fontSize: 9, color: t.type === "buy" ? "#10b981" : "#ef4444", marginLeft: 4, fontWeight: 700 }}>{t.type.toUpperCase()}</span>

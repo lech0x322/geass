@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { IconUser, IconWallet, IconActivity, IconCopy, IconCheck, IconRefresh, IconArrowUpRight, IconCrown, IconChart } from "./icons";
+import { IconUser, IconWallet, IconActivity, IconCopy, IconCheck, IconRefresh, IconArrowUpRight, IconCrown, IconChart, IconVerified, IconCamera } from "./icons";
 import JupiterSwapModal from "./JupiterSwapModal";
 
 const CARD: React.CSSProperties = {
@@ -44,8 +44,25 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile }: Pr
   const [editing, setEditing]   = useState(false);
   const [username, setUsername] = useState("Anon Trader");
   const [emoji, setEmoji]       = useState("🧠");
+  const [avatar, setAvatar]     = useState<string | null>(null);
   const [draftName, setDraftName] = useState("Anon Trader");
   const [draftEmoji, setDraftEmoji] = useState("🧠");
+
+  const uploadAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const b64 = reader.result as string;
+      setAvatar(b64);
+      try {
+        const raw = localStorage.getItem("geass_profile");
+        const p = raw ? JSON.parse(raw) : {};
+        localStorage.setItem("geass_profile", JSON.stringify({ ...p, avatar: b64 }));
+      } catch {}
+    };
+    reader.readAsDataURL(file);
+  };
 
   const [activity, setActivity]     = useState<ActivityTx[]>([]);
   const [actLoading, setActLoading] = useState(false);
@@ -61,6 +78,7 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile }: Pr
         const p = JSON.parse(raw) as { username?: string; emoji?: string };
         if (p.username) { setUsername(p.username); setDraftName(p.username); }
         if (p.emoji)    { setEmoji(p.emoji); setDraftEmoji(p.emoji); }
+        if (p.avatar)   { setAvatar(p.avatar); }
       }
     } catch {}
   }, []);
@@ -116,13 +134,24 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile }: Pr
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: isPro ? "linear-gradient(90deg,#10b981,#7c3aed)" : "linear-gradient(90deg,#ef4444,#f97316)" }} />
 
         <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
-          <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#1a1a1e", border: "2px solid #27272a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0 }}>
-            {emoji}
+          <div style={{ position: "relative", width: 56, height: 56, flexShrink: 0 }}>
+            {avatar ? (
+              <img src={avatar} alt="avatar" style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", border: "2px solid #27272a" }} />
+            ) : (
+              <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#1a1a1e", border: "2px solid #27272a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>
+                {emoji}
+              </div>
+            )}
+            <label title="Upload photo" style={{ position: "absolute", bottom: 0, right: 0, width: 20, height: 20, borderRadius: "50%", background: "#27272a", border: "1px solid #3f3f46", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+              <IconCamera size={10} style={{ color: "#a1a1aa" }} />
+              <input type="file" accept="image/*" onChange={uploadAvatar} style={{ display: "none" }} />
+            </label>
           </div>
 
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <span style={{ fontSize: 16, fontWeight: 800, color: "#f4f4f5" }}>{username}</span>
+              {isPro && <IconVerified size={18} title="Pro Verified" />}
               {isPro && (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 700, color: "#a855f7", background: "#a855f720", border: "1px solid #a855f740", padding: "2px 7px", borderRadius: 8 }}>
                   <IconCrown size={9} /> PRO

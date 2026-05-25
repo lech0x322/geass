@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { IconWallet, IconCopy, IconCheck, IconArrowUpRight, IconCrown, IconUser } from "./icons";
+import { IconWallet, IconCopy, IconCheck, IconArrowUpRight, IconCrown, IconUser, IconVerified, IconCamera } from "./icons";
 
 const EMOJIS = ["🧠", "🦊", "🐉", "🌑", "⚡", "🎯", "💎", "🔥", "🏹", "🐋", "🦁", "🌙", "🚀", "👾", "🤖"];
 
@@ -16,18 +16,36 @@ interface Props {
 export function ProfilePanel({ wallet, solBalance, solPrice, isPro, onClose }: Props) {
   const [username, setUsername] = useState("Anon Trader");
   const [emoji, setEmoji]       = useState("🧠");
+  const [avatar, setAvatar]     = useState<string | null>(null);
   const [copied, setCopied]     = useState(false);
   const [editing, setEditing]   = useState(false);
   const [draftName, setDraftName]   = useState("Anon Trader");
   const [draftEmoji, setDraftEmoji] = useState("🧠");
 
+  const uploadAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const b64 = reader.result as string;
+      setAvatar(b64);
+      try {
+        const raw = localStorage.getItem("geass_profile");
+        const p = raw ? JSON.parse(raw) : {};
+        localStorage.setItem("geass_profile", JSON.stringify({ ...p, avatar: b64 }));
+      } catch {}
+    };
+    reader.readAsDataURL(file);
+  };
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem("geass_profile");
       if (raw) {
-        const p = JSON.parse(raw) as { username?: string; emoji?: string };
+        const p = JSON.parse(raw) as { username?: string; emoji?: string; avatar?: string };
         if (p.username) { setUsername(p.username); setDraftName(p.username); }
         if (p.emoji)    { setEmoji(p.emoji); setDraftEmoji(p.emoji); }
+        if (p.avatar)   { setAvatar(p.avatar); }
       }
     } catch {}
   }, []);
@@ -68,12 +86,23 @@ export function ProfilePanel({ wallet, solBalance, solPrice, isPro, onClose }: P
 
         {/* Avatar + name */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#1a1a1e", border: "2px solid #27272a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>
-            {emoji}
+          <div style={{ position: "relative", width: 44, height: 44, flexShrink: 0 }}>
+            {avatar ? (
+              <img src={avatar} alt="avatar" style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover", border: "2px solid #27272a" }} />
+            ) : (
+              <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#1a1a1e", border: "2px solid #27272a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
+                {emoji}
+              </div>
+            )}
+            <label title="Upload photo" style={{ position: "absolute", bottom: 0, right: 0, width: 16, height: 16, borderRadius: "50%", background: "#27272a", border: "1px solid #3f3f46", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+              <IconCamera size={8} style={{ color: "#a1a1aa" }} />
+              <input type="file" accept="image/*" onChange={uploadAvatar} style={{ display: "none" }} />
+            </label>
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <span style={{ fontSize: 13, fontWeight: 800, color: "#f4f4f5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{username}</span>
+              {isPro && <IconVerified size={14} title="Pro Verified" />}
               {isPro && <IconCrown size={11} style={{ color: "#a855f7", flexShrink: 0 }} />}
             </div>
             <button onClick={copy}

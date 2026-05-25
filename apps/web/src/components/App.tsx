@@ -115,7 +115,17 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [searchQ, setSearchQ] = useState("");
   const [searchResults, setSearchResults] = useState<{ baseToken: { address: string; name: string; symbol: string }; priceUsd: string | null; priceChange: Record<string, number> | null; volume: Record<string, number>; liquidity: { usd: number | null } | null; url: string }[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchCategory, setSearchCategory] = useState<"all" | "tokens" | "kol" | "wallets">("all");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isSolanaAddress = (q: string) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q.trim());
+  const kolMatches = searchQ.length >= 2
+    ? KOLS.filter(k =>
+        k.name.toLowerCase().includes(searchQ.toLowerCase()) ||
+        k.tw.toLowerCase().includes(searchQ.toLowerCase()) ||
+        k.addr.toLowerCase().startsWith(searchQ.toLowerCase())
+      )
+    : [];
   const [ctMintAddress, setCtMintAddress] = useState<string | null>(null);
   const [wBal, setWBal]       = useState<string | null>(initialBalance);
   const [filters, setFilters] = useState({ minScore: 0, tiers: [] as string[], hasKol: false, noFlags: false });
@@ -854,48 +864,117 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           </div>
         )}
 
-        {/* DEX Screener Search bar */}
+        {/* Multifunctional Search bar */}
         <div style={{ padding: isMobile ? "8px 12px" : "8px 18px", borderBottom: "1px solid #18181b", background: "#0c0c0e", flexShrink: 0, position: "relative" }}>
-          <div style={{ position: "relative", maxWidth: 480 }}>
-            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#52525b", pointerEvents: "none", display: "flex" }}>
-              <IconSearch size={12} />
-            </span>
-            <input
-              value={searchQ}
-              onChange={e => { setSearchQ(e.target.value); setSearchOpen(true); }}
-              onFocus={() => setSearchOpen(true)}
-              onBlur={() => setTimeout(() => setSearchOpen(false), 200)}
-              placeholder="Search any Solana token by name, symbol or address…"
-              style={{ width: "100%", background: "#111113", border: "1px solid #27272a", borderRadius: 9, color: "#f4f4f5", padding: "7px 12px 7px 30px", fontSize: 11, outline: "none", transition: "border .15s" }}
-            />
-            {searchQ && (
-              <button onClick={() => { setSearchQ(""); setSearchResults([]); }} aria-label="Clear search"
-                style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "#52525b", cursor: "pointer", display: "flex", padding: 2 }}>
-                <IconX size={12} />
-              </button>
-            )}
-          </div>
-          {/* Search dropdown */}
-          {searchOpen && searchResults.length > 0 && (
-            <div style={{ position: "absolute", top: "100%", left: isMobile ? 12 : 18, right: isMobile ? 12 : 18, maxWidth: 480, background: "#111113", border: "1px solid #27272a", borderRadius: 10, zIndex: 100, overflow: "hidden", boxShadow: "0 8px 32px #00000080" }}>
-              {searchResults.map((p, i) => {
-                const ch24 = p.priceChange?.h24;
-                return (
-                  <button key={i} onMouseDown={() => { setDexToken({ address: p.baseToken.address, symbol: p.baseToken.symbol }); setSearchQ(""); setSearchResults([]); }}
-                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: "transparent", border: "none", borderBottom: "1px solid #18181b", cursor: "pointer", textAlign: "left" }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontSize: 12, fontWeight: 800, color: "#f4f4f5" }}>${p.baseToken.symbol}</span>
-                        <span style={{ fontSize: 9, color: "#52525b" }}>{p.baseToken.name}</span>
-                      </div>
-                      <div style={{ fontSize: 9, color: "#3f3f46", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.baseToken.address}</div>
-                    </div>
-                    {p.priceUsd && <span style={{ fontSize: 11, fontWeight: 700, color: "#f4f4f5", flexShrink: 0 }}>${parseFloat(p.priceUsd) < 0.0001 ? parseFloat(p.priceUsd).toExponential(2) : parseFloat(p.priceUsd).toFixed(6)}</span>}
-                    {ch24 !== undefined && ch24 !== null && <span style={{ fontSize: 10, fontWeight: 600, color: ch24 >= 0 ? "#10b981" : "#ef4444", flexShrink: 0 }}>{ch24 >= 0 ? "+" : ""}{ch24.toFixed(1)}%</span>}
-                    <span style={{ fontSize: 9, color: "#f97316", flexShrink: 0 }}>DEX ↗</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, maxWidth: 600 }}>
+            {/* Category tabs */}
+            {!isMobile && (
+              <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+                {(["all", "tokens", "kol", "wallets"] as const).map(cat => (
+                  <button key={cat} onClick={() => setSearchCategory(cat)}
+                    style={{ padding: "4px 9px", borderRadius: 6, border: "1px solid", fontSize: 9, fontWeight: 700, cursor: "pointer", letterSpacing: "0.5px",
+                      borderColor: searchCategory === cat ? "#a855f7" : "#27272a",
+                      background: searchCategory === cat ? "#a855f718" : "transparent",
+                      color: searchCategory === cat ? "#a855f7" : "#52525b" }}>
+                    {cat === "all" ? "ALL" : cat === "tokens" ? "TOKENS" : cat === "kol" ? "KOL" : "WALLETS"}
                   </button>
-                );
-              })}
+                ))}
+              </div>
+            )}
+            <div style={{ position: "relative", flex: 1 }}>
+              <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#52525b", pointerEvents: "none", display: "flex" }}>
+                <IconSearch size={12} />
+              </span>
+              <input
+                value={searchQ}
+                onChange={e => { setSearchQ(e.target.value); setSearchOpen(true); }}
+                onFocus={() => setSearchOpen(true)}
+                onBlur={() => setTimeout(() => setSearchOpen(false), 220)}
+                placeholder={
+                  searchCategory === "tokens"  ? "Search token name, symbol or mint…" :
+                  searchCategory === "kol"     ? "Search KOL name or @handle…" :
+                  searchCategory === "wallets" ? "Paste Solana wallet address…" :
+                  "Search tokens, KOL traders, wallets…"
+                }
+                style={{ width: "100%", background: "#111113", border: "1px solid #27272a", borderRadius: 9, color: "#f4f4f5", padding: "7px 30px 7px 30px", fontSize: 11, outline: "none", transition: "border .15s", boxSizing: "border-box" }}
+              />
+              {searchQ && (
+                <button onClick={() => { setSearchQ(""); setSearchResults([]); }} aria-label="Clear"
+                  style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "#52525b", cursor: "pointer", display: "flex", padding: 2 }}>
+                  <IconX size={12} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Unified search dropdown */}
+          {searchOpen && searchQ.length >= 2 && (kolMatches.length > 0 || searchResults.length > 0 || isSolanaAddress(searchQ)) && (
+            <div style={{ position: "absolute", top: "calc(100% + 2px)", left: isMobile ? 12 : 18, right: isMobile ? 12 : 18, maxWidth: 600, background: "#111113", border: "1px solid #27272a", borderRadius: 12, zIndex: 200, overflow: "hidden", boxShadow: "0 12px 40px #00000090" }}>
+
+              {/* KOL section */}
+              {(searchCategory === "all" || searchCategory === "kol") && kolMatches.length > 0 && (
+                <>
+                  <div style={{ padding: "6px 12px 3px", fontSize: 8, fontWeight: 700, color: "#52525b", letterSpacing: "1px" }}>KOL TRADERS</div>
+                  {kolMatches.map(k => (
+                    <button key={k.addr} onMouseDown={() => { window.open(`https://x.com/${k.tw}`, "_blank"); setSearchOpen(false); }}
+                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "transparent", border: "none", borderBottom: "1px solid #18181b", cursor: "pointer", textAlign: "left" }}>
+                      <div style={{ width: 26, height: 26, borderRadius: "50%", background: k.c + "25", border: `1px solid ${k.c}50`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: k.c, flexShrink: 0 }}>{k.name[0]}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#f4f4f5" }}>{k.name}</div>
+                        <div style={{ fontSize: 9, color: "#52525b", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>@{k.tw} · {k.addr.slice(0,8)}…</div>
+                      </div>
+                      <div style={{ textAlign: "right", flexShrink: 0 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#10b981" }}>{k.pnl}</div>
+                        <div style={{ fontSize: 9, color: "#52525b" }}>{k.wr}% WR</div>
+                      </div>
+                      <span style={{ fontSize: 9, color: "#3b82f6", flexShrink: 0 }}>X ↗</span>
+                    </button>
+                  ))}
+                </>
+              )}
+
+              {/* Wallet / address section */}
+              {(searchCategory === "all" || searchCategory === "wallets") && isSolanaAddress(searchQ) && (
+                <>
+                  <div style={{ padding: "6px 12px 3px", fontSize: 8, fontWeight: 700, color: "#52525b", letterSpacing: "1px" }}>WALLET ADDRESS</div>
+                  <button onMouseDown={() => { window.open(`https://solscan.io/account/${searchQ.trim()}`, "_blank"); setSearchOpen(false); }}
+                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "transparent", border: "none", borderBottom: "1px solid #18181b", cursor: "pointer", textAlign: "left" }}>
+                    <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#10b98115", border: "1px solid #10b98130", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <IconWallet size={12} style={{ color: "#10b981" }} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#f4f4f5" }}>Open on Solscan</div>
+                      <div style={{ fontSize: 9, color: "#52525b", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{searchQ.trim()}</div>
+                    </div>
+                    <span style={{ fontSize: 9, color: "#10b981", flexShrink: 0 }}>Solscan ↗</span>
+                  </button>
+                </>
+              )}
+
+              {/* Token section */}
+              {(searchCategory === "all" || searchCategory === "tokens") && searchResults.length > 0 && (
+                <>
+                  <div style={{ padding: "6px 12px 3px", fontSize: 8, fontWeight: 700, color: "#52525b", letterSpacing: "1px" }}>TOKENS</div>
+                  {searchResults.slice(0, 6).map((p, i) => {
+                    const ch24 = p.priceChange?.h24;
+                    return (
+                      <button key={i} onMouseDown={() => { setDexToken({ address: p.baseToken.address, symbol: p.baseToken.symbol }); setSearchQ(""); setSearchResults([]); }}
+                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "transparent", border: "none", borderBottom: "1px solid #18181b", cursor: "pointer", textAlign: "left" }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontSize: 12, fontWeight: 800, color: "#f4f4f5" }}>${p.baseToken.symbol}</span>
+                            <span style={{ fontSize: 9, color: "#52525b" }}>{p.baseToken.name}</span>
+                          </div>
+                          <div style={{ fontSize: 9, color: "#3f3f46", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.baseToken.address}</div>
+                        </div>
+                        {p.priceUsd && <span style={{ fontSize: 11, fontWeight: 700, color: "#f4f4f5", flexShrink: 0 }}>${parseFloat(p.priceUsd) < 0.0001 ? parseFloat(p.priceUsd).toExponential(2) : parseFloat(p.priceUsd).toFixed(6)}</span>}
+                        {ch24 !== undefined && ch24 !== null && <span style={{ fontSize: 10, fontWeight: 600, color: ch24 >= 0 ? "#10b981" : "#ef4444", flexShrink: 0 }}>{ch24 >= 0 ? "+" : ""}{ch24.toFixed(1)}%</span>}
+                        <span style={{ fontSize: 9, color: "#f97316", flexShrink: 0 }}>DEX ↗</span>
+                      </button>
+                    );
+                  })}
+                </>
+              )}
             </div>
           )}
         </div>

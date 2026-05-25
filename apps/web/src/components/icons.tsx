@@ -288,3 +288,27 @@ export const IconSolana = ({ size = 16, style, className }: IconProps) => (
     <path fill="url(#sol-g3)" d="M333.1 120.1c-2.4-2.4-5.7-3.8-9.2-3.8H6.5c-5.8 0-8.7 7-4.6 11.1l62.7 62.7c2.4 2.4 5.7 3.8 9.2 3.8h317.4c5.8 0 8.7-7 4.6-11.1l-62.7-62.6Z" />
   </svg>
 );
+
+/** Blue verified checkmark — filled circle with white check (Twitter/X style). */
+export const IconVerified = ({ size = 16, style, className }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    xmlns="http://www.w3.org/2000/svg"
+    style={{ display: "inline-block", flexShrink: 0, ...style }}
+    className={className}
+    aria-hidden
+  >
+    <circle cx="12" cy="12" r="12" fill="#1d9bf0" />
+    <path d="M9.5 16.5 5.5 12.5l1.41-1.41L9.5 13.67l7.59-7.58L18.5 7.5z" fill="white" />
+  </svg>
+);
+
+/** Camera icon for photo upload. */
+export const IconCamera = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+    <circle cx="12" cy="13" r="4" />
+  </Svg>
+);
