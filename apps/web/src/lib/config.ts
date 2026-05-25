@@ -17,10 +17,10 @@ export const TIER: Record<string, { l: string; c: string }> = {
   RUGGED: { l: "RUG", c: "#6b7280" },
 };
 
-export type NavId = "trades" | "launch" | "gems" | "referral" | "pro" | "autosnipe" | "settings" | "trending" | "profile";
+export type NavId = "home" | "trades" | "launch" | "gems" | "referral" | "pro" | "autosnipe" | "settings" | "trending" | "profile";
 
 export type NavIconId =
-  | "broadcast" | "flame" | "rocket" | "zap" | "target"
+  | "home" | "broadcast" | "flame" | "rocket" | "zap" | "target"
   | "users" | "cog" | "crown" | "user";
 
 export type SettingsSection = "sounds" | "referral" | "wallet";
@@ -40,16 +40,19 @@ export interface NavItem {
   iconId: NavIconId;
   /** Include in the mobile bottom tab bar. */
   mobile?: boolean;
+  /** Only shown in the mobile bottom bar — hidden from the sidebar on all breakpoints. */
+  mobileOnly?: boolean;
   /** Sub-items shown when the nav item expands (e.g. Settings). */
   sub?: { id: SettingsSection; label: string }[];
 }
 
 export const NAV: NavItem[] = [
-  { id: "trades",    label: "Realtime Trades", mobileLabel: "KOL",     badge: "LIVE", iconId: "broadcast", mobile: true },
-  { id: "trending",  label: "Trending",                                badge: "NEW",  iconId: "flame",     mobile: true },
-  { id: "launch",    label: "Launch",                                                   iconId: "rocket",    mobile: true },
-  { id: "gems",      label: "Alpha Scanner",   mobileLabel: "Scanner", badge: "PRO",  pro: true, iconId: "zap",    mobile: true },
-  { id: "autosnipe", label: "Auto-Snipe",                              badge: "NEW",  pro: true, iconId: "target" },
+  { id: "home",      label: "Home",                                                         iconId: "home",      mobile: true },
+  { id: "trades",    label: "Realtime Trades", mobileLabel: "KOL",     badge: "LIVE",  iconId: "broadcast", mobile: true },
+  { id: "trending",  label: "Trending",                                 badge: "NEW",   iconId: "flame",     mobile: true },
+  { id: "launch",    label: "Launch",                                                    iconId: "rocket",    mobile: true },
+  { id: "gems",      label: "Alpha Scanner",   mobileLabel: "Scanner", badge: "PRO",   pro: true, iconId: "zap",    mobile: true },
+  { id: "autosnipe", label: "Auto-Snipe",                               badge: "NEW",   pro: true, iconId: "target" },
   {
     id: "settings",
     label: "Settings",
@@ -60,8 +63,8 @@ export const NAV: NavItem[] = [
       { id: "wallet",   label: "Wallet" },
     ],
   },
-  { id: "pro",       label: "GEASS Pro",                                          pro: true, iconId: "crown" },
-  { id: "profile",   label: "Profile",                                                      iconId: "user",   mobile: true },
+  { id: "pro",     label: "GEASS Pro",                                   pro: true, iconId: "crown" },
+  { id: "profile", label: "Profile", mobileLabel: "Me", iconId: "user", mobile: true, mobileOnly: true },
 ];
 
 export const toB64 = (arr: Uint8Array): string => {

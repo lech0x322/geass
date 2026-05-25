@@ -23,12 +23,15 @@ import {
   IconBroadcast, IconFlame, IconRocket, IconZap, IconTarget, IconUsers,
   IconCog, IconCrown, IconChevronDown, IconSolana, IconSearch, IconX,
   IconMenu, IconRefresh, IconLock, IconSpeaker, IconWallet, IconPower,
-  IconCheck, IconChart, IconArrowUpRight, IconCopy, IconUser,
+  IconCheck, IconChart, IconArrowUpRight, IconCopy, IconUser, IconHome,
 } from "./icons";
 import { ProfileTab } from "./ProfileTab";
+import { ProfilePanel } from "./ProfilePanel";
+import { HomeTab } from "./HomeTab";
 import type { NavIconId, SettingsSection } from "@/lib/config";
 
 const NAV_ICON: Record<NavIconId, React.FC<{ size?: number }>> = {
+  home:      IconHome,
   broadcast: IconBroadcast,
   flame:     IconFlame,
   rocket:    IconRocket,
@@ -98,7 +101,7 @@ interface Props {
 }
 
 export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
-  const [tab, setTab]         = useState<"trades" | "launch" | "gems" | "autosnipe" | "referral" | "pro" | "settings" | "trending" | "profile">("trades");
+  const [tab, setTab]         = useState<"home" | "trades" | "launch" | "gems" | "autosnipe" | "referral" | "pro" | "settings" | "trending" | "profile">("home");
   const [gems, setGems]       = useState<Gem[]>([]);
   const [loading, setLoading] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
@@ -633,7 +636,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: "8px 6px", overflowY: "auto" }}>
-        {NAV.map(n => {
+        {NAV.filter(n => !n.mobileOnly).map(n => {
           const isActive = tab === n.id;
           const accent = n.pro ? "#a855f7" : "#ef4444";
           const accentBg = n.pro ? "#7c3aed12" : "#dc262612";
@@ -1019,6 +1022,19 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* HOME TAB */}
+          {tab === "home" && (
+            <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px" }}>
+              <HomeTab
+                solPrice={solPrice}
+                solChange={solChange}
+                feedTrades={feedTrades}
+                isMobile={isMobile}
+                onNavigate={(id) => setTab(id as typeof tab)}
+              />
             </div>
           )}
 
@@ -1977,6 +1993,16 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           </nav>
         )}
       </div>
+
+      {/* Desktop profile panel — always visible on the right */}
+      {!isMobile && (
+        <ProfilePanel
+          wallet={wallet}
+          solBalance={wBal}
+          solPrice={solPrice}
+          isPro={pro.active}
+        />
+      )}
     </div>
   );
 }

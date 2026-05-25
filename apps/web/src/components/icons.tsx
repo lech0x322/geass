@@ -228,6 +228,13 @@ export const IconCopy = (p: IconProps) => (
   </Svg>
 );
 
+export const IconHome = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z" />
+    <path d="M9 21V12h6v9" />
+  </Svg>
+);
+
 export const IconUser = (p: IconProps) => (
   <Svg {...p}>
     <circle cx="12" cy="8" r="4" />
