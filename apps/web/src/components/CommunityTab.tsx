@@ -34,9 +34,9 @@ function timeAgo(ts: number) {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-interface Props { wallet: string; isMobile: boolean; }
+interface Props { wallet: string; isMobile: boolean; onNewPost?: () => void; }
 
-export function CommunityTab({ wallet, isMobile }: Props) {
+export function CommunityTab({ wallet, isMobile, onNewPost }: Props) {
   const [view,        setView]        = useState<"list" | "detail" | "create">("list");
   const [communities, setCommunities] = useState<Community[]>([]);
   const [detail,      setDetail]      = useState<CommunityDetail | null>(null);
@@ -118,6 +118,7 @@ export function CommunityTab({ wallet, isMobile }: Props) {
     if (res.post) {
       setDetail(prev => prev ? { ...prev, posts: [res.post!, ...prev.posts] } : prev);
       setPostText("");
+      onNewPost?.();
     }
     setPosting(false);
   };

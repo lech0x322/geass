@@ -171,9 +171,12 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profilePanelOpen, setProfilePanelOpen] = useState(true);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
-  const [gemSoundId,  setGemSoundId]  = useState<SoundId>("chime");
-  const [kolSoundId,  setKolSoundId]  = useState<SoundId>("tap");
-  const [memeSoundId, setMemeSoundId] = useState<SoundId>("buzz");
+  const [gemSoundId,        setGemSoundId]        = useState<SoundId>("chime");
+  const [kolSoundId,        setKolSoundId]        = useState<SoundId>("tap");
+  const [memeSoundId,       setMemeSoundId]       = useState<SoundId>("buzz");
+  const [communitySoundId,  setCommunitySoundId]  = useState<SoundId>("ping");
+  const [geassAlertSoundId, setGeassAlertSoundId] = useState<SoundId>("alert");
+  const [soundExpandedKey,  setSoundExpandedKey]  = useState<string | null>(null);
   const [solPrice, setSolPrice]     = useState<number | null>(null);
   const [solChange, setSolChange]   = useState(0);
 
@@ -302,8 +305,8 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     asRef.current = { enabled: asEnabled, amount: asAmount, minScore: asMinScore, method: asMethod };
   }, [asEnabled, asAmount, asMinScore, asMethod]);
 
-  const soundRef = useRef<{ gems: SoundId; kol: SoundId; meme: SoundId }>({ gems: "chime", kol: "tap", meme: "buzz" });
-  useEffect(() => { soundRef.current = { gems: gemSoundId, kol: kolSoundId, meme: memeSoundId }; }, [gemSoundId, kolSoundId, memeSoundId]);
+  const soundRef = useRef<{ gems: SoundId; kol: SoundId; meme: SoundId; community: SoundId; geass: SoundId }>({ gems: "chime", kol: "tap", meme: "buzz", community: "ping", geass: "alert" });
+  useEffect(() => { soundRef.current = { gems: gemSoundId, kol: kolSoundId, meme: memeSoundId, community: communitySoundId, geass: geassAlertSoundId }; }, [gemSoundId, kolSoundId, memeSoundId, communitySoundId, geassAlertSoundId]);
 
   useEffect(() => {
     if (!stream.newGems.length) return;
@@ -525,19 +528,25 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
       const sg = localStorage.getItem("geass_soundid_gems");
       const sk = localStorage.getItem("geass_soundid_kol");
       const sm = localStorage.getItem("geass_soundid_meme");
+      const sc = localStorage.getItem("geass_soundid_community");
+      const sa = localStorage.getItem("geass_soundid_geass");
       const ids = SOUND_OPTIONS.map(o => o.id);
       if (sg && ids.includes(sg as SoundId)) setGemSoundId(sg as SoundId);
       if (sk && ids.includes(sk as SoundId)) setKolSoundId(sk as SoundId);
       if (sm && ids.includes(sm as SoundId)) setMemeSoundId(sm as SoundId);
+      if (sc && ids.includes(sc as SoundId)) setCommunitySoundId(sc as SoundId);
+      if (sa && ids.includes(sa as SoundId)) setGeassAlertSoundId(sa as SoundId);
     } catch {}
   }, []);
   useEffect(() => {
     try {
-      localStorage.setItem("geass_soundid_gems", gemSoundId);
-      localStorage.setItem("geass_soundid_kol",  kolSoundId);
-      localStorage.setItem("geass_soundid_meme", memeSoundId);
+      localStorage.setItem("geass_soundid_gems",      gemSoundId);
+      localStorage.setItem("geass_soundid_kol",       kolSoundId);
+      localStorage.setItem("geass_soundid_meme",      memeSoundId);
+      localStorage.setItem("geass_soundid_community", communitySoundId);
+      localStorage.setItem("geass_soundid_geass",     geassAlertSoundId);
     } catch {}
-  }, [gemSoundId, kolSoundId, memeSoundId]);
+  }, [gemSoundId, kolSoundId, memeSoundId, communitySoundId, geassAlertSoundId]);
 
   // Real-time price + signal push from Elixir signal server (falls back to polling if not configured)
   useSignalSocket({
@@ -1696,42 +1705,61 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   <IconSpeaker size={11} /> SOUND ALERTS
                 </div>
                 {([
-                  [gemSoundId,  setGemSoundId,  "New Gem Detected", "Alpha Scanner token alert"],
-                  [kolSoundId,  setKolSoundId,  "KOL Trade Alert",  "Tracked KOL wallet trade"],
-                  [memeSoundId, setMemeSoundId, "🧠 Meme Signals",  "High-score meme opportunity"],
-                ] as [SoundId, React.Dispatch<React.SetStateAction<SoundId>>, string, string][]).map(([val, set, label, desc]) => (
-                  <div key={label} style={{ marginBottom: 18 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                      <div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#e2d9f3" }}>{label}</div>
-                        <div style={{ fontSize: 10, color: "#52525b", marginTop: 1 }}>{desc}</div>
-                      </div>
-                      {val !== "off" && (
-                        <button onClick={() => playSound(val)} title="Preview"
-                          style={{ fontSize: 10, padding: "3px 10px", borderRadius: 6, border: "1px solid #27272a", background: "transparent", color: "#a1a1aa", cursor: "pointer" }}>
-                          ▶ Preview
+                  [gemSoundId,        setGemSoundId,        "New Gem Detected",    "Alpha Scanner token alert"],
+                  [kolSoundId,        setKolSoundId,        "KOL Trade Alert",     "Tracked KOL wallet trade"],
+                  [memeSoundId,       setMemeSoundId,       "🧠 Meme Signals",     "High-score meme opportunity"],
+                  [communitySoundId,  setCommunitySoundId,  "💬 Community",        "New community message"],
+                  [geassAlertSoundId, setGeassAlertSoundId, "⚡ GEASS Alerts",     "System notifications & tx confirmations"],
+                ] as [SoundId, React.Dispatch<React.SetStateAction<SoundId>>, string, string][]).map(([val, set, label, desc]) => {
+                  const isOpen = soundExpandedKey === label;
+                  const opt = SOUND_OPTIONS.find(o => o.id === val);
+                  return (
+                    <div key={label} style={{ marginBottom: 4, borderRadius: 10, border: "1px solid #1e1e21", overflow: "hidden" }}>
+                      {/* Row header — always visible */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#0f0f11" }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#e2d9f3" }}>{label}</div>
+                          <div style={{ fontSize: 10, color: "#52525b", marginTop: 1 }}>{desc}</div>
+                        </div>
+                        {/* Current sound chip */}
+                        <span style={{ fontSize: 10, padding: "3px 9px", borderRadius: 20, background: val === "off" ? "#27272a" : "#a855f722", color: val === "off" ? "#52525b" : "#a855f7", fontWeight: 600, whiteSpace: "nowrap" }}>
+                          {opt?.emoji} {opt?.label}
+                        </span>
+                        {val !== "off" && (
+                          <button onClick={() => playSound(val)} title="Preview"
+                            style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, border: "1px solid #27272a", background: "transparent", color: "#71717a", cursor: "pointer", flexShrink: 0 }}>
+                            ▶
+                          </button>
+                        )}
+                        {/* Expand arrow */}
+                        <button onClick={() => setSoundExpandedKey(isOpen ? null : label)}
+                          style={{ background: "transparent", border: "1px solid #27272a", borderRadius: 6, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#71717a", flexShrink: 0, transition: "transform .2s", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+                          ▾
                         </button>
+                      </div>
+                      {/* Expandable picker */}
+                      {isOpen && (
+                        <div style={{ padding: "10px 12px 12px", background: "#111113", display: "flex", flexWrap: "wrap", gap: 6, borderTop: "1px solid #1e1e21" }}>
+                          {SOUND_OPTIONS.map(o => {
+                            const active = val === o.id;
+                            return (
+                              <button key={o.id} onClick={() => { set(o.id); if (o.id !== "off") playSound(o.id); }}
+                                style={{
+                                  padding: "5px 11px", borderRadius: 20, fontSize: 11, fontWeight: active ? 700 : 500, cursor: "pointer",
+                                  border: `1px solid ${active ? "#a855f7" : "#27272a"}`,
+                                  background: active ? "#a855f722" : "transparent",
+                                  color: active ? "#a855f7" : "#71717a",
+                                  display: "flex", alignItems: "center", gap: 5,
+                                }}>
+                                <span>{o.emoji}</span> {o.label}
+                              </button>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                      {SOUND_OPTIONS.map(opt => {
-                        const active = val === opt.id;
-                        return (
-                          <button key={opt.id} onClick={() => set(opt.id)}
-                            style={{
-                              padding: "5px 11px", borderRadius: 20, fontSize: 11, fontWeight: active ? 700 : 500, cursor: "pointer",
-                              border: `1px solid ${active ? "#a855f7" : "#27272a"}`,
-                              background: active ? "#a855f722" : "transparent",
-                              color: active ? "#a855f7" : "#71717a",
-                              display: "flex", alignItems: "center", gap: 5,
-                            }}>
-                            <span>{opt.emoji}</span> {opt.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Phantom wallet */}
@@ -2212,7 +2240,8 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           )}
 
           {tab === "community" && (
-            <CommunityTab wallet={wallet} isMobile={isMobile} />
+            <CommunityTab wallet={wallet} isMobile={isMobile}
+              onNewPost={() => { if (soundRef.current.community !== "off") playSound(soundRef.current.community); }} />
           )}
 
           {tab === "predictions" && (
