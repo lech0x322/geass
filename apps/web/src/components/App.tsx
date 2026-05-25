@@ -1723,14 +1723,8 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                         </div>
                         {/* Current sound chip */}
                         <span style={{ fontSize: 10, padding: "3px 9px", borderRadius: 20, background: val === "off" ? "#27272a" : "#a855f722", color: val === "off" ? "#52525b" : "#a855f7", fontWeight: 600, whiteSpace: "nowrap" }}>
-                          {opt?.emoji} {opt?.label}
+                          {opt?.label}
                         </span>
-                        {val !== "off" && (
-                          <button onClick={() => playSound(val)} title="Preview"
-                            style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, border: "1px solid #27272a", background: "transparent", color: "#71717a", cursor: "pointer", flexShrink: 0 }}>
-                            ▶
-                          </button>
-                        )}
                         {/* Expand arrow */}
                         <button onClick={() => setSoundExpandedKey(isOpen ? null : label)}
                           style={{ background: "transparent", border: "1px solid #27272a", borderRadius: 6, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#71717a", flexShrink: 0, transition: "transform .2s", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
@@ -1751,7 +1745,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                                   color: active ? "#a855f7" : "#71717a",
                                   display: "flex", alignItems: "center", gap: 5,
                                 }}>
-                                <span>{o.emoji}</span> {o.label}
+                                {o.label}
                               </button>
                             );
                           })}
