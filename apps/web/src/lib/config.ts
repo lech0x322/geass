@@ -17,11 +17,11 @@ export const TIER: Record<string, { l: string; c: string }> = {
   RUGGED: { l: "RUG", c: "#6b7280" },
 };
 
-export type NavId = "home" | "trades" | "launch" | "gems" | "referral" | "pro" | "autosnipe" | "settings" | "trending" | "profile" | "community";
+export type NavId = "home" | "trades" | "launch" | "gems" | "referral" | "pro" | "autosnipe" | "settings" | "trending" | "profile" | "community" | "predictions";
 
 export type NavIconId =
   | "home" | "broadcast" | "flame" | "rocket" | "zap" | "target"
-  | "users" | "cog" | "crown" | "user";
+  | "users" | "cog" | "crown" | "user" | "chart";
 
 export type SettingsSection = "sounds" | "referral" | "wallet";
 /** Settings sub-items that navigate to a different tab entirely. */
@@ -55,7 +55,8 @@ export const NAV: NavItem[] = [
   { id: "launch",    label: "Launch",                                                    iconId: "rocket",    mobile: true, sidebarHidden: true },
   { id: "gems",      label: "Alpha Scanner",   mobileLabel: "Scanner", badge: "PRO",   pro: true, iconId: "zap",    mobile: true },
   { id: "autosnipe",  label: "Auto-Snipe",                               badge: "NEW",   pro: true, iconId: "target" },
-  { id: "community",  label: "Community",    mobileLabel: "Community",  badge: "NEW",   iconId: "users",  mobile: true },
+  { id: "community",    label: "Community",    mobileLabel: "Community",  badge: "NEW",   iconId: "users",  mobile: true },
+  { id: "predictions", label: "Predictions",  mobileLabel: "Predict",    badge: "NEW",   iconId: "chart",  mobile: true, sidebarHidden: true },
   {
     id: "settings",
     label: "Settings",
