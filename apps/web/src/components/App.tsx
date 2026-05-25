@@ -98,6 +98,21 @@ function SettingsBody({ section, children }: { section: SettingsSection | null; 
   return <>{children}</>;
 }
 
+// ── Sound system ──────────────────────────────────────────────────────────────
+export type SoundId = "chime" | "ping" | "bell" | "buzz" | "tap" | "arcade" | "alert" | "soft" | "off";
+
+export const SOUND_OPTIONS: { id: SoundId; label: string; emoji: string }[] = [
+  { id: "chime",  label: "Chime",  emoji: "🎵" },
+  { id: "ping",   label: "Ping",   emoji: "🔔" },
+  { id: "bell",   label: "Bell",   emoji: "🛎" },
+  { id: "buzz",   label: "Buzz",   emoji: "📳" },
+  { id: "tap",    label: "Tap",    emoji: "👆" },
+  { id: "arcade", label: "Arcade", emoji: "🕹" },
+  { id: "alert",  label: "Alert",  emoji: "⚡" },
+  { id: "soft",   label: "Soft",   emoji: "🌊" },
+  { id: "off",    label: "Off",    emoji: "🔇" },
+];
+
 interface Props {
   wallet: string;
   balance: string | null;
@@ -156,9 +171,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profilePanelOpen, setProfilePanelOpen] = useState(true);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
-  const [soundGems, setSoundGems]   = useState(true);
-  const [soundKol, setSoundKol]     = useState(true);
-  const [soundMeme, setSoundMeme]   = useState(true);
+  const [gemSoundId,  setGemSoundId]  = useState<SoundId>("chime");
+  const [kolSoundId,  setKolSoundId]  = useState<SoundId>("tap");
+  const [memeSoundId, setMemeSoundId] = useState<SoundId>("buzz");
   const [solPrice, setSolPrice]     = useState<number | null>(null);
   const [solChange, setSolChange]   = useState(0);
 
@@ -218,51 +233,61 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     return () => document.removeEventListener("click", unlock);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Gem: sine, bright rising double-chime (880→1320, then 1760→2640)
-  async function playSoundGem() {
+  async function playSound(id: SoundId) {
+    if (id === "off") return;
     try {
       const ctx = getAudioCtx(); await ctx.resume(); const t = ctx.currentTime;
-      [0, 0.20].forEach((offset, i) => {
+      const note = (type: OscillatorType, freq: number, start: number, dur: number, vol = 0.11) => {
         const osc = ctx.createOscillator(); const gain = ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(880 * (i + 1), t + offset);
-        osc.frequency.linearRampToValueAtTime(1320 * (i + 1), t + offset + 0.14);
-        gain.gain.setValueAtTime(0.11, t + offset);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.30);
+        osc.type = type; osc.frequency.setValueAtTime(freq, t + start);
+        gain.gain.setValueAtTime(vol, t + start);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + start + dur);
         osc.connect(gain); gain.connect(ctx.destination);
-        osc.start(t + offset); osc.stop(t + offset + 0.30);
-      });
-    } catch {}
-  }
-  // KOL: triangle, punchy double-tap (660 Hz then 990 Hz)
-  async function playSoundKol() {
-    try {
-      const ctx = getAudioCtx(); await ctx.resume(); const t = ctx.currentTime;
-      [{ f: 660, o: 0 }, { f: 990, o: 0.18 }].forEach(({ f, o }) => {
-        const osc = ctx.createOscillator(); const gain = ctx.createGain();
-        osc.type = "triangle";
-        osc.frequency.setValueAtTime(f, t + o);
-        gain.gain.setValueAtTime(0.14, t + o);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + o + 0.22);
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.start(t + o); osc.stop(t + o + 0.22);
-      });
-    } catch {}
-  }
-  // Meme: sawtooth retro buzz, descending 1047→523→698
-  async function playSoundMeme() {
-    try {
-      const ctx = getAudioCtx(); await ctx.resume(); const t = ctx.currentTime;
-      const osc = ctx.createOscillator(); const gain = ctx.createGain();
-      osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(1047, t);
-      osc.frequency.exponentialRampToValueAtTime(523, t + 0.18);
-      osc.frequency.setValueAtTime(523, t + 0.20);
-      osc.frequency.linearRampToValueAtTime(698, t + 0.38);
-      gain.gain.setValueAtTime(0.08, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.start(t); osc.stop(t + 0.45);
+        osc.start(t + start); osc.stop(t + start + dur);
+      };
+      switch (id) {
+        case "chime":
+          [0, 0.20].forEach((off, i) => {
+            const osc = ctx.createOscillator(); const gain = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(880 * (i + 1), t + off);
+            osc.frequency.linearRampToValueAtTime(1320 * (i + 1), t + off + 0.14);
+            gain.gain.setValueAtTime(0.11, t + off);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + off + 0.30);
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.start(t + off); osc.stop(t + off + 0.30);
+          }); break;
+        case "ping":
+          note("sine", 1760, 0, 0.25, 0.10); break;
+        case "bell": {
+          const osc = ctx.createOscillator(); const gain = ctx.createGain();
+          osc.type = "sine"; osc.frequency.setValueAtTime(880, t);
+          gain.gain.setValueAtTime(0.15, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.start(t); osc.stop(t + 0.8); break;
+        }
+        case "buzz": {
+          const osc = ctx.createOscillator(); const gain = ctx.createGain();
+          osc.type = "sawtooth";
+          osc.frequency.setValueAtTime(1047, t);
+          osc.frequency.exponentialRampToValueAtTime(523, t + 0.18);
+          osc.frequency.setValueAtTime(523, t + 0.20);
+          osc.frequency.linearRampToValueAtTime(698, t + 0.38);
+          gain.gain.setValueAtTime(0.08, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.start(t); osc.stop(t + 0.45); break;
+        }
+        case "tap":
+          [{ f: 660, o: 0 }, { f: 990, o: 0.18 }].forEach(({ f, o }) => note("triangle", f, o, 0.22, 0.14)); break;
+        case "arcade":
+          [523, 659, 784, 1047].forEach((f, i) => note("square", f, i * 0.08, 0.10, 0.07)); break;
+        case "alert":
+          note("sine", 1320, 0, 0.15, 0.12); note("sine", 880, 0.18, 0.20, 0.10); break;
+        case "soft":
+          note("sine", 528, 0, 0.5, 0.07); note("sine", 660, 0.15, 0.4, 0.05); break;
+      }
     } catch {}
   }
 
@@ -277,8 +302,8 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     asRef.current = { enabled: asEnabled, amount: asAmount, minScore: asMinScore, method: asMethod };
   }, [asEnabled, asAmount, asMinScore, asMethod]);
 
-  const soundRef = useRef({ gems: true, kol: true, meme: true });
-  useEffect(() => { soundRef.current = { gems: soundGems, kol: soundKol, meme: soundMeme }; }, [soundGems, soundKol, soundMeme]);
+  const soundRef = useRef<{ gems: SoundId; kol: SoundId; meme: SoundId }>({ gems: "chime", kol: "tap", meme: "buzz" });
+  useEffect(() => { soundRef.current = { gems: gemSoundId, kol: kolSoundId, meme: memeSoundId }; }, [gemSoundId, kolSoundId, memeSoundId]);
 
   useEffect(() => {
     if (!stream.newGems.length) return;
@@ -300,7 +325,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
       if (!source || source === "NONE") setSource("STREAM");
       return next;
     });
-    if (soundRef.current.gems && freshGems.length > 0) playSoundGem();
+    if (soundRef.current.gems !== "off" && freshGems.length > 0) playSound(soundRef.current.gems);
     stream.clear();
     // Auto-snipe newly detected gems if enabled
     const cfg = asRef.current;
@@ -497,21 +522,22 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   // Load / persist sound prefs
   useEffect(() => {
     try {
-      const sg = localStorage.getItem("geass_sound_gems");
-      const sk = localStorage.getItem("geass_sound_kol");
-      const sm = localStorage.getItem("geass_sound_meme");
-      if (sg !== null) setSoundGems(sg !== "0");
-      if (sk !== null) setSoundKol(sk !== "0");
-      if (sm !== null) setSoundMeme(sm !== "0");
+      const sg = localStorage.getItem("geass_soundid_gems");
+      const sk = localStorage.getItem("geass_soundid_kol");
+      const sm = localStorage.getItem("geass_soundid_meme");
+      const ids = SOUND_OPTIONS.map(o => o.id);
+      if (sg && ids.includes(sg as SoundId)) setGemSoundId(sg as SoundId);
+      if (sk && ids.includes(sk as SoundId)) setKolSoundId(sk as SoundId);
+      if (sm && ids.includes(sm as SoundId)) setMemeSoundId(sm as SoundId);
     } catch {}
   }, []);
   useEffect(() => {
     try {
-      localStorage.setItem("geass_sound_gems", soundGems ? "1" : "0");
-      localStorage.setItem("geass_sound_kol",  soundKol  ? "1" : "0");
-      localStorage.setItem("geass_sound_meme", soundMeme ? "1" : "0");
+      localStorage.setItem("geass_soundid_gems", gemSoundId);
+      localStorage.setItem("geass_soundid_kol",  kolSoundId);
+      localStorage.setItem("geass_soundid_meme", memeSoundId);
     } catch {}
-  }, [soundGems, soundKol, soundMeme]);
+  }, [gemSoundId, kolSoundId, memeSoundId]);
 
   // Real-time price + signal push from Elixir signal server (falls back to polling if not configured)
   useSignalSocket({
@@ -554,7 +580,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const prevKolCount = useRef(0);
   useEffect(() => {
     if (feedTrades.length > prevKolCount.current && prevKolCount.current > 0) {
-      if (soundRef.current.kol) playSoundKol();
+      if (soundRef.current.kol !== "off") playSound(soundRef.current.kol);
     }
     prevKolCount.current = feedTrades.length;
   }, [feedTrades.length]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -564,7 +590,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   useEffect(() => {
     const highScore = memeSignals.filter(s => s.score >= 60).length;
     if (highScore > prevMemeCount.current && prevMemeCount.current >= 0) {
-      if (soundRef.current.meme) playSoundMeme();
+      if (soundRef.current.meme !== "off") playSound(soundRef.current.meme);
     }
     prevMemeCount.current = highScore;
   }, [memeSignals]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1670,24 +1696,39 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   <IconSpeaker size={11} /> SOUND ALERTS
                 </div>
                 {([
-                  [soundGems, setSoundGems, "New Gem Detected",  "Plays a rising double-chime when a new token is detected by the Alpha Scanner", playSoundGem],
-                  [soundKol,  setSoundKol,  "KOL Trade Alert",   "Plays a punchy double-tap when a tracked KOL wallet makes a new trade",          playSoundKol],
-                  [soundMeme, setSoundMeme, "🧠 Meme Signals",   "Plays a retro buzz when a high-score meme opportunity is detected",               playSoundMeme],
-                ] as [boolean, React.Dispatch<React.SetStateAction<boolean>>, string, string, () => void][]).map(([val, set, label, desc, preview]) => (
-                  <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "#e2d9f3" }}>{label}</div>
-                      <div style={{ fontSize: 10, color: "#52525b", marginTop: 2 }}>{desc}</div>
+                  [gemSoundId,  setGemSoundId,  "New Gem Detected", "Alpha Scanner token alert"],
+                  [kolSoundId,  setKolSoundId,  "KOL Trade Alert",  "Tracked KOL wallet trade"],
+                  [memeSoundId, setMemeSoundId, "🧠 Meme Signals",  "High-score meme opportunity"],
+                ] as [SoundId, React.Dispatch<React.SetStateAction<SoundId>>, string, string][]).map(([val, set, label, desc]) => (
+                  <div key={label} style={{ marginBottom: 18 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#e2d9f3" }}>{label}</div>
+                        <div style={{ fontSize: 10, color: "#52525b", marginTop: 1 }}>{desc}</div>
+                      </div>
+                      {val !== "off" && (
+                        <button onClick={() => playSound(val)} title="Preview"
+                          style={{ fontSize: 10, padding: "3px 10px", borderRadius: 6, border: "1px solid #27272a", background: "transparent", color: "#a1a1aa", cursor: "pointer" }}>
+                          ▶ Preview
+                        </button>
+                      )}
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                      <button onClick={preview} title="Preview sound"
-                        style={{ fontSize: 10, padding: "3px 8px", borderRadius: 6, border: "1px solid #27272a", background: "transparent", color: "#52525b", cursor: "pointer" }}>
-                        ▶
-                      </button>
-                      <button onClick={() => set(v => !v)}
-                        style={{ width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", position: "relative", background: val ? "#10b981" : "#27272a", transition: "background .2s" }}>
-                        <span style={{ position: "absolute", top: 2, left: val ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
-                      </button>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {SOUND_OPTIONS.map(opt => {
+                        const active = val === opt.id;
+                        return (
+                          <button key={opt.id} onClick={() => set(opt.id)}
+                            style={{
+                              padding: "5px 11px", borderRadius: 20, fontSize: 11, fontWeight: active ? 700 : 500, cursor: "pointer",
+                              border: `1px solid ${active ? "#a855f7" : "#27272a"}`,
+                              background: active ? "#a855f722" : "transparent",
+                              color: active ? "#a855f7" : "#71717a",
+                              display: "flex", alignItems: "center", gap: 5,
+                            }}>
+                            <span>{opt.emoji}</span> {opt.label}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
