@@ -28,6 +28,7 @@ import {
 import { ProfileTab } from "./ProfileTab";
 import { ProfilePanel } from "./ProfilePanel";
 import { HomeTab } from "./HomeTab";
+import { CommunityTab } from "./CommunityTab";
 import JupiterSwapModal from "./JupiterSwapModal";
 import type { NavIconId, SettingsSection } from "@/lib/config";
 
@@ -102,7 +103,7 @@ interface Props {
 }
 
 export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
-  const [tab, setTab]         = useState<"home" | "trades" | "launch" | "gems" | "autosnipe" | "referral" | "pro" | "settings" | "trending" | "profile">("home");
+  const [tab, setTab]         = useState<"home" | "trades" | "launch" | "gems" | "autosnipe" | "referral" | "pro" | "settings" | "trending" | "profile" | "community">("home");
   const [gems, setGems]       = useState<Gem[]>([]);
   const [loading, setLoading] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
@@ -2165,6 +2166,10 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
               isPro={pro.active}
               isMobile={isMobile}
             />
+          )}
+
+          {tab === "community" && (
+            <CommunityTab wallet={wallet} isMobile={isMobile} />
           )}
         </main>
 

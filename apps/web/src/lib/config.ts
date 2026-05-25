@@ -17,7 +17,7 @@ export const TIER: Record<string, { l: string; c: string }> = {
   RUGGED: { l: "RUG", c: "#6b7280" },
 };
 
-export type NavId = "home" | "trades" | "launch" | "gems" | "referral" | "pro" | "autosnipe" | "settings" | "trending" | "profile";
+export type NavId = "home" | "trades" | "launch" | "gems" | "referral" | "pro" | "autosnipe" | "settings" | "trending" | "profile" | "community";
 
 export type NavIconId =
   | "home" | "broadcast" | "flame" | "rocket" | "zap" | "target"
@@ -54,7 +54,8 @@ export const NAV: NavItem[] = [
   { id: "trending",  label: "Trending",                                 badge: "NEW",   iconId: "flame",     mobile: true, sidebarHidden: true },
   { id: "launch",    label: "Launch",                                                    iconId: "rocket",    mobile: true, sidebarHidden: true },
   { id: "gems",      label: "Alpha Scanner",   mobileLabel: "Scanner", badge: "PRO",   pro: true, iconId: "zap",    mobile: true },
-  { id: "autosnipe", label: "Auto-Snipe",                               badge: "NEW",   pro: true, iconId: "target" },
+  { id: "autosnipe",  label: "Auto-Snipe",                               badge: "NEW",   pro: true, iconId: "target" },
+  { id: "community",  label: "Community",    mobileLabel: "Community",  badge: "NEW",   iconId: "users",  mobile: true },
   {
     id: "settings",
     label: "Settings",
