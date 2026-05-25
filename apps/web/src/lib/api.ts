@@ -361,17 +361,28 @@ export interface MemeSignal {
   createdAt:   number;
 }
 
-export async function fetchMemeSignals(): Promise<{ signals: MemeSignal[]; fetchedAt: number }> {
+export interface NarrativeStat {
+  id:        string;
+  label:     string;
+  color:     string;
+  count:     number;
+  totalVol:  number;
+  topSymbol: string;
+  topIcon:   string | null;
+  momentum:  number;
+}
+
+export async function fetchMemeSignals(): Promise<{ signals: MemeSignal[]; narratives: NarrativeStat[]; fetchedAt: number }> {
   try {
     const r = await fetch("/api/trends/meme", { cache: "no-store" });
-    if (!r.ok) return { signals: [], fetchedAt: Date.now() };
+    if (!r.ok) return { signals: [], narratives: [], fetchedAt: Date.now() };
     return r.json();
   } catch {
-    return { signals: [], fetchedAt: Date.now() };
+    return { signals: [], narratives: [], fetchedAt: Date.now() };
   }
 }
 
-// ── X / Social Narrative Signals ─────────────────────────────────────────────
+// ── Crypto News Feed ──────────────────────────────────────────────────────────
 
 export interface XSignal {
   id:      string;
@@ -379,7 +390,8 @@ export interface XSignal {
   author:  string;
   url:     string;
   score:   number;
-  source:  "x" | "news";
+  source:  "news";
+  icon:    string;
   pubDate: number;
 }
 

@@ -5,7 +5,7 @@ import { Keypair, VersionedTransaction } from "@solana/web3.js";
 import bs58 from "bs58";
 import { KOLS, NAV, TIER, SETTINGS_TAB_OVERRIDES } from "@/lib/config";
 import { fmtAge, shortAddr } from "@/lib/utils";
-import { scan, fetchBalance, pumpTradeTx, pumpIpfs, fetchPortfolio, autoSnipe, jitoLaunchBundle, jitoSubmit, fetchTrending, fetchMemeSignals, fetchXSignals, type PortfolioResult, type AutoSnipeResult, type TrendingToken, type TrendingMeta, type MemeSignal, type XSignal } from "@/lib/api";
+import { scan, fetchBalance, pumpTradeTx, pumpIpfs, fetchPortfolio, autoSnipe, jitoLaunchBundle, jitoSubmit, fetchTrending, fetchMemeSignals, fetchXSignals, type PortfolioResult, type AutoSnipeResult, type TrendingToken, type TrendingMeta, type MemeSignal, type NarrativeStat, type XSignal } from "@/lib/api";
 import { signAllWithPhantom } from "@/lib/wallet";
 import { signAndSendBytes } from "@/lib/wallet";
 import { useGemStream } from "@/lib/useGemStream";
@@ -143,6 +143,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [trendingMetas,  setTrendingMetas]  = useState<TrendingMeta[]>([]);
   const [trendingLoading, setTrendingLoading] = useState(false);
   const [memeSignals,    setMemeSignals]    = useState<MemeSignal[]>([]);
+  const [memeNarratives, setMemeNarratives] = useState<NarrativeStat[]>([]);
   const [memeLoading,    setMemeLoading]    = useState(false);
   const [xSignals,       setXSignals]       = useState<XSignal[]>([]);
   const [xLoading,       setXLoading]       = useState(false);
@@ -585,7 +586,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
       setTrendingMetas(d.metas);
     }).finally(() => setTrendingLoading(false));
     setMemeLoading(true);
-    fetchMemeSignals().then(d => setMemeSignals(d.signals)).finally(() => setMemeLoading(false));
+    fetchMemeSignals().then(d => { setMemeSignals(d.signals); setMemeNarratives(d.narratives ?? []); }).finally(() => setMemeLoading(false));
     if (tab === "trending") {
       setXLoading(true);
       fetchXSignals().then(d => setXSignals(d.signals)).finally(() => setXLoading(false));
@@ -1669,7 +1670,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 <button onClick={() => {
                   setTrendingLoading(true); setMemeLoading(true); setXLoading(true);
                   fetchTrending().then(d => { setTrendingTokens(d.tokens); setTrendingMetas(d.metas); }).finally(() => setTrendingLoading(false));
-                  fetchMemeSignals().then(d => setMemeSignals(d.signals)).finally(() => setMemeLoading(false));
+                  fetchMemeSignals().then(d => { setMemeSignals(d.signals); setMemeNarratives(d.narratives ?? []); }).finally(() => setMemeLoading(false));
                   fetchXSignals().then(d => setXSignals(d.signals)).finally(() => setXLoading(false));
                 }} style={{ marginLeft: "auto", fontSize: 9, padding: "4px 10px", borderRadius: 6, border: "1px solid #27272a", background: "transparent", color: "#52525b", cursor: "pointer" }}>
                   ↻ Refresh
@@ -1678,7 +1679,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
               {/* Sub-tab switcher */}
               <div style={{ display: "flex", gap: 4, marginBottom: 18, background: "#0a0a0b", borderRadius: 10, padding: 4, width: "fit-content" }}>
-                {([["dex", "🔥 DEX"], ["meme", "🧠 Meme"], ["x", "𝕏 Narrative"]] as [typeof memeTab, string][]).map(([id, label]) => (
+                {([["dex", "🔥 DEX"], ["meme", "🧠 Meme"], ["x", "📰 News"]] as [typeof memeTab, string][]).map(([id, label]) => (
                   <button key={id} onClick={() => setMemeTab(id)}
                     style={{ padding: "6px 14px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700,
                       background: memeTab === id ? "#1a1a1d" : "transparent",
@@ -1790,9 +1791,49 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                     <span style={{ fontSize: 8, color: "#a855f7", background: "#a855f720", border: "1px solid #a855f740", padding: "2px 8px", borderRadius: 8, fontWeight: 700 }}>PUMP.FUN · LIVE</span>
                     {memeLoading && <span style={{ fontSize: 9, color: "#52525b" }} className="pulse">Scanning...</span>}
                   </div>
-                  <p style={{ fontSize: 11, color: "#3f3f46", marginBottom: 18 }}>
-                    Meme potential detector — scores new tokens by name pattern, community replies &amp; 1h volume. High score = meme narrative forming.
+                  <p style={{ fontSize: 11, color: "#3f3f46", marginBottom: 14 }}>
+                    Trend intelligence for token creators — see what narratives are forming right now on pump.fun.
                   </p>
+
+                  {/* Trending Narratives grid */}
+                  {memeNarratives.length > 0 && (
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: "#52525b", letterSpacing: "1.5px", marginBottom: 10 }}>🔥 TRENDING NARRATIVES RIGHT NOW</div>
+                      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fill,minmax(160px,1fr))", gap: 8 }}>
+                        {memeNarratives.map(n => (
+                          <div key={n.id} style={{ background: "#111113", border: `1px solid ${n.color}30`, borderRadius: 12, padding: "12px 14px", position: "relative", overflow: "hidden" }}>
+                            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: n.color }} />
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                              {n.topIcon && <img src={n.topIcon} alt={n.topSymbol} width={22} height={22} style={{ borderRadius: "50%", objectFit: "cover" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />}
+                              <span style={{ fontSize: 12, fontWeight: 800, color: "#f4f4f5" }}>{n.label}</span>
+                            </div>
+                            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                              <div>
+                                <div style={{ fontSize: 8, color: "#52525b", letterSpacing: "1px" }}>TOKENS</div>
+                                <div style={{ fontSize: 15, fontWeight: 800, color: n.color }}>{n.count}</div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: 8, color: "#52525b", letterSpacing: "1px" }}>MOMENTUM</div>
+                                <div style={{ fontSize: 15, fontWeight: 800, color: n.momentum >= 50 ? "#10b981" : "#eab308" }}>{n.momentum}</div>
+                              </div>
+                              {n.totalVol > 0 && (
+                                <div>
+                                  <div style={{ fontSize: 8, color: "#52525b", letterSpacing: "1px" }}>VOL 1H</div>
+                                  <div style={{ fontSize: 11, fontWeight: 700, color: "#eab308" }}>{n.totalVol >= 1000 ? `$${(n.totalVol/1000).toFixed(0)}K` : `$${n.totalVol.toFixed(0)}`}</div>
+                                </div>
+                              )}
+                            </div>
+                            <div style={{ marginTop: 6, fontSize: 9, color: "#52525b" }}>Top: <span style={{ color: n.color, fontWeight: 700 }}>${n.topSymbol}</span></div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ marginTop: 8, fontSize: 9, color: "#27272a" }}>
+                        💡 Tip: High-momentum narratives = creators are rushing to launch tokens in this theme. Be first.
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "#52525b", letterSpacing: "1.5px", marginBottom: 10 }}>TOP MEME SIGNALS</div>
 
                   {!memeLoading && memeSignals.length === 0 && (
                     <div style={{ textAlign: "center", padding: "40px 20px", color: "#3f3f46" }}>
@@ -1862,71 +1903,54 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 </>
               )}
 
-              {/* X NARRATIVE sub-tab */}
+              {/* NEWS sub-tab */}
               {memeTab === "x" && (
                 <>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontSize: 8, color: "#1d9bf0", background: "#1d9bf020", border: "1px solid #1d9bf040", padding: "2px 8px", borderRadius: 8, fontWeight: 700 }}>𝕏 · NITTER RSS</span>
-                    <span style={{ fontSize: 8, color: "#52525b", background: "#27272a20", border: "1px solid #27272a40", padding: "2px 8px", borderRadius: 8, fontWeight: 700 }}>CRYPTO NEWS</span>
-                    {xLoading && <span style={{ fontSize: 9, color: "#52525b" }} className="pulse">Fetching...</span>}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
+                    {["🟠 CoinTelegraph", "🔵 Decrypt", "⚡ The Defiant", "📰 CoinDesk", "🟡 BTC Magazine"].map(s => (
+                      <span key={s} style={{ fontSize: 8, color: "#71717a", background: "#18181b", border: "1px solid #27272a", padding: "2px 7px", borderRadius: 6, fontWeight: 600 }}>{s}</span>
+                    ))}
+                    {xLoading && <span style={{ fontSize: 9, color: "#52525b" }} className="pulse">Loading…</span>}
                   </div>
-                  <p style={{ fontSize: 11, color: "#3f3f46", marginBottom: 18 }}>
-                    Social narrative detector — posts from key CT accounts &amp; crypto news scored for meme coin potential.
+                  <p style={{ fontSize: 11, color: "#3f3f46", marginBottom: 14 }}>
+                    Memecoin &amp; crypto news from top sources — newest first, auto-refreshes every 60s.
                   </p>
 
                   {!xLoading && xSignals.length === 0 && (
                     <div style={{ textAlign: "center", padding: "40px 20px", color: "#3f3f46" }}>
-                      <div style={{ fontSize: 24, marginBottom: 8 }}>𝕏</div>
-                      <div style={{ fontSize: 12 }}>No signals — Nitter may be temporarily unavailable</div>
-                      <div style={{ fontSize: 10, color: "#27272a", marginTop: 6 }}>Crypto news RSS will still appear when available</div>
+                      <div style={{ fontSize: 24, marginBottom: 8 }}>📰</div>
+                      <div style={{ fontSize: 12 }}>No news loaded — try refreshing</div>
                     </div>
                   )}
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {xSignals.map(s => {
-                      const isX    = s.source === "x";
-                      const accent = isX ? "#1d9bf0" : "#f59e0b";
-                      const accentBg = isX ? "#1d9bf010" : "#f59e0b10";
-                      const scoreColor = s.score >= 60 ? "#10b981" : s.score >= 35 ? "#eab308" : "#52525b";
                       const age = Math.round((Date.now() - s.pubDate) / 60000);
                       const ageLabel = age < 60 ? `${age}m ago` : age < 1440 ? `${Math.round(age/60)}h ago` : `${Math.round(age/1440)}d ago`;
+                      const isMeme = s.score >= 30;
                       return (
-                        <div key={s.id} style={{ background: "#111113", border: `1px solid ${s.score >= 60 ? "#10b98125" : "#1e1e21"}`, borderRadius: 12, padding: "12px 14px" }}>
-                          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                            {/* Source badge */}
-                            <div style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 8, background: accentBg, border: `1px solid ${accent}30`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, marginTop: 1 }}>
-                              {isX ? "𝕏" : "📰"}
-                            </div>
-                            {/* Content */}
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
-                                <span style={{ fontSize: 10, fontWeight: 700, color: accent }}>{s.author}</span>
-                                <span style={{ fontSize: 9, color: "#3f3f46" }}>{ageLabel}</span>
-                              </div>
-                              <div style={{ fontSize: 11, color: "#d4d4d8", lineHeight: 1.5 }}>{s.text}</div>
-                            </div>
-                            {/* Score */}
-                            <div style={{ flexShrink: 0, textAlign: "center", minWidth: 38 }}>
-                              <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "0.5px" }}>SIGNAL</div>
-                              <div style={{ fontSize: 15, fontWeight: 900, color: scoreColor }}>{s.score}</div>
+                        <a key={s.id} href={s.url} target="_blank" rel="noopener noreferrer"
+                          style={{ textDecoration: "none", display: "flex", alignItems: "flex-start", gap: 10, background: "#111113", border: `1px solid ${isMeme ? "#a855f725" : "#1e1e21"}`, borderRadius: 10, padding: "10px 12px" }}>
+                          <div style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 8, background: "#1a1a1e", border: "1px solid #27272a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>
+                            {s.icon}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: "#e4e4e7", lineHeight: 1.4, marginBottom: 4 }}>{s.text}</div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontSize: 9, fontWeight: 700, color: "#52525b" }}>{s.author}</span>
+                              <span style={{ fontSize: 9, color: "#3f3f46" }}>{ageLabel}</span>
+                              {isMeme && <span style={{ fontSize: 8, color: "#a855f7", background: "#a855f715", border: "1px solid #a855f730", padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>MEME</span>}
                             </div>
                           </div>
-                          {s.url && (
-                            <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #1e1e21" }}>
-                              <a href={s.url} target="_blank" rel="noopener noreferrer"
-                                style={{ fontSize: 9, color: accent, textDecoration: "none", opacity: 0.7 }}>
-                                {s.url.length > 60 ? s.url.slice(0, 60) + "…" : s.url} ↗
-                              </a>
-                            </div>
-                          )}
-                        </div>
+                          <span style={{ fontSize: 10, color: "#3f3f46", flexShrink: 0, marginTop: 2 }}>↗</span>
+                        </a>
                       );
                     })}
                   </div>
 
                   {xSignals.length > 0 && (
                     <div style={{ marginTop: 14, fontSize: 9, color: "#27272a", textAlign: "center" }}>
-                      Sources: Nitter RSS (X/Twitter) · CoinTelegraph · Decrypt · Refreshes on demand
+                      {xSignals.length} articles · auto-refresh every 60s · click to open source
                     </div>
                   )}
                 </>
