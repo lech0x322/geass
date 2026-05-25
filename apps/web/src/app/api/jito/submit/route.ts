@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Keypair, Connection, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
+import { Keypair, VersionedTransaction, Connection, TransactionMessage, PublicKey } from "@solana/web3.js";
 import bs58 from "bs58";
 import { JitoClient, JitoBundle, buildTipInstruction, solToLamports, TIP_DEFAULT_SOL } from "@geass/sdk";
 import { enforceRateLimit } from "@/lib/server/withRateLimit";
@@ -15,12 +15,6 @@ function geassKeypair(): Keypair {
   catch { throw new Error("GEASS_WALLET_PRIVKEY is invalid base58"); }
 }
 
-/**
- * POST { transactions: string[], tipSol?: number }
- *
- * Accepts pre-signed base64 transactions (e.g. Phantom-signed create + buy).
- * Appends a GEASS-signed Jito tip tx automatically so the bundle is valid.
- */
 export async function POST(request: Request) {
   const limited = enforceRateLimit(request, { bucket: "jito-submit", max: 8, windowMs: 60_000 });
   if (limited) return limited;
@@ -41,17 +35,32 @@ export async function POST(request: Request) {
     const conn   = new Connection(SOLANA_RPC, "confirmed");
     const client = new JitoClient(JITO_BLOCK_ENGINE_URL);
     const tipSol = typeof body.tipSol === "number" && body.tipSol > 0 ? body.tipSol : TIP_DEFAULT_SOL;
+    const tipLamps = solToLamports(tipSol);
 
+    // Verify GEASS wallet has enough SOL for the tip tx
+    const balance = await conn.getBalance(geass.publicKey);
+    const minRequired = Number(tipLamps) + 10_000;
+    if (balance < minRequired) {
+      return NextResponse.json({
+        error: `GEASS wallet (${geass.publicKey.toBase58()}) needs ${(minRequired / 1e9).toFixed(4)} SOL for Jito tip — current: ${(balance / 1e9).toFixed(4)} SOL`,
+      }, { status: 402 });
+    }
+
+    // Deserialize user-signed transactions
     const txs = body.transactions.map(b64 =>
       VersionedTransaction.deserialize(Buffer.from(b64, "base64")),
     );
 
-    // Build + sign the Jito tip tx (must be last in the bundle)
+    // Fetch live tip accounts from Jito, pick one
+    const tipAccounts = await client.getTipAccounts();
+    const tipAccount  = new PublicKey(tipAccounts[Math.floor(Math.random() * tipAccounts.length)]);
+
+    // Build and sign the tip tx last
     const { blockhash } = await conn.getLatestBlockhash("confirmed");
     const tipMsg = new TransactionMessage({
       payerKey:        geass.publicKey,
       recentBlockhash: blockhash,
-      instructions:    [buildTipInstruction(geass.publicKey, solToLamports(tipSol))],
+      instructions:    [buildTipInstruction(geass.publicKey, tipLamps, tipAccount)],
     }).compileToV0Message();
     const tipTx = new VersionedTransaction(tipMsg);
     tipTx.sign([geass]);
@@ -63,9 +72,8 @@ export async function POST(request: Request) {
     const { bundleId } = await client.sendBundle(bundle);
     return NextResponse.json({ bundleId });
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : String(e) },
-      { status: 502 },
-    );
+    const msg = e instanceof Error ? e.message : String(e);
+    const status = msg.includes("insufficient") || msg.includes("needs") ? 402 : 502;
+    return NextResponse.json({ error: msg }, { status });
   }
 }

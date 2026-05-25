@@ -1,5 +1,6 @@
 "use client";
 
+import { VersionedTransaction } from "@solana/web3.js";
 import { toB64 } from "./config";
 
 interface PhantomProvider {
@@ -111,18 +112,20 @@ export async function signAllWithPhantom(txBytes: Uint8Array[]): Promise<string[
   const p = getPhantom();
   if (!p) throw new Error("Phantom not found");
 
-  const fakeTxs = txBytes.map(bytes => ({ serialize: () => bytes }));
+  // Deserialize as VersionedTransaction so Phantom receives a proper object
+  // (not a fake { serialize } stub) and can handle v0 message headers correctly.
+  const versionedTxs = txBytes.map(bytes => VersionedTransaction.deserialize(bytes));
 
   if (p.signAllTransactions) {
-    const signed = await p.signAllTransactions(fakeTxs);
+    const signed = await p.signAllTransactions(versionedTxs);
     return signed.map(tx => Buffer.from(tx.serialize()).toString("base64"));
   }
 
   // Fallback: sign one at a time
   if (p.signTransaction) {
     const results: string[] = [];
-    for (const fakeTx of fakeTxs) {
-      const signed = await p.signTransaction(fakeTx);
+    for (const tx of versionedTxs) {
+      const signed = await p.signTransaction(tx);
       results.push(Buffer.from(signed.serialize()).toString("base64"));
     }
     return results;

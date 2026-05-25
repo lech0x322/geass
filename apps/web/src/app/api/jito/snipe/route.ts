@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { Keypair, VersionedTransaction, Connection, TransactionMessage } from "@solana/web3.js";
 import bs58 from "bs58";
-import { JitoClient, JitoBundle, buildTipInstruction, solToLamports, TIP_DEFAULT_SOL } from "@geass/sdk";
+import { JitoClient, JitoBundle, buildTipInstruction, solToLamports, TIP_DEFAULT_SOL, JITO_TIP_ACCOUNTS } from "@geass/sdk";
 import { enforceRateLimit } from "@/lib/server/withRateLimit";
 import { GEASS_WALLET_PRIVKEY, GEASS_WALLET_PUBKEY, JITO_BLOCK_ENGINE_URL, SOLANA_RPC } from "@/lib/env";
+import { PublicKey } from "@solana/web3.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,13 +19,6 @@ function geassKeypair(): Keypair {
   }
 }
 
-/**
- * POST { buyTxB64, tipSol? }
- *
- * Receives an unsigned buy transaction built browser-side via PumpPortal
- * (PumpPortal blocks cloud/Vercel IPs — must be called from the browser).
- * Signs with the GEASS wallet, appends a Jito tip tx, submits the bundle.
- */
 export async function POST(request: Request) {
   const limited = enforceRateLimit(request, { bucket: "jito-snipe", max: 5, windowMs: 60_000 });
   if (limited) return limited;
@@ -44,29 +38,41 @@ export async function POST(request: Request) {
     const tipSol   = body.tipSol ?? TIP_DEFAULT_SOL;
     const tipLamps = solToLamports(tipSol);
 
-    // Sign buy tx with GEASS keypair
+    // Verify GEASS wallet has enough SOL for tip + fees
+    const balance = await conn.getBalance(geass.publicKey);
+    const minRequired = Number(tipLamps) + 10_000; // tip + ~1 tx fee
+    if (balance < minRequired) {
+      return NextResponse.json({
+        error: `GEASS wallet (${geass.publicKey.toBase58()}) has insufficient SOL: ` +
+               `${(balance / 1e9).toFixed(4)} SOL — needs at least ${(minRequired / 1e9).toFixed(4)} SOL`,
+      }, { status: 402 });
+    }
+
+    // Sign buy tx
     const buyTx = VersionedTransaction.deserialize(Buffer.from(body.buyTxB64, "base64"));
     buyTx.sign([geass]);
 
-    // Build Jito tip tx
+    // Fetch live tip accounts, pick one
+    const tipAccounts = await client.getTipAccounts();
+    const tipAccount  = new PublicKey(tipAccounts[Math.floor(Math.random() * tipAccounts.length)]);
+
+    // Build tip tx using the live tip account
     const { blockhash } = await conn.getLatestBlockhash("confirmed");
     const tipMsg = new TransactionMessage({
       payerKey:        geass.publicKey,
       recentBlockhash: blockhash,
-      instructions:    [buildTipInstruction(geass.publicKey, tipLamps)],
+      instructions:    [buildTipInstruction(geass.publicKey, tipLamps, tipAccount)],
     }).compileToV0Message();
     const tipTx = new VersionedTransaction(tipMsg);
     tipTx.sign([geass]);
 
-    // Submit bundle [buy, tip]
     const bundle = new JitoBundle().add(buyTx).add(tipTx);
     const { bundleId } = await client.sendBundle(bundle);
 
     return NextResponse.json({ bundleId, tipSol, wallet: GEASS_WALLET_PUBKEY });
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : String(e) },
-      { status: 502 },
-    );
+    const msg = e instanceof Error ? e.message : String(e);
+    const status = msg.includes("insufficient") ? 402 : 502;
+    return NextResponse.json({ error: msg }, { status });
   }
 }
