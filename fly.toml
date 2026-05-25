@@ -1,27 +1,33 @@
-app = "geass-signals"
-primary_region = "fra"
+# fly.toml app configuration file generated for geass on 2026-05-25T10:32:54Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'geass'
+primary_region = 'fra'
 
 [build]
-  dockerfile = "apps/signal_server/Dockerfile"
+  dockerfile = 'apps/signal_server/Dockerfile'
 
 [env]
-  PORT         = "4001"
-  GEASS_API_URL   = "https://geass.app"
-  ALLOWED_ORIGINS = "https://geass.app"
+  ALLOWED_ORIGINS = 'https://geass.app'
+  GEASS_API_URL = 'https://geass.app'
+  PORT = '4001'
 
 [http_service]
-  internal_port     = 4001
-  force_https       = true
-  auto_stop_machines = "stop"
+  internal_port = 4001
+  force_https = true
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 1
 
   [http_service.concurrency]
-    type       = "connections"
+    type = 'connections'
     hard_limit = 1000
     soft_limit = 800
 
 [[vm]]
-  memory   = "512mb"
-  cpu_kind = "shared"
-  cpus     = 1
+  memory = '512mb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 512
