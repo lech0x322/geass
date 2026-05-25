@@ -1,6 +1,6 @@
 import "server-only";
 import { HELIUS_KEY, HELIUS_API, PRO_TREASURY_WALLET } from "../env";
-import { KOLS } from "../config";
+import { KOL_WALLETS } from "./kol";
 
 export interface HeliusWebhook {
   webhookID: string;
@@ -83,7 +83,7 @@ export function ensureKolWebhook(baseUrl: string | undefined, authHeader: string
     return kolRegistrationPromise;
   }
   const url = `${baseUrl.replace(/\/$/, "")}/api/feed/webhook`;
-  const kolAddrs = KOLS.map(k => k.addr);
+  const kolAddrs = [...KOL_WALLETS.keys()];
   kolRegistrationPromise = (async () => {
     try {
       const existing = await listWebhooks();
