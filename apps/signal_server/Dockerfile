@@ -7,12 +7,13 @@ ENV MIX_ENV=prod
 
 RUN mix local.hex --force && mix local.rebar --force
 
-COPY mix.exs mix.lock ./
+# Build context = repo root; signal_server sources live under apps/signal_server/
+COPY apps/signal_server/mix.exs ./
 RUN mix deps.get --only prod
 RUN mix deps.compile
 
-COPY config config
-COPY lib lib
+COPY apps/signal_server/config config
+COPY apps/signal_server/lib lib
 RUN mix compile
 RUN mix release
 
