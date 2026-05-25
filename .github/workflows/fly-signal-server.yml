@@ -1,0 +1,25 @@
+name: Deploy signal_server to Fly.io
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/signal_server/**"
+      - ".github/workflows/fly-signal-server.yml"
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    concurrency: deploy-signal-server
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        working-directory: apps/signal_server
+        run: flyctl deploy --remote-only --wait-timeout 120
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

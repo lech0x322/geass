@@ -2,6 +2,7 @@ app = "geass-signals"
 primary_region = "fra"
 
 [build]
+  dockerfile = "Dockerfile"
 
 [env]
   PORT = "4001"
