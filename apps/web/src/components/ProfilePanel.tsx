@@ -10,9 +10,10 @@ interface Props {
   solBalance: string | null;
   solPrice: number | null;
   isPro: boolean;
+  onClose?: () => void;
 }
 
-export function ProfilePanel({ wallet, solBalance, solPrice, isPro }: Props) {
+export function ProfilePanel({ wallet, solBalance, solPrice, isPro, onClose }: Props) {
   const [username, setUsername] = useState("Anon Trader");
   const [emoji, setEmoji]       = useState("🧠");
   const [copied, setCopied]     = useState(false);
@@ -55,6 +56,12 @@ export function ProfilePanel({ wallet, solBalance, solPrice, isPro }: Props) {
           style={{ marginLeft: "auto", padding: "3px 9px", borderRadius: 5, border: "1px solid #27272a", background: "transparent", color: "#52525b", fontSize: 9, cursor: "pointer" }}>
           {editing ? "Cancel" : "Edit"}
         </button>
+        {onClose && (
+          <button onClick={onClose} title="Hide panel"
+            style={{ padding: "3px 7px", borderRadius: 5, border: "1px solid #27272a", background: "transparent", color: "#52525b", fontSize: 12, lineHeight: 1, cursor: "pointer" }}>
+            ‹
+          </button>
+        )}
       </div>
 
       <div style={{ flex: 1, padding: "14px 12px", display: "flex", flexDirection: "column", gap: 12 }}>

@@ -138,6 +138,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [profilePanelOpen, setProfilePanelOpen] = useState(true);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
   const [soundGems, setSoundGems]   = useState(true);
   const [soundKol, setSoundKol]     = useState(true);
@@ -567,7 +568,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   }, [tab, pro.active]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (tab !== "trending") return;
+    if (tab !== "trending" && tab !== "home") return;
     setTrendingLoading(true);
     fetchTrending().then(d => {
       setTrendingTokens(d.tokens);
@@ -575,8 +576,10 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     }).finally(() => setTrendingLoading(false));
     setMemeLoading(true);
     fetchMemeSignals().then(d => setMemeSignals(d.signals)).finally(() => setMemeLoading(false));
-    setXLoading(true);
-    fetchXSignals().then(d => setXSignals(d.signals)).finally(() => setXLoading(false));
+    if (tab === "trending") {
+      setXLoading(true);
+      fetchXSignals().then(d => setXSignals(d.signals)).finally(() => setXLoading(false));
+    }
   }, [tab]);
 
   // ── Stream status ───────────────────────────────────────────
@@ -612,7 +615,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     <>
       {/* Header */}
       <div style={{ height: 56, display: "flex", alignItems: "center", padding: sidebarCollapsed ? "0 10px" : "0 14px", borderBottom: "1px solid #18181b", gap: 8, flexShrink: 0, overflow: "hidden" }}>
-        <button onClick={() => { setTab("trades" as typeof tab); }} style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: 0, flex: 1, minWidth: 0 }}>
+        <button onClick={() => { setTab("home" as typeof tab); }} style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: 0, flex: 1, minWidth: 0 }}>
           <GeassLogo size={28} />
           {!sidebarCollapsed && (
             <div style={{ overflow: "hidden" }}>
@@ -754,6 +757,13 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 : `Trading Wallet locked`}
             </span>
           </div>
+        )}
+        {!isMobile && (
+          <button onClick={() => setProfilePanelOpen(v => !v)} title="Toggle profile panel"
+            style={{ width: "100%", padding: sidebarCollapsed ? "6px" : "6px 8px", borderRadius: 7, border: `1px solid ${profilePanelOpen ? "#27272a50" : "#27272a"}`, background: profilePanelOpen ? "#27272a30" : "transparent", color: profilePanelOpen ? "#a1a1aa" : "#52525b", fontSize: 9, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+            <IconUser size={12} />
+            {!sidebarCollapsed && (profilePanelOpen ? "Hide Profile" : "Profile")}
+          </button>
         )}
         <button onClick={onDisconnect} title="Disconnect"
           style={{ width: "100%", padding: sidebarCollapsed ? "6px" : "6px 8px", borderRadius: 7, border: "1px solid #27272a", background: "transparent", color: "#52525b", fontSize: 9, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
@@ -1032,6 +1042,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 solPrice={solPrice}
                 solChange={solChange}
                 feedTrades={feedTrades}
+                trendingTokens={trendingTokens}
+                memeSignals={memeSignals}
+                trendingLoading={trendingLoading}
                 isMobile={isMobile}
                 onNavigate={(id) => setTab(id as typeof tab)}
               />
@@ -1994,13 +2007,14 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
         )}
       </div>
 
-      {/* Desktop profile panel — always visible on the right */}
-      {!isMobile && (
+      {/* Desktop profile panel — toggled via sidebar button */}
+      {!isMobile && profilePanelOpen && (
         <ProfilePanel
           wallet={wallet}
           solBalance={wBal}
           solPrice={solPrice}
           isPro={pro.active}
+          onClose={() => setProfilePanelOpen(false)}
         />
       )}
     </div>
