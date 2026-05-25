@@ -113,7 +113,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [dexToken, setDexToken] = useState<{ address: string; symbol: string } | null>(null);
   const [jupModal, setJupModal] = useState<{ mint: string; symbol: string; mode: "buy" | "sell" } | null>(null);
   const [searchQ, setSearchQ] = useState("");
-  const [searchResults, setSearchResults] = useState<{ baseToken: { address: string; name: string; symbol: string }; priceUsd: string | null; priceChange: Record<string, number> | null; volume: Record<string, number>; liquidity: { usd: number | null } | null; url: string }[]>([]);
+  const [searchResults, setSearchResults] = useState<{ baseToken: { address: string; name: string; symbol: string }; priceUsd: string | null; priceChange: Record<string, number> | null; volume: Record<string, number>; liquidity: { usd: number | null } | null; url: string; info?: { imageUrl?: string } }[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchCategory, setSearchCategory] = useState<"all" | "tokens" | "kol" | "wallets">("all");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -524,8 +524,6 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   });
 
   useEffect(() => {
-    // Fallback polling — only active when NEXT_PUBLIC_SIGNAL_SERVER_URL is not set
-    if (process.env.NEXT_PUBLIC_SIGNAL_SERVER_URL) return;
     const load = () => fetch("/api/sol-price").then(r => r.json()).then((d: { price: number | null; change: number }) => {
       if (d.price) setSolPrice(d.price);
       setSolChange(d.change ?? 0);
@@ -651,7 +649,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: "8px 6px", overflowY: "auto" }}>
-        {NAV.filter(n => !n.mobileOnly).map(n => {
+        {NAV.filter(n => !n.mobileOnly && !n.sidebarHidden).map(n => {
           const isActive = tab === n.id;
           const accent = n.pro ? "#a855f7" : "#ef4444";
           const accentBg = n.pro ? "#7c3aed12" : "#dc262612";
@@ -889,7 +887,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 value={searchQ}
                 onChange={e => { setSearchQ(e.target.value); setSearchOpen(true); }}
                 onFocus={() => setSearchOpen(true)}
-                onBlur={() => setTimeout(() => setSearchOpen(false), 220)}
+                onBlur={() => setTimeout(() => setSearchOpen(false), 300)}
                 placeholder={
                   searchCategory === "tokens"  ? "Search token name, symbol or mint…" :
                   searchCategory === "kol"     ? "Search KOL name or @handle…" :
@@ -918,7 +916,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   {kolMatches.map(k => (
                     <button key={k.addr} onMouseDown={() => { window.open(`https://x.com/${k.tw}`, "_blank"); setSearchOpen(false); }}
                       style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "transparent", border: "none", borderBottom: "1px solid #18181b", cursor: "pointer", textAlign: "left" }}>
-                      <div style={{ width: 26, height: 26, borderRadius: "50%", background: k.c + "25", border: `1px solid ${k.c}50`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: k.c, flexShrink: 0 }}>{k.name[0]}</div>
+                      <div style={{ width: 26, height: 26, borderRadius: "50%", overflow: "hidden", border: `1px solid ${k.c}50`, flexShrink: 0, background: k.c + "25" }}>
+                        <img src={`https://unavatar.io/twitter/${k.tw}`} alt={k.name} width={26} height={26} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: "#f4f4f5" }}>{k.name}</div>
                         <div style={{ fontSize: 9, color: "#52525b", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>@{k.tw} · {k.addr.slice(0,8)}…</div>
@@ -960,6 +960,11 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                     return (
                       <button key={i} onMouseDown={() => { setDexToken({ address: p.baseToken.address, symbol: p.baseToken.symbol }); setSearchQ(""); setSearchResults([]); }}
                         style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "transparent", border: "none", borderBottom: "1px solid #18181b", cursor: "pointer", textAlign: "left" }}>
+                        {p.info?.imageUrl ? (
+                          <img src={p.info.imageUrl} alt={p.baseToken.symbol} width={26} height={26} style={{ borderRadius: "50%", flexShrink: 0, objectFit: "cover" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                        ) : (
+                          <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#27272a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "#71717a", flexShrink: 0 }}>{p.baseToken.symbol.slice(0,2)}</div>
+                        )}
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             <span style={{ fontSize: 12, fontWeight: 800, color: "#f4f4f5" }}>${p.baseToken.symbol}</span>

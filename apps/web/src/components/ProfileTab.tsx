@@ -71,6 +71,23 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile }: Pr
   const [swapMint, setSwapMint]     = useState("");
   const [swapMode, setSwapMode]     = useState<"buy" | "sell">("buy");
 
+  const [pumpProfile, setPumpProfile] = useState<{ username?: string; bio?: string; profile_image?: string } | null>(null);
+  const [pumpCoins, setPumpCoins]     = useState<{ mint: string; name: string; symbol: string; image_uri?: string; market_cap?: number }[]>([]);
+  const [pumpLoading, setPumpLoading] = useState(false);
+
+  useEffect(() => {
+    if (!wallet) return;
+    setPumpLoading(true);
+    fetch(`/api/pump/profile?wallet=${wallet}`)
+      .then(r => r.json())
+      .then((d: { profile: { username?: string; bio?: string; profile_image?: string } | null; coins: { mint: string; name: string; symbol: string; image_uri?: string; market_cap?: number }[] }) => {
+        setPumpProfile(d.profile ?? null);
+        setPumpCoins(d.coins ?? []);
+      })
+      .catch(() => {})
+      .finally(() => setPumpLoading(false));
+  }, [wallet]);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem("geass_profile");
@@ -254,6 +271,63 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile }: Pr
             Solscan <IconArrowUpRight size={10} />
           </a>
         </div>
+      </div>
+
+      {/* Pump.fun Profile Sync */}
+      <div style={{ ...CARD, border: "1px solid #10b98130", background: "#0b1510" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <img src="https://pump.fun/favicon.ico" alt="pump.fun" width={14} height={14} style={{ borderRadius: 3 }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#10b981" }}>Pump.fun Profile</span>
+          </div>
+          {pumpLoading && <span style={{ fontSize: 9, color: "#52525b" }} className="pulse">Syncing…</span>}
+        </div>
+
+        {!pumpLoading && !pumpProfile && pumpCoins.length === 0 && (
+          <div style={{ textAlign: "center", padding: "16px 0", fontSize: 11, color: "#3f3f46" }}>
+            No pump.fun activity found for this wallet
+          </div>
+        )}
+
+        {pumpProfile && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, padding: "10px", background: "#0c0c0e", borderRadius: 10 }}>
+            {pumpProfile.profile_image ? (
+              <img src={pumpProfile.profile_image} alt="pump avatar" width={40} height={40} style={{ borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: "2px solid #10b98130" }} />
+            ) : (
+              <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#10b98115", border: "1px solid #10b98130", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>🎪</div>
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#f4f4f5" }}>{pumpProfile.username ?? "Anonymous"}</div>
+              {pumpProfile.bio && <div style={{ fontSize: 10, color: "#71717a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pumpProfile.bio}</div>}
+            </div>
+            <a href={`https://pump.fun/profile/${wallet}`} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: 9, color: "#10b981", textDecoration: "none", display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
+              View <IconArrowUpRight size={9} />
+            </a>
+          </div>
+        )}
+
+        {pumpCoins.length > 0 && (
+          <>
+            <div style={LABEL}>TOKENS LAUNCHED ({pumpCoins.length})</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: 8 }}>
+              {pumpCoins.map(c => (
+                <a key={c.mint} href={`https://pump.fun/${c.mint}`} target="_blank" rel="noopener noreferrer"
+                  style={{ textDecoration: "none", background: "#0c0c0e", border: "1px solid #1e1e21", borderRadius: 8, padding: "8px 6px", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                  {c.image_uri ? (
+                    <img src={c.image_uri} alt={c.symbol} width={32} height={32} style={{ borderRadius: "50%", objectFit: "cover" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                  ) : (
+                    <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#10b98120", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>🪙</div>
+                  )}
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "#f4f4f5", textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}>${c.symbol}</div>
+                  {c.market_cap != null && (
+                    <div style={{ fontSize: 8, color: "#52525b" }}>{c.market_cap >= 1e6 ? `$${(c.market_cap / 1e6).toFixed(1)}M` : c.market_cap >= 1e3 ? `$${(c.market_cap / 1e3).toFixed(0)}K` : `$${c.market_cap}`}</div>
+                  )}
+                </a>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Jupiter Quick Swap */}

@@ -162,7 +162,10 @@ export function HomeTab({ solPrice, solChange, feedTrades, trendingTokens, memeS
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {KOLS.map((k, i) => (
               <div key={k.addr} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 6px", borderRadius: 8, background: i % 2 === 0 ? "#0c0c0e" : "transparent" }}>
-                <div style={{ width: 20, height: 20, borderRadius: "50%", background: k.c + "22", border: `1px solid ${k.c}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 800, color: k.c, flexShrink: 0 }}>{i + 1}</div>
+                <span style={{ fontSize: 8, fontWeight: 800, color: k.c, width: 12, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
+                <div style={{ width: 24, height: 24, borderRadius: "50%", overflow: "hidden", border: `1px solid ${k.c}44`, flexShrink: 0, background: k.c + "22" }}>
+                  <img src={`https://unavatar.io/twitter/${k.tw}`} alt={k.name} width={24} height={24} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: "#f4f4f5" }}>{k.name}</div>
                   <div style={{ fontSize: 9, color: "#52525b" }}>@{k.tw} · {k.trades.toLocaleString()} trades</div>

@@ -42,15 +42,17 @@ export interface NavItem {
   mobile?: boolean;
   /** Only shown in the mobile bottom bar — hidden from the sidebar on all breakpoints. */
   mobileOnly?: boolean;
+  /** Hidden from the desktop/sidebar nav — accessible via mobile bottom bar or Home shortcuts. */
+  sidebarHidden?: boolean;
   /** Sub-items shown when the nav item expands (e.g. Settings). */
   sub?: { id: SettingsSection; label: string }[];
 }
 
 export const NAV: NavItem[] = [
   { id: "home",      label: "Home",                                                         iconId: "home",      mobile: true },
-  { id: "trades",    label: "Realtime Trades", mobileLabel: "KOL",     badge: "LIVE",  iconId: "broadcast", mobile: true },
-  { id: "trending",  label: "Trending",                                 badge: "NEW",   iconId: "flame",     mobile: true },
-  { id: "launch",    label: "Launch",                                                    iconId: "rocket",    mobile: true },
+  { id: "trades",    label: "Realtime Trades", mobileLabel: "KOL",     badge: "LIVE",  iconId: "broadcast", mobile: true, sidebarHidden: true },
+  { id: "trending",  label: "Trending",                                 badge: "NEW",   iconId: "flame",     mobile: true, sidebarHidden: true },
+  { id: "launch",    label: "Launch",                                                    iconId: "rocket",    mobile: true, sidebarHidden: true },
   { id: "gems",      label: "Alpha Scanner",   mobileLabel: "Scanner", badge: "PRO",   pro: true, iconId: "zap",    mobile: true },
   { id: "autosnipe", label: "Auto-Snipe",                               badge: "NEW",   pro: true, iconId: "target" },
   {
