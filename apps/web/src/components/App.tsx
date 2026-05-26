@@ -52,28 +52,52 @@ const APP_CSS = `
 @keyframes ticker-scroll{ 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
 @keyframes spin         { to{transform:rotate(360deg)} }
 @keyframes pulse-anim   { 0%,100%{opacity:1} 50%{opacity:.35} }
+@keyframes slide-in     { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
+@keyframes glow-pulse   { 0%,100%{box-shadow:0 0 0 0 rgba(244,63,94,0)} 50%{box-shadow:0 0 0 4px rgba(244,63,94,0.15)} }
+@keyframes fade-in      { from{opacity:0} to{opacity:1} }
 
-.live-dot     { width:7px;height:7px;border-radius:50%;flex-shrink:0;display:inline-block;animation:dot-pulse 2s ease-in-out infinite }
-.ticker-track { display:flex;animation:ticker-scroll 24s linear infinite;width:max-content }
-.ticker-track:hover { animation-play-state:paused }
-.spin  { animation:spin 1s linear infinite;display:inline-block }
-.pulse { animation:pulse-anim 1.5s ease-in-out infinite }
-
-::-webkit-scrollbar       { width:4px;height:4px }
+/* Scrollbar — ultra thin */
+::-webkit-scrollbar       { width:3px;height:3px }
 ::-webkit-scrollbar-track { background:transparent }
-::-webkit-scrollbar-thumb { background:#27272a;border-radius:4px }
-::-webkit-scrollbar-thumb:hover { background:#3f3f46 }
+::-webkit-scrollbar-thumb { background:#2d2d3a;border-radius:3px }
+::-webkit-scrollbar-thumb:hover { background:#3d3d50 }
 
-input[type=range] { -webkit-appearance:none;width:100%;height:4px;border-radius:2px;background:#27272a;outline:none;cursor:pointer }
-input[type=range]::-webkit-slider-thumb { -webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#ef4444;border:2px solid #09090b;cursor:pointer }
-input[type=range]::-moz-range-thumb     { width:14px;height:14px;border-radius:50%;background:#ef4444;border:2px solid #09090b;cursor:pointer;border:none }
+/* Cards */
+.g-card { background:#0f0f16;border:1px solid #1e1e2e;border-radius:16px;transition:border-color .2s,box-shadow .2s }
+.g-card:hover { border-color:#2d2d42;box-shadow:0 8px 32px rgba(0,0,0,0.5) }
 
-.nav-item:hover { background:#ffffff06 !important }
+/* Nav items */
+.nav-item { transition:background .15s,color .15s !important }
+.nav-item:hover { background:rgba(255,255,255,0.05) !important }
+.nav-item-active { background:rgba(244,63,94,0.08) !important; border-left:2px solid #f43f5e !important }
 
-/* Responsive grid helpers */
+/* Inputs */
+input,textarea,select { transition:border-color .15s,box-shadow .15s }
+input:focus,textarea:focus { border-color:#f43f5e44 !important;box-shadow:0 0 0 3px rgba(244,63,94,0.08) !important }
+
+/* Buttons */
+.btn-primary { background:linear-gradient(135deg,#f43f5e,#8b5cf6);border:none;color:#fff;font-weight:700;cursor:pointer;transition:opacity .15s,transform .1s }
+.btn-primary:hover { opacity:.9;transform:translateY(-1px) }
+.btn-primary:active { transform:translateY(0) }
+
+/* Grid helpers */
 .app-g4 { display:grid;grid-template-columns:repeat(4,1fr);gap:8px }
 .app-g3 { display:grid;grid-template-columns:repeat(3,1fr);gap:10px }
 .app-g2 { display:grid;grid-template-columns:1fr 1fr;gap:14px }
+
+/* Status dot */
+.live-dot { width:6px;height:6px;border-radius:50%;flex-shrink:0;display:inline-block;animation:dot-pulse 2s ease-in-out infinite }
+.spin  { animation:spin 1s linear infinite;display:inline-block }
+.pulse { animation:pulse-anim 1.5s ease-in-out infinite }
+
+/* Ticker */
+.ticker-track { display:flex;animation:ticker-scroll 28s linear infinite;width:max-content }
+.ticker-track:hover { animation-play-state:paused }
+
+/* Range input */
+input[type=range] { -webkit-appearance:none;width:100%;height:3px;border-radius:2px;background:#1e1e2e;outline:none;cursor:pointer }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:linear-gradient(135deg,#f43f5e,#8b5cf6);border:2px solid #050507;cursor:pointer;box-shadow:0 0 8px rgba(244,63,94,0.4) }
+input[type=range]::-moz-range-thumb     { width:14px;height:14px;border-radius:50%;background:linear-gradient(135deg,#f43f5e,#8b5cf6);cursor:pointer;border:none }
 
 @media (max-width:768px) {
   .app-g4 { grid-template-columns:1fr 1fr !important;gap:6px !important }
@@ -680,13 +704,15 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const sidebarContent = (
     <>
       {/* Header */}
-      <div style={{ height: 56, display: "flex", alignItems: "center", padding: sidebarCollapsed ? "0 10px" : "0 14px", borderBottom: "1px solid #18181b", gap: 8, flexShrink: 0, overflow: "hidden" }}>
+      <div style={{ height: 56, display: "flex", alignItems: "center", padding: sidebarCollapsed ? "0 10px" : "0 14px", borderBottom: "1px solid #151520", gap: 8, flexShrink: 0, overflow: "hidden" }}>
         <button onClick={() => { setTab("home" as typeof tab); }} style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: 0, flex: 1, minWidth: 0 }}>
-          <GeassLogo size={28} />
+          <div style={{ filter: "drop-shadow(0 0 6px rgba(244,63,94,0.35))", display: "flex" }}>
+            <GeassLogo size={28} />
+          </div>
           {!sidebarCollapsed && (
             <div style={{ overflow: "hidden" }}>
-              <span style={{ fontWeight: 800, fontSize: 13, color: "#f4f4f5", letterSpacing: "1.5px" }}>GEASS</span>
-              <div style={{ fontSize: 8, color: "#3f3f46", letterSpacing: "2px", marginTop: -1 }}>ALPHA RECON</div>
+              <span style={{ fontWeight: 800, fontSize: 13, background: "linear-gradient(90deg,#f4f4f5,#a1a1aa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: "1.5px" }}>GEASS</span>
+              <div style={{ fontSize: 8, color: "#3d3d50", letterSpacing: "2px", marginTop: -1 }}>ALPHA RECON</div>
             </div>
           )}
         </button>
@@ -729,13 +755,15 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   if (n.id !== "settings") setSettingsOpen(false);
                 }}
                 title={sidebarCollapsed ? n.label : undefined}
+                className="nav-item"
                 style={{
                   width: "100%", display: "flex", alignItems: "center",
                   gap: sidebarCollapsed ? 0 : 10,
                   padding: sidebarCollapsed ? "9px 0" : "9px 10px",
                   justifyContent: sidebarCollapsed ? "center" : "flex-start",
-                  borderRadius: 8,
-                  border: `1px solid ${isActive ? accentBd : "transparent"}`,
+                  borderRadius: sidebarCollapsed ? 8 : 7,
+                  border: isActive && !sidebarCollapsed ? "none" : `1px solid ${isActive ? accentBd : "transparent"}`,
+                  borderLeft: !sidebarCollapsed && isActive ? `2px solid ${accent}` : undefined,
                   background: isActive ? accentBg : "transparent",
                   color: isActive ? accent : n.pro ? "#6d4aab" : "#71717a",
                   cursor: "pointer", marginBottom: 2,
@@ -748,9 +776,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                     {n.badge && (
                       <span style={{ fontSize: 7, fontWeight: 700,
                         color: n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981",
-                        background: (n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981") + "20",
-                        border: `1px solid ${(n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981") + "40"}`,
-                        padding: "1px 5px", borderRadius: 8 }}>
+                        background: (n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981") + "18",
+                        border: `1px solid ${(n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981") + "35"}`,
+                        padding: "1px 6px", borderRadius: 99, letterSpacing: ".3px" }}>
                         {n.badge}
                       </span>
                     )}
@@ -797,7 +825,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
       </nav>
 
       {/* Footer */}
-      <div style={{ padding: sidebarCollapsed ? "8px 4px" : 8, borderTop: "1px solid #18181b", display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ padding: sidebarCollapsed ? "8px 4px" : 8, borderTop: "1px solid #151520", display: "flex", flexDirection: "column", gap: 6 }}>
         {!sidebarCollapsed && pro.active && (
           <div style={{ padding: "5px 10px", background: "linear-gradient(135deg,#dc262615,#7c3aed20)", border: "1px solid #7c3aed40", borderRadius: 7, fontSize: 9, color: "#a855f7", fontWeight: 700, letterSpacing: ".5px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
@@ -841,7 +869,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   );
 
   return (
-    <div style={{ display: "flex", height: "100dvh", background: "#09090b", color: "#f4f4f5", fontFamily: "'Inter',system-ui,sans-serif", overflow: "hidden", position: "relative" }}>
+    <div style={{ display: "flex", height: "100dvh", background: "#050507", color: "#f4f4f5", fontFamily: "'Inter',system-ui,sans-serif", overflow: "hidden", position: "relative" }}>
       <style dangerouslySetInnerHTML={{ __html: APP_CSS }} />
 
       {/* Mobile overlay backdrop */}
@@ -852,12 +880,12 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
       {/* Sidebar — desktop: always visible; mobile: drawer */}
       {!isMobile ? (
-        <aside style={{ width: sidebarCollapsed ? 52 : 200, background: "#0c0c0e", borderRight: "1px solid #18181b", display: "flex", flexDirection: "column", flexShrink: 0, transition: "width .2s ease" }}>
+        <aside style={{ width: sidebarCollapsed ? 52 : 200, background: "#08080d", borderRight: "1px solid #151520", display: "flex", flexDirection: "column", flexShrink: 0, transition: "width .2s ease" }}>
           {sidebarContent}
         </aside>
       ) : (
         <aside style={{
-          position: "fixed", top: 0, left: 0, bottom: 0, width: 230, background: "#0c0c0e", borderRight: "1px solid #18181b",
+          position: "fixed", top: 0, left: 0, bottom: 0, width: 230, background: "#08080d", borderRight: "1px solid #151520",
           display: "flex", flexDirection: "column", zIndex: 50,
           transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)",
           transition: "transform .25s ease",
@@ -869,13 +897,15 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Mobile top bar */}
         {isMobile && (
-          <div style={{ height: 50, background: "#0c0c0e", borderBottom: "1px solid #18181b", display: "flex", alignItems: "center", padding: "0 14px", gap: 10, flexShrink: 0 }}>
+          <div style={{ height: 50, background: "#08080d", borderBottom: "1px solid #151520", display: "flex", alignItems: "center", padding: "0 14px", gap: 10, flexShrink: 0 }}>
             <button onClick={() => setSidebarOpen(true)} aria-label="Open menu"
               style={{ background: "transparent", border: "1px solid #27272a", color: "#a1a1aa", width: 32, height: 32, borderRadius: 7, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <IconMenu size={16} />
             </button>
-            <GeassLogo size={22} />
-            <span style={{ fontWeight: 800, fontSize: 12, letterSpacing: "1.5px" }}>GEASS</span>
+            <div style={{ filter: "drop-shadow(0 0 5px rgba(244,63,94,0.3))", display: "flex" }}>
+              <GeassLogo size={22} />
+            </div>
+            <span style={{ fontWeight: 800, fontSize: 12, letterSpacing: "1.5px", background: "linear-gradient(90deg,#f4f4f5,#a1a1aa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>GEASS</span>
             {solPrice && (
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <IconSolana size={12} />
@@ -2295,19 +2325,21 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
         {/* Mobile bottom tab bar — only essential items, settings lives in hamburger */}
         {isMobile && (
-          <nav style={{ height: 60, background: "#0c0c0e", borderTop: "1px solid #18181b", display: "flex", alignItems: "stretch", flexShrink: 0 }}>
+          <nav style={{ height: 60, background: "#08080d", borderTop: "1px solid #151520", display: "flex", alignItems: "stretch", flexShrink: 0 }}>
             {NAV.filter(n => n.mobile).map(n => {
               const isActive = tab === n.id;
-              const accent = n.pro ? "#a855f7" : "#ef4444";
+              const accent = n.pro ? "#a855f7" : "#f43f5e";
               return (
                 <button key={n.id} onClick={() => { setTab(n.id as typeof tab); setSettingsOpen(false); }}
                   style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
-                    background: "transparent", border: "none", cursor: "pointer",
-                    color: isActive ? accent : "#52525b",
+                    background: isActive ? (n.pro ? "rgba(168,85,247,0.06)" : "rgba(244,63,94,0.06)") : "transparent",
+                    border: "none", cursor: "pointer",
+                    color: isActive ? accent : "#4a4a5a",
                     borderTop: isActive ? `2px solid ${accent}` : "2px solid transparent",
+                    transition: "background .15s, color .15s",
                   }}>
                   <NavIcon id={n.iconId} size={18} />
-                  <span style={{ fontSize: 9, fontWeight: isActive ? 700 : 500 }}>{n.mobileLabel ?? n.label}</span>
+                  <span style={{ fontSize: 9, fontWeight: isActive ? 700 : 500, letterSpacing: isActive ? ".3px" : "0" }}>{n.mobileLabel ?? n.label}</span>
                 </button>
               );
             })}
