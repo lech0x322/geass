@@ -8,20 +8,38 @@ import type { UseInternalWallet } from "@/lib/useInternalWallet";
 
 const RPC = process.env.NEXT_PUBLIC_RPC_URL ?? "https://api.mainnet-beta.solana.com";
 
+const MONO = "'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace";
+const RED = "#ff2b4e";
+
 const CARD: React.CSSProperties = {
-  background: "#0f0f16",
-  border: "1px solid #1e1e2e",
-  borderRadius: 16,
-  padding: "20px",
+  background: "#050506",
+  border: "1px solid #18181c",
+  borderRadius: 0,
+  padding: "22px",
+  position: "relative",
 };
 
 const LABEL: React.CSSProperties = {
   fontSize: 9,
-  color: "#475569",
-  letterSpacing: "1.5px",
+  color: "#5a5a63",
+  letterSpacing: "2px",
   fontWeight: 700,
   marginBottom: 8,
+  fontFamily: MONO,
 };
+
+/* section header — [ LABEL ] bracket + bold title */
+const SectionHead = ({ label, title, color }: { label: string; title: string; color: string }) => (
+  <div style={{ marginBottom: 16 }}>
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 7, fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: "2.5px", color, marginBottom: 8 }}>
+      <span style={{ color: "#2a2a30" }}>[</span>
+      <span style={{ width: 5, height: 5, background: color, display: "inline-block" }} />
+      {label}
+      <span style={{ color: "#2a2a30" }}>]</span>
+    </div>
+    <div style={{ fontSize: 15, fontWeight: 700, color: "#f5f5f7", letterSpacing: ".3px" }}>{title}</div>
+  </div>
+);
 
 const EMOJIS = ["🧠", "🦊", "🐉", "🌑", "⚡", "🎯", "💎", "🔥", "🏹", "🐋", "🦁", "🌙", "🚀", "👾", "🤖"];
 
@@ -158,54 +176,53 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile, iw }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
-      {/* Profile card — glass morphism */}
-      <div style={{ ...CARD, position: "relative", overflow: "hidden", background: "linear-gradient(135deg,#0f0f16,#0c0a16,#0f0f16)" }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: isPro ? "linear-gradient(90deg,#10b981,#8b5cf6)" : "linear-gradient(90deg,#f43f5e,#f97316)" }} />
-        <div style={{ position: "absolute", top: -30, right: -30, width: 120, height: 120, borderRadius: "50%", background: isPro ? "#8b5cf606" : "#f43f5e06", filter: "blur(40px)" }} />
+      {/* Profile card — flat with left accent bar */}
+      <div style={{ ...CARD }}>
+        <div style={{ position: "absolute", top: 0, left: 0, width: 2, height: "100%", background: isPro ? "#8b5cf6" : RED }} />
 
         <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
-          {/* Avatar with colored ring */}
+          {/* Avatar — square with accent border + glow */}
           <div style={{ position: "relative", width: 60, height: 60, flexShrink: 0 }}>
-            <div style={{ width: 60, height: 60, borderRadius: "50%", padding: 2, background: isPro ? "linear-gradient(135deg,#10b981,#8b5cf6)" : "linear-gradient(135deg,#f43f5e,#f97316)", boxShadow: isPro ? "0 0 20px rgba(139,92,246,0.4)" : "0 0 20px rgba(244,63,94,0.3)" }}>
+            <div style={{ width: 60, height: 60, border: `1px solid ${isPro ? "#8b5cf6" : RED}`, boxShadow: isPro ? "0 0 18px #8b5cf640" : `0 0 18px ${RED}40`, background: "#070708" }}>
               {avatar ? (
-                <img src={avatar} alt="avatar" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover", border: "2px solid #0f0f16" }} />
+                <img src={avatar} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               ) : (
-                <div style={{ width: "100%", height: "100%", borderRadius: "50%", background: "#151520", border: "2px solid #0f0f16", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>
+                <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>
                   {emoji}
                 </div>
               )}
             </div>
-            <label title="Upload photo" style={{ position: "absolute", bottom: 0, right: 0, width: 22, height: 22, borderRadius: "50%", background: "#151520", border: "1px solid #2d2d42", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }}>
-              <IconCamera size={10} style={{ color: "#94a3b8" }} />
+            <label title="Upload photo" style={{ position: "absolute", bottom: -1, right: -1, width: 22, height: 22, background: "#0c0c0e", border: "1px solid #2a2a30", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+              <IconCamera size={10} style={{ color: "#9a9aa2" }} />
               <input type="file" accept="image/*" onChange={uploadAvatar} style={{ display: "none" }} />
             </label>
           </div>
 
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 17, fontWeight: 800, background: "linear-gradient(90deg,#f1f5f9,#94a3b8)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{username}</span>
+              <span style={{ fontSize: 17, fontWeight: 800, color: "#f5f5f7", letterSpacing: "-.3px" }}>{username}</span>
               {isPro && <IconVerified size={18} />}
               {isPro && (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 700, color: "#a78bfa", background: "linear-gradient(135deg,#8b5cf620,#7c3aed20)", border: "1px solid #8b5cf640", padding: "3px 9px", borderRadius: 20 }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 700, color: RED, background: "transparent", border: `1px solid ${RED}`, padding: "3px 9px", borderRadius: 0, fontFamily: MONO, letterSpacing: "1px" }}>
                   <IconCrown size={9} /> PRO
                 </span>
               )}
             </div>
             <button onClick={copyWallet}
-              style={{ marginTop: 5, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontFamily: "monospace", color: "#475569", background: "#0a0a0f", border: "1px solid #1e1e2e", borderRadius: 8, padding: "4px 10px", cursor: "pointer" }}>
+              style={{ marginTop: 7, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontFamily: MONO, color: "#9a9aa2", background: "#070708", border: "1px solid #18181c", borderRadius: 0, padding: "5px 11px", cursor: "pointer" }}>
               {shortWallet}
               {copied ? <IconCheck size={11} style={{ color: "#10b981" }} /> : <IconCopy size={11} />}
             </button>
           </div>
 
           <button onClick={() => { setDraftName(username); setDraftEmoji(emoji); setEditing(!editing); }}
-            style={{ padding: "7px 14px", borderRadius: 10, border: "1px solid #2d2d42", background: "transparent", color: "#94a3b8", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
-            {editing ? "Cancel" : "Edit"}
+            style={{ padding: "7px 14px", borderRadius: 0, border: "1px solid #18181c", background: "transparent", color: "#9a9aa2", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0, fontFamily: MONO, letterSpacing: ".5px" }}>
+            {editing ? "CANCEL" : "EDIT"}
           </button>
         </div>
 
         {editing && (
-          <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 14, background: "#0a0a0f", borderRadius: 12, padding: 16, border: "1px solid #1e1e2e" }}>
+          <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 14, background: "#070708", borderRadius: 0, padding: 16, border: "1px solid #18181c" }}>
             <div>
               <div style={LABEL}>USERNAME</div>
               <input
@@ -213,7 +230,9 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile, iw }
                 onChange={e => setDraftName(e.target.value)}
                 maxLength={24}
                 placeholder="Anon Trader"
-                style={{ width: "100%", background: "#0f0f16", border: "1px solid #2d2d42", borderRadius: 8, padding: "9px 12px", color: "#f1f5f9", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                onFocus={e => { e.currentTarget.style.borderColor = RED; }}
+                onBlur={e => { e.currentTarget.style.borderColor = "#18181c"; }}
+                style={{ width: "100%", background: "#000", border: "1px solid #18181c", borderRadius: 0, padding: "9px 12px", color: "#f5f5f7", fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: MONO }}
               />
             </div>
             <div>
@@ -221,15 +240,15 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile, iw }
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {EMOJIS.map(e => (
                   <button key={e} onClick={() => setDraftEmoji(e)}
-                    style={{ width: 38, height: 38, borderRadius: 10, border: `2px solid ${draftEmoji === e ? "#f43f5e" : "#1e1e2e"}`, background: draftEmoji === e ? "#f43f5e18" : "#0f0f16", fontSize: 18, cursor: "pointer", transition: "all 0.15s" }}>
+                    style={{ width: 38, height: 38, borderRadius: 0, border: `1px solid ${draftEmoji === e ? RED : "#18181c"}`, background: draftEmoji === e ? `${RED}18` : "#000", fontSize: 18, cursor: "pointer", transition: "all 0.15s" }}>
                     {e}
                   </button>
                 ))}
               </div>
             </div>
             <button onClick={saveProfile}
-              style={{ alignSelf: "flex-start", padding: "9px 22px", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#f43f5e,#e11d48)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 16px rgba(244,63,94,0.3)" }}>
-              Save Profile
+              style={{ alignSelf: "flex-start", padding: "9px 22px", borderRadius: 0, border: `1px solid ${RED}`, background: RED, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: MONO, letterSpacing: ".5px" }}>
+              SAVE PROFILE ▸
             </button>
           </div>
         )}

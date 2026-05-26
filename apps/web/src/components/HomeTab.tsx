@@ -6,12 +6,38 @@ import type { FeedTrade } from "@/lib/types";
 import type { TrendingToken, MemeSignal, XSignal } from "@/lib/api";
 import { IconBroadcast, IconFlame, IconZap, IconRocket, IconSolana, IconArrowUpRight, IconCrown, IconTarget, IconActivity } from "./icons";
 
+const MONO = "'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace";
+const RED = "#ff2b4e";
+
 const CARD: React.CSSProperties = {
-  background: "#0f0f16",
-  border: "1px solid #1e1e2e",
-  borderRadius: 16,
+  background: "#050506",
+  border: "1px solid #18181c",
+  borderRadius: 0,
   padding: "20px",
+  position: "relative",
 };
+
+// small mono bracket section heading: [ LABEL ]
+const SectionHead = ({ label, color = RED, action, children }: { label: string; color?: string; action?: React.ReactNode; children: React.ReactNode }) => (
+  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+    <div>
+      <div style={{ display: "inline-flex", alignItems: "center", gap: 7, marginBottom: 8, fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: "2.5px", color }}>
+        <span style={{ color: "#2a2a30" }}>[</span>
+        <span style={{ width: 5, height: 5, background: color, display: "inline-block" }} />
+        {label}
+        <span style={{ color: "#2a2a30" }}>]</span>
+      </div>
+      {children}
+    </div>
+    {action}
+  </div>
+);
+
+const viewBtn = (onClick: () => void, txt: string): React.ReactNode => (
+  <button onClick={onClick} style={{ background: "transparent", border: "1px solid #18181c", color: "#9a9aa2", fontSize: 9, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, padding: "5px 11px", fontFamily: MONO, letterSpacing: ".5px" }}>
+    {txt} <span style={{ color: RED }}>▸</span>
+  </button>
+);
 
 const fmtAge = (ago: number) => {
   if (ago < 60)    return `${ago}s`;
@@ -46,69 +72,72 @@ export function HomeTab({ solPrice, solChange, feedTrades, trendingTokens, memeS
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
       {/* Hero */}
-      <div style={{ position: "relative", background: "linear-gradient(135deg,#0a0612,#0c0810,#0f0c1a)", border: "1px solid #1e1e2e", borderRadius: 16, padding: isMobile ? "22px 18px" : "28px 28px", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg,#f43f5e,#f97316,#eab308)" }} />
-        <div style={{ position: "absolute", bottom: -60, right: -30, width: 200, height: 200, borderRadius: "50%", background: "#f43f5e06", filter: "blur(60px)" }} />
-        <div style={{ position: "absolute", top: -40, right: 60, width: 140, height: 140, borderRadius: "50%", background: "#8b5cf606", filter: "blur(50px)" }} />
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 9, color: "#f43f5e", fontWeight: 700, letterSpacing: "2.5px", marginBottom: 10, background: "#f43f5e12", border: "1px solid #f43f5e30", padding: "3px 10px", borderRadius: 20 }}>
-          <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#f43f5e", display: "inline-block", animation: "pulse 1.5s infinite" }} />
-          GEASS ALPHA RECON
+      <div style={{ position: "relative", background: "#050506", border: "1px solid #18181c", borderRadius: 0, padding: isMobile ? "22px 18px" : "30px 28px", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, width: 2, height: "100%", background: RED }} />
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 9, color: RED, fontWeight: 600, letterSpacing: "2.5px", marginBottom: 14, fontFamily: MONO }}>
+          <span style={{ color: "#2a2a30" }}>[</span>
+          <span style={{ position: "relative", display: "inline-flex", width: 6, height: 6 }}>
+            <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: RED, animation: "pulse 1.6s infinite" }} />
+            <span style={{ position: "relative", display: "block", width: 6, height: 6, borderRadius: "50%", background: RED }} />
+          </span>
+          GEASS_ALPHA_RECON
+          <span style={{ color: "#2a2a30" }}>]</span>
         </div>
-        <h1 style={{ fontSize: isMobile ? 22 : 30, fontWeight: 900, color: "#f1f5f9", letterSpacing: "-.5px", marginBottom: 8, lineHeight: 1.1 }}>
-          <span style={{ background: "linear-gradient(90deg,#f43f5e,#f97316)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Meme Intel.</span><br />
-          <span style={{ color: "#94a3b8", fontSize: isMobile ? 17 : 22, fontWeight: 700 }}>Before Everyone.</span>
+        <h1 style={{ fontSize: isMobile ? 24 : 34, fontWeight: 800, color: "#f5f5f7", letterSpacing: "-1.5px", marginBottom: 10, lineHeight: 1.02, textTransform: "uppercase" }}>
+          <span style={{ color: RED }}>Meme Intel.</span><br />
+          <span style={{ color: "#9a9aa2", fontSize: isMobile ? 18 : 24, fontWeight: 800 }}>Before Everyone.</span>
         </h1>
-        <p style={{ fontSize: 12, color: "#475569", marginBottom: 20, lineHeight: 1.7, maxWidth: 400 }}>
+        <p style={{ fontSize: 12, color: "#5a5a63", marginBottom: 22, lineHeight: 1.7, maxWidth: 400, fontFamily: MONO }}>
           Real-time KOL tracking, meme scanner &amp; alpha signals — all in one terminal.
         </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={() => onNavigate("trades")} style={{ padding: "9px 18px", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#f43f5e,#e11d48)", color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, boxShadow: "0 4px 16px rgba(244,63,94,0.35)" }}>
-            <IconBroadcast size={11} /> Live KOL Feed
+          <button onClick={() => onNavigate("trades")} style={{ padding: "11px 20px", borderRadius: 0, border: `1px solid ${RED}`, background: RED, color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: MONO, letterSpacing: ".5px" }}>
+            <IconBroadcast size={11} /> LIVE KOL FEED ▸
           </button>
-          <button onClick={() => onNavigate("gems")} style={{ padding: "9px 18px", borderRadius: 10, border: "1px solid #2d2d42", background: "#0a0a0f", color: "#94a3b8", fontSize: 11, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
-            <IconZap size={11} /> Scan Alpha
+          <button onClick={() => onNavigate("gems")} style={{ padding: "11px 20px", borderRadius: 0, border: "1px solid #18181c", background: "transparent", color: "#9a9aa2", fontSize: 11, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: MONO, letterSpacing: ".5px" }}>
+            <IconZap size={11} /> SCAN ALPHA
           </button>
-          <button onClick={() => onNavigate("trending")} style={{ padding: "9px 18px", borderRadius: 10, border: "1px solid #2d2d42", background: "#0a0a0f", color: "#94a3b8", fontSize: 11, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
-            <IconFlame size={11} /> Trending
+          <button onClick={() => onNavigate("trending")} style={{ padding: "11px 20px", borderRadius: 0, border: "1px solid #18181c", background: "transparent", color: "#9a9aa2", fontSize: 11, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: MONO, letterSpacing: ".5px" }}>
+            <IconFlame size={11} /> TRENDING
           </button>
         </div>
       </div>
 
       {/* Market Pulse */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: 1, background: "#18181c", border: "1px solid #18181c" }}>
         {/* SOL Price */}
-        <div style={{ ...CARD, background: "#0f0f16", position: "relative", overflow: "hidden" }}>
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg,#10b981,#059669)", borderRadius: "16px 16px 0 0" }} />
-          <div style={{ fontSize: 9, color: "#475569", letterSpacing: "1.5px", marginBottom: 8, display: "flex", alignItems: "center", gap: 4, paddingTop: 4 }}>
-            <IconSolana size={9} /> SOL PRICE
+        <div style={{ background: "#050506", padding: "20px", position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: 0, left: 0, width: 2, height: "100%", background: "#10b981" }} />
+          <div style={{ fontSize: 9, color: "#5a5a63", letterSpacing: "1.5px", marginBottom: 10, display: "flex", alignItems: "center", gap: 5, fontFamily: MONO }}>
+            <IconSolana size={9} /> SOL_PRICE
           </div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#f1f5f9" }}>{solPrice ? `$${solPrice.toFixed(2)}` : "—"}</div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: solChange >= 0 ? "#10b981" : "#f43f5e", marginTop: 3 }}>
+          <div style={{ fontSize: 24, fontWeight: 700, color: "#f5f5f7", fontFamily: MONO, letterSpacing: "-1px" }}>{solPrice ? `$${solPrice.toFixed(2)}` : "—"}</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: solChange >= 0 ? "#10b981" : RED, marginTop: 4, fontFamily: MONO }}>
             {solChange !== 0 ? `${solChange >= 0 ? "+" : ""}${solChange.toFixed(2)}% 24h` : "—"}
           </div>
         </div>
         {/* KOLs Tracked */}
-        <div style={{ ...CARD, position: "relative", overflow: "hidden" }}>
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg,#f59e0b,#d97706)", borderRadius: "16px 16px 0 0" }} />
-          <div style={{ fontSize: 9, color: "#475569", letterSpacing: "1.5px", marginBottom: 8, paddingTop: 4 }}>KOLs TRACKED</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#f1f5f9" }}>{KOLS.length}</div>
-          <div style={{ fontSize: 10, color: "#475569", marginTop: 3 }}>Elite wallets</div>
+        <div style={{ background: "#050506", padding: "20px", position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: 0, left: 0, width: 2, height: "100%", background: "#f59e0b" }} />
+          <div style={{ fontSize: 9, color: "#5a5a63", letterSpacing: "1.5px", marginBottom: 10, fontFamily: MONO }}>KOLS_TRACKED</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: "#f5f5f7", fontFamily: MONO, letterSpacing: "-1px" }}>{KOLS.length}</div>
+          <div style={{ fontSize: 10, color: "#5a5a63", marginTop: 4, fontFamily: MONO }}>elite wallets</div>
         </div>
         {/* Live Signals */}
-        <div style={{ ...CARD, position: "relative", overflow: "hidden" }}>
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: feedTrades.length > 0 ? "linear-gradient(90deg,#f43f5e,#e11d48)" : "linear-gradient(90deg,#1e1e2e,#2d2d42)", borderRadius: "16px 16px 0 0" }} />
-          <div style={{ fontSize: 9, color: "#475569", letterSpacing: "1.5px", marginBottom: 8, paddingTop: 4 }}>LIVE SIGNALS</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: feedTrades.length > 0 ? "#10b981" : "#f1f5f9" }}>{feedTrades.length}</div>
-          <div style={{ fontSize: 10, color: "#475569", marginTop: 3 }}>KOL trades</div>
+        <div style={{ background: "#050506", padding: "20px", position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: 0, left: 0, width: 2, height: "100%", background: feedTrades.length > 0 ? RED : "#2a2a30" }} />
+          <div style={{ fontSize: 9, color: "#5a5a63", letterSpacing: "1.5px", marginBottom: 10, fontFamily: MONO }}>LIVE_SIGNALS</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: feedTrades.length > 0 ? "#10b981" : "#f5f5f7", fontFamily: MONO, letterSpacing: "-1px" }}>{feedTrades.length}</div>
+          <div style={{ fontSize: 10, color: "#5a5a63", marginTop: 4, fontFamily: MONO }}>kol trades</div>
         </div>
         {/* Quick Launch */}
-        <div style={{ ...CARD, cursor: "pointer", position: "relative", overflow: "hidden" }} onClick={() => onNavigate("launch")}>
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg,#3b82f6,#2563eb)", borderRadius: "16px 16px 0 0" }} />
-          <div style={{ fontSize: 9, color: "#475569", letterSpacing: "1.5px", marginBottom: 8, paddingTop: 4 }}>QUICK LAUNCH</div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#3b82f6", display: "flex", alignItems: "center", gap: 5 }}>
-            <IconRocket size={14} /> Launch
+        <div style={{ background: "#050506", padding: "20px", cursor: "pointer", position: "relative", overflow: "hidden" }} onClick={() => onNavigate("launch")}>
+          <div style={{ position: "absolute", top: 0, left: 0, width: 2, height: "100%", background: "#3b82f6" }} />
+          <div style={{ fontSize: 9, color: "#5a5a63", letterSpacing: "1.5px", marginBottom: 10, fontFamily: MONO }}>QUICK_LAUNCH</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#3b82f6", display: "flex", alignItems: "center", gap: 6, fontFamily: MONO, letterSpacing: "-.5px" }}>
+            <IconRocket size={14} /> LAUNCH ▸
           </div>
-          <div style={{ fontSize: 10, color: "#475569", marginTop: 3 }}>New Pump.fun token</div>
+          <div style={{ fontSize: 10, color: "#5a5a63", marginTop: 4, fontFamily: MONO }}>new pump.fun token</div>
         </div>
       </div>
 
