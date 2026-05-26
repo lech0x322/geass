@@ -143,50 +143,46 @@ export function HomeTab({ solPrice, solChange, feedTrades, trendingTokens, memeS
 
       {/* Top Boosted Memecoins */}
       <div style={CARD}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#f1f5f9", display: "flex", alignItems: "center", gap: 7 }}>
-            <IconFlame size={14} style={{ color: "#f97316" }} />
-            <span style={{ background: "linear-gradient(90deg,#f97316,#f59e0b)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Top Boosted</span>
-            <span style={{ color: "#f1f5f9" }}>Memecoins</span>
-            {trendingLoading && <span style={{ fontSize: 9, color: "#475569" }} className="pulse">Loading…</span>}
+        <div style={{ position: "absolute", top: 0, left: 0, width: 2, height: "100%", background: "#f59e0b" }} />
+        <SectionHead label="TOP_BOOSTED" color="#f59e0b" action={viewBtn(() => onNavigate("trending"), "VIEW ALL")}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 800, color: "#f5f5f7", letterSpacing: "-.5px", textTransform: "uppercase" }}>
+            <IconFlame size={14} style={{ color: "#f59e0b" }} /> Boosted Memecoins
+            {trendingLoading && <span style={{ fontSize: 9, color: "#5a5a63", fontFamily: MONO }} className="pulse">LOADING…</span>}
           </div>
-          <button onClick={() => onNavigate("trending")} style={{ background: "transparent", border: "none", color: "#475569", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 3, transition: "color 0.15s" }}>
-            View all <IconArrowUpRight size={10} />
-          </button>
-        </div>
+        </SectionHead>
         {topMemecoins.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "24px 0", fontSize: 12, color: "#475569", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+          <div style={{ textAlign: "center", padding: "24px 0", fontSize: 11, color: "#5a5a63", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, fontFamily: MONO }}>
             <div style={{ fontSize: 28, opacity: 0.3 }}>🔥</div>
-            {trendingLoading ? "Fetching DEX Screener…" : "No data — navigate to Trending first"}
+            {trendingLoading ? "FETCHING DEX SCREENER…" : "NO DATA — NAVIGATE TO TRENDING FIRST"}
           </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(5,1fr)", gap: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(5,1fr)", gap: 1, background: "#18181c", border: "1px solid #18181c" }}>
             {topMemecoins.map((t, i) => (
               <a key={t.address} href={t.dexUrl} target="_blank" rel="noopener noreferrer"
-                style={{ textDecoration: "none", display: "flex", flexDirection: isMobile ? "row" : "column", alignItems: isMobile ? "center" : "flex-start", gap: isMobile ? 10 : 8, padding: "12px 10px", background: "#0a0a0f", borderRadius: 12, border: "1px solid #1e1e2e", transition: "all 0.2s" }}
-                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "#2d2d42"; (e.currentTarget as HTMLAnchorElement).style.transform = "translateY(-1px)"; (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 8px 32px rgba(0,0,0,0.4)"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "#1e1e2e"; (e.currentTarget as HTMLAnchorElement).style.transform = "none"; (e.currentTarget as HTMLAnchorElement).style.boxShadow = "none"; }}>
+                style={{ textDecoration: "none", display: "flex", flexDirection: isMobile ? "row" : "column", alignItems: isMobile ? "center" : "flex-start", gap: isMobile ? 10 : 8, padding: "12px 12px", background: "#050506", borderRadius: 0, transition: "background 0.15s" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = "#0d0d10"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = "#050506"; }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, flex: isMobile ? 1 : undefined }}>
                   {t.icon
-                    ? <img src={t.icon} alt={t.symbol} width={26} height={26} style={{ borderRadius: "50%", flexShrink: 0, border: "1px solid #1e1e2e" }} />
-                    : <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#151520", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "#475569", flexShrink: 0, border: "1px solid #1e1e2e" }}>{i + 1}</div>
+                    ? <img src={t.icon} alt={t.symbol} width={26} height={26} style={{ borderRadius: "50%", flexShrink: 0, border: "1px solid #18181c" }} />
+                    : <div style={{ width: 26, height: 26, borderRadius: 0, background: "#0a0a0c", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, color: "#5a5a63", flexShrink: 0, border: "1px solid #18181c", fontFamily: MONO }}>{i + 1}</div>
                   }
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#f1f5f9" }}>${t.symbol}</div>
-                    {isMobile && <div style={{ fontSize: 9, color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 120 }}>{t.name}</div>}
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#f5f5f7", fontFamily: MONO }}>${t.symbol}</div>
+                    {isMobile && <div style={{ fontSize: 9, color: "#5a5a63", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 120, fontFamily: MONO }}>{t.name}</div>}
                   </div>
                 </div>
                 <div style={{ display: "flex", flexDirection: isMobile ? "row" : "column", gap: isMobile ? 12 : 3, alignItems: isMobile ? "center" : "flex-start" }}>
                   {t.priceChange24 !== null && (
-                    <div style={{ fontSize: 11, fontWeight: 700, color: t.priceChange24 >= 0 ? "#10b981" : "#f43f5e" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: t.priceChange24 >= 0 ? "#10b981" : RED, fontFamily: MONO }}>
                       {t.priceChange24 >= 0 ? "+" : ""}{t.priceChange24.toFixed(1)}%
                     </div>
                   )}
-                  <div style={{ fontSize: 9, color: "#f97316", display: "flex", alignItems: "center", gap: 3, background: "#f9731610", padding: "2px 6px", borderRadius: 6 }}>
+                  <div style={{ fontSize: 9, color: "#f59e0b", display: "flex", alignItems: "center", gap: 3, border: "1px solid #f59e0b35", padding: "2px 6px", borderRadius: 0, fontFamily: MONO }}>
                     <IconFlame size={8} />{t.boostAmount >= 1000 ? `${(t.boostAmount / 1000).toFixed(0)}k` : t.boostAmount}
                   </div>
                   {!isMobile && t.volume24 !== null && (
-                    <div style={{ fontSize: 9, color: "#475569" }}>Vol {fmtVol(t.volume24)}</div>
+                    <div style={{ fontSize: 9, color: "#5a5a63", fontFamily: MONO }}>VOL {fmtVol(t.volume24)}</div>
                   )}
                 </div>
               </a>

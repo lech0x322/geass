@@ -775,11 +775,10 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   <>
                     <span style={{ flex: 1 }}>{n.label}</span>
                     {n.badge && (
-                      <span style={{ fontSize: 7, fontWeight: 700,
-                        color: n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981",
-                        background: (n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981") + "18",
-                        border: `1px solid ${(n.badge === "NEW" ? "#10b981" : n.pro ? "#a855f7" : "#10b981") + "35"}`,
-                        padding: "1px 6px", borderRadius: 99, letterSpacing: ".3px" }}>
+                      <span style={{ fontSize: 7, fontWeight: 700, fontFamily: MONO,
+                        color: n.badge === "NEW" ? "#10b981" : n.pro ? "#8b5cf6" : "#10b981",
+                        border: `1px solid ${(n.badge === "NEW" ? "#10b981" : n.pro ? "#8b5cf6" : "#10b981") + "35"}`,
+                        padding: "1px 6px", borderRadius: 0, letterSpacing: "1px" }}>
                         {n.badge}
                       </span>
                     )}
@@ -792,7 +791,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 )}
               </button>
               {expanded && n.sub && (
-                <div style={{ marginLeft: 16, marginBottom: 4, borderLeft: "1px solid #27272a", paddingLeft: 8 }}>
+                <div style={{ marginLeft: 16, marginBottom: 4, borderLeft: "1px solid #18181c", paddingLeft: 8 }}>
                   {n.sub.map(s => {
                     const subActive = tab === "settings" && settingsSection === s.id;
                     return (
@@ -808,11 +807,11 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                           setSidebarOpen(false);
                         }}
                         style={{
-                          width: "100%", padding: "6px 10px", borderRadius: 6,
-                          background: subActive ? "#dc262610" : "transparent",
-                          border: "none", color: subActive ? "#ef4444" : "#52525b",
+                          width: "100%", padding: "6px 10px", borderRadius: 0,
+                          background: subActive ? "#0d0d10" : "transparent",
+                          border: "none", color: subActive ? "#ff2b4e" : "#5a5a63",
                           fontSize: 10, fontWeight: subActive ? 700 : 500, textAlign: "left",
-                          cursor: "pointer", marginBottom: 1,
+                          cursor: "pointer", marginBottom: 1, fontFamily: MONO,
                         }}>
                         {s.label}
                       </button>
@@ -826,9 +825,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
       </nav>
 
       {/* Footer */}
-      <div style={{ padding: sidebarCollapsed ? "8px 4px" : 8, borderTop: "1px solid #151520", display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ padding: sidebarCollapsed ? "8px 4px" : 8, borderTop: "1px solid #18181c", display: "flex", flexDirection: "column", gap: 6 }}>
         {!sidebarCollapsed && pro.active && (
-          <div style={{ padding: "5px 10px", background: "linear-gradient(135deg,#dc262615,#7c3aed20)", border: "1px solid #7c3aed40", borderRadius: 7, fontSize: 9, color: "#a855f7", fontWeight: 700, letterSpacing: ".5px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ padding: "5px 10px", background: "#8b5cf612", border: "1px solid #8b5cf640", borderRadius: 0, fontSize: 9, color: "#8b5cf6", fontWeight: 700, letterSpacing: ".5px", display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: MONO }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
               <IconCrown size={11} /> PRO ACTIVE
             </span>
@@ -836,7 +835,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           </div>
         )}
         {!sidebarCollapsed && (
-          <div style={{ padding: "6px 10px", background: "#10b98110", border: "1px solid #10b98130", borderRadius: 7, fontSize: 9, color: "#10b981", display: "flex", alignItems: "center", gap: 5 }}>
+          <div style={{ padding: "6px 10px", background: "#10b98110", border: "1px solid #10b98130", borderRadius: 0, fontSize: 9, color: "#10b981", display: "flex", alignItems: "center", gap: 5, fontFamily: MONO }}>
             <IconCheck size={10} />
             <span>{shortAddr(wallet)}{wBal ? ` · ${wBal} SOL` : ""}</span>
           </div>
@@ -844,7 +843,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
         {!sidebarCollapsed && iw.status !== "none" && (
           <div
             onClick={() => { setTab("settings" as typeof tab); setSettingsSection("wallet"); setSidebarOpen(false); }}
-            style={{ padding: "6px 10px", background: iw.status === "unlocked" ? "#3b82f610" : "#27272a30", border: `1px solid ${iw.status === "unlocked" ? "#3b82f640" : "#27272a"}`, borderRadius: 7, fontSize: 9, color: iw.status === "unlocked" ? "#3b82f6" : "#52525b", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+            style={{ padding: "6px 10px", background: iw.status === "unlocked" ? "#3b82f610" : "#0d0d10", border: `1px solid ${iw.status === "unlocked" ? "#3b82f640" : "#18181c"}`, borderRadius: 0, fontSize: 9, color: iw.status === "unlocked" ? "#3b82f6" : "#5a5a63", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontFamily: MONO }}>
             <IconWallet size={10} />
             <span>
               {iw.status === "unlocked"

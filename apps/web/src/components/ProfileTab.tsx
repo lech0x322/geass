@@ -257,64 +257,57 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile, iw }
       {/* Stats grid */}
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: 12 }}>
         {/* SOL Balance — green accent */}
-        <div style={{ ...CARD, position: "relative", overflow: "hidden" }}>
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg,#10b981,#059669)", borderRadius: "16px 16px 0 0" }} />
-          <div style={{ ...LABEL, paddingTop: 6 }}><IconWallet size={9} style={{ marginRight: 4 }} />SOL BALANCE</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: "#f1f5f9", lineHeight: 1.2 }}>
+        <div style={{ ...CARD }}>
+          <div style={{ position: "absolute", top: 0, left: 0, width: 2, height: "100%", background: "#10b981" }} />
+          <div style={LABEL}><IconWallet size={9} style={{ marginRight: 4 }} />SOL BALANCE</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: "#f5f5f7", lineHeight: 1.2, fontFamily: MONO, letterSpacing: "-1px" }}>
             {solNum != null ? solNum.toFixed(4) : "—"}
           </div>
-          <div style={{ fontSize: 11, color: "#10b981", marginTop: 3, fontWeight: 600 }}>
+          <div style={{ fontSize: 11, color: "#10b981", marginTop: 3, fontWeight: 600, fontFamily: MONO }}>
             {solUsd != null ? `≈ $${solUsd.toFixed(2)}` : "—"}
           </div>
         </div>
 
         {/* Status — purple accent */}
-        <div style={{ ...CARD, position: "relative", overflow: "hidden" }}>
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: isPro ? "linear-gradient(90deg,#8b5cf6,#7c3aed)" : "linear-gradient(90deg,#1e1e2e,#2d2d42)", borderRadius: "16px 16px 0 0" }} />
-          <div style={{ ...LABEL, paddingTop: 6 }}><IconChart size={9} style={{ marginRight: 4 }} />STATUS</div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: isPro ? "#a78bfa" : "#475569" }}>{isPro ? "PRO" : "FREE"}</div>
-          <div style={{ fontSize: 10, color: "#475569", marginTop: 3 }}>{isPro ? "All features unlocked" : "Upgrade for full access"}</div>
+        <div style={{ ...CARD }}>
+          <div style={{ position: "absolute", top: 0, left: 0, width: 2, height: "100%", background: isPro ? "#8b5cf6" : "#34343a" }} />
+          <div style={LABEL}><IconChart size={9} style={{ marginRight: 4 }} />STATUS</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: isPro ? "#8b5cf6" : "#5a5a63", fontFamily: MONO, letterSpacing: "-.5px" }}>{isPro ? "PRO" : "FREE"}</div>
+          <div style={{ fontSize: 10, color: "#5a5a63", marginTop: 3, fontFamily: MONO }}>{isPro ? "All features unlocked" : "Upgrade for full access"}</div>
         </div>
 
         {/* Address — blue accent */}
         {!isMobile && (
-          <div style={{ ...CARD, position: "relative", overflow: "hidden" }}>
-            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg,#3b82f6,#2563eb)", borderRadius: "16px 16px 0 0" }} />
-            <div style={{ ...LABEL, paddingTop: 6 }}><IconUser size={9} style={{ marginRight: 4 }} />ADDRESS</div>
-            <div style={{ fontSize: 10, fontFamily: "monospace", color: "#94a3b8", wordBreak: "break-all", lineHeight: 1.5 }}>{wallet}</div>
+          <div style={{ ...CARD }}>
+            <div style={{ position: "absolute", top: 0, left: 0, width: 2, height: "100%", background: "#3b82f6" }} />
+            <div style={LABEL}><IconUser size={9} style={{ marginRight: 4 }} />ADDRESS</div>
+            <div style={{ fontSize: 10, fontFamily: MONO, color: "#9a9aa2", wordBreak: "break-all", lineHeight: 1.5 }}>{wallet}</div>
           </div>
         )}
       </div>
 
       {/* Top-up */}
-      <div style={{ ...CARD, background: "#0a0f0c", border: "1px solid #10b98128" }}>
-        <div style={{ position: "absolute", display: "none" }} />
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 10, background: "#10b98118", border: "1px solid #10b98130", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <IconWallet size={14} style={{ color: "#10b981" }} />
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#10b981" }}>Top Up Wallet</div>
-          </div>
-        </div>
-        <div style={{ fontSize: 11, color: "#475569", marginBottom: 14, lineHeight: 1.7 }}>
+      <div style={{ ...CARD }}>
+        <div style={{ position: "absolute", top: 0, left: 0, width: 2, height: "100%", background: "#10b981" }} />
+        <SectionHead label="TOP_UP" title="Top Up Wallet" color="#10b981" />
+        <div style={{ fontSize: 11, color: "#5a5a63", marginBottom: 14, lineHeight: 1.7 }}>
           Send SOL to your connected wallet address to fund trading operations.
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#0f0f16", border: "1px solid #10b98128", borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
-          <span style={{ flex: 1, fontFamily: "monospace", fontSize: 11, color: "#94a3b8", wordBreak: "break-all" }}>{wallet}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#070708", border: "1px solid #18181c", borderRadius: 0, padding: "10px 14px", marginBottom: 14 }}>
+          <span style={{ flex: 1, fontFamily: MONO, fontSize: 11, color: "#9a9aa2", wordBreak: "break-all" }}>{wallet}</span>
           <button onClick={copyWallet}
-            style={{ flexShrink: 0, padding: "5px 12px", borderRadius: 8, border: "1px solid #10b98130", background: copied ? "#10b98118" : "transparent", color: copied ? "#10b981" : "#94a3b8", fontSize: 10, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, transition: "all 0.15s" }}>
-            {copied ? <><IconCheck size={10} /> Copied</> : <><IconCopy size={10} /> Copy</>}
+            style={{ flexShrink: 0, padding: "5px 12px", borderRadius: 0, border: "1px solid #10b98130", background: copied ? "#10b98118" : "transparent", color: copied ? "#10b981" : "#9a9aa2", fontSize: 10, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, transition: "all 0.15s", fontFamily: MONO }}>
+            {copied ? <><IconCheck size={10} /> COPIED</> : <><IconCopy size={10} /> COPY</>}
           </button>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <a href="https://jup.ag/swap/USDC-SOL" target="_blank" rel="noopener noreferrer"
-            style={{ flex: 1, padding: "10px 14px", borderRadius: 10, border: "1px solid #10b98140", background: "#10b98110", color: "#10b981", fontSize: 11, fontWeight: 700, textDecoration: "none", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
-            Buy SOL on Jupiter <IconArrowUpRight size={10} />
+            style={{ flex: 1, padding: "10px 14px", borderRadius: 0, border: "1px solid #10b98140", background: "#10b98110", color: "#10b981", fontSize: 11, fontWeight: 700, textDecoration: "none", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontFamily: MONO }}>
+            BUY SOL ON JUPITER <IconArrowUpRight size={10} />
           </a>
           <a href={`https://solscan.io/account/${wallet}`} target="_blank" rel="noopener noreferrer"
-            style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #1e1e2e", background: "transparent", color: "#94a3b8", fontSize: 11, fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: 5 }}>
-            Solscan <IconArrowUpRight size={10} />
+            style={{ padding: "10px 14px", borderRadius: 0, border: "1px solid #18181c", background: "transparent", color: "#9a9aa2", fontSize: 11, fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: 5, fontFamily: MONO }}>
+            SOLSCAN <IconArrowUpRight size={10} />
           </a>
         </div>
       </div>
