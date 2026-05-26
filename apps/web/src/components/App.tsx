@@ -1790,7 +1790,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   [gemSoundId,        setGemSoundId,        "New Gem Detected",    "Alpha Scanner token alert"],
                   [kolSoundId,        setKolSoundId,        "KOL Trade Alert",     "Tracked KOL wallet trade"],
                   [memeSoundId,       setMemeSoundId,       "Meme Signals",  "High-score meme opportunity"],
-                  [communitySoundId,  setCommunitySoundId,  "Community",     "New community message"],
+                  [communitySoundId,  setCommunitySoundId,  "Channel",       "New channel message"],
                   [geassAlertSoundId, setGeassAlertSoundId, "GEASS Alerts",  "System notifications & tx confirmations"],
                 ] as [SoundId, React.Dispatch<React.SetStateAction<SoundId>>, string, string][]).map(([val, set, label, desc]) => {
                   const isOpen = soundExpandedKey === label;

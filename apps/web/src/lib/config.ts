@@ -55,7 +55,7 @@ export const NAV: NavItem[] = [
   { id: "launch",    label: "Launch",                                                    iconId: "rocket",    mobile: true, sidebarHidden: true },
   { id: "gems",      label: "Alpha Scanner",   mobileLabel: "Scanner", badge: "PRO",   pro: true, iconId: "zap",    mobile: true },
   { id: "autosnipe",  label: "Auto-Snipe",                               badge: "NEW",   pro: true, iconId: "target" },
-  { id: "community",   label: "Community",   badge: "NEW", iconId: "users" },
+  { id: "community",   label: "Channel",     badge: "NEW", iconId: "users" },
   { id: "predictions", label: "Predictions", badge: "NEW", iconId: "chart" },
   {
     id: "settings",
