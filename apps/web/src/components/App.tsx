@@ -224,6 +224,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [refCopied, setRefCopied] = useState(false);
   const [refStats, setRefStats] = useState<{ clicks: number; referrals: number } | null>(null);
   const freeMonths = refStats ? Math.floor(refStats.referrals / 3) : 0;
+  // GEASS Points: 300/pro-ref + 2/click. SOL estimate from 5% fee share
+  const geassPoints = refStats ? (refStats.referrals * 300) + (refStats.clicks * 2) : 0;
+  const solEarned   = refStats ? (refStats.referrals * 0.003).toFixed(3) : "0.000";
 
   // Launch state
   const [ct, setCt]           = useState({ name: "", sym: "", desc: "", img: "", devBuy: "0.5" });
@@ -1582,144 +1585,183 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* REFERRAL TAB */}
           {tab === "referral" && (() => {
-            const refs = refStats?.referrals ?? 0;
-            const progressToNext = refs % 3;
-            const nextMilestone  = 3 - progressToNext;
-            const tierLabel =
-              refs >= 10 ? { l: "🏆 Platinum", c: "#a855f7" } :
-              refs >= 6  ? { l: "🥇 Gold",     c: "#eab308" } :
-              refs >= 3  ? { l: "🥈 Silver",   c: "#94a3b8" } :
-                           { l: "🥉 Bronze",   c: "#f97316" };
-            const shareUrl  = refLink || `https://geass.app/?ref=${refCode}`;
-            const shareText = `Join GEASS — real-time Solana alpha intel. Use my link and get 10% off Pro:`;
+            const refs       = refStats?.referrals ?? 0;
+            const clicks     = refStats?.clicks    ?? 0;
+            const shareUrl   = refLink || `https://geass.app/?ref=${refCode}`;
+            const shareText  = `Join GEASS — real-time Solana alpha intel. My ref link:`;
+            const MONO_STYLE = { fontFamily: "ui-monospace,'SF Mono',monospace" } as const;
+            // Tier by refs
+            const tier =
+              refs >= 15 ? { name: "LEGEND",    c: "#a855f7", feeShare: "10%", gpBonus: "+60%", refs: "15+" } :
+              refs >= 8  ? { name: "COMMANDER", c: "#ff2b4e", feeShare: "5%",  gpBonus: "+40%", refs: "8+"  } :
+              refs >= 4  ? { name: "SCOUT",     c: "#3b82f6", feeShare: "2%",  gpBonus: "+20%", refs: "4+"  } :
+                           { name: "RECRUITER", c: "#10b981", feeShare: "1%",  gpBonus: "base", refs: "0+"  };
+            const nextTierRefs = refs >= 15 ? null : refs >= 8 ? 15 : refs >= 4 ? 8 : 4;
+            const progressPct  = nextTierRefs ? Math.min((refs / nextTierRefs) * 100, 100) : 100;
             return (
               <div style={{ padding: isMobile ? "14px 14px 80px" : "24px 28px", maxWidth: 700 }}>
 
-                {/* Hero */}
-                <div style={{ position: "relative", background: "linear-gradient(135deg,#12101e,#0d1520)", border: "1px solid #7c3aed50", borderRadius: 18, padding: isMobile ? "22px 18px" : "32px 28px", marginBottom: 20, overflow: "hidden" }}>
-                  <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg,#dc2626,#7c3aed,#10b981)" }} />
-                  <div style={{ position: "absolute", right: -30, bottom: -30, width: 180, height: 180, background: "#7c3aed08", borderRadius: "50%", border: "1px solid #7c3aed15" }} />
-
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                    <div style={{ fontSize: 8, fontWeight: 700, color: "#10b981", letterSpacing: "2.5px" }}>GEASS REFERRAL PROGRAM</div>
-                    <div style={{ padding: "2px 10px", borderRadius: 20, background: tierLabel.c + "20", border: `1px solid ${tierLabel.c}40`, fontSize: 10, fontWeight: 800, color: tierLabel.c }}>{tierLabel.l}</div>
+                {/* Header */}
+                <div style={{ position: "relative", background: "#070708", border: "1px solid #18181c", padding: isMobile ? "20px 16px" : "28px 24px", marginBottom: 1, overflow: "hidden" }}>
+                  <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: tier.c }} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+                    <span style={{ ...MONO_STYLE, fontSize: 9, fontWeight: 700, color: "#48484f", letterSpacing: "2.5px" }}>GEASS_REFERRAL</span>
+                    <span style={{ ...MONO_STYLE, fontSize: 9, fontWeight: 700, color: tier.c, border: `1px solid ${tier.c}40`, padding: "2px 8px", letterSpacing: "1px" }}>{tier.name}</span>
+                    <span style={{ ...MONO_STYLE, fontSize: 9, color: "#48484f", marginLeft: "auto" }}>fee_share: <span style={{ color: tier.c }}>{tier.feeShare}</span></span>
                   </div>
-                  <h1 style={{ fontSize: isMobile ? 22 : 30, fontWeight: 900, color: "#f4f4f5", marginBottom: 8, lineHeight: 1.1 }}>
+                  <h2 style={{ fontSize: isMobile ? 20 : 26, fontWeight: 800, color: "#f5f5f7", marginBottom: 8, lineHeight: 1.1, letterSpacing: "-1px" }}>
                     Invite traders.<br />
-                    <span style={{ background: "linear-gradient(90deg,#a855f7,#dc2626)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Earn free Pro access.</span>
-                  </h1>
-                  <p style={{ fontSize: 12, color: "#71717a", lineHeight: 1.7, maxWidth: 440, marginBottom: 20 }}>
-                    Share your link. Friends get <strong style={{ color: "#10b981" }}>10% off</strong> their first month — you earn <strong style={{ color: "#a855f7" }}>1 free month</strong> for every 3 paid referrals.
+                    <span style={{ color: tier.c }}>Earn GP + SOL.</span>
+                  </h2>
+                  <p style={{ ...MONO_STYLE, fontSize: 11, color: "#5a5a63", lineHeight: 1.7, maxWidth: 440, marginBottom: 20 }}>
+                    Every referral earns <span style={{ color: "#ff2b4e" }}>GEASS Points (GP)</span> redeemable for Pro access or SOL. You also earn <span style={{ color: "#10b981" }}>{tier.feeShare} of every trade</span> your referrals make — forever.
                   </p>
 
-                  {/* Progress bar */}
+                  {/* Tier progress */}
                   <div style={{ marginBottom: 20 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 9 }}>
-                      <span style={{ color: "#52525b", letterSpacing: "1px", fontWeight: 700 }}>PROGRESS TO NEXT FREE MONTH</span>
-                      <span style={{ color: "#a855f7", fontWeight: 700 }}>{progressToNext}/3 referrals</span>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 9, ...MONO_STYLE }}>
+                      <span style={{ color: "#48484f", letterSpacing: "1px" }}>TIER_PROGRESS</span>
+                      <span style={{ color: tier.c }}>{refs}/{nextTierRefs ?? "MAX"} refs{!nextTierRefs ? " — max tier" : ` → ${refs >= 8 ? "LEGEND" : refs >= 4 ? "COMMANDER" : "SCOUT"}`}</span>
                     </div>
-                    <div style={{ height: 6, background: "#1e1e21", borderRadius: 6, overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${(progressToNext / 3) * 100}%`, background: "linear-gradient(90deg,#7c3aed,#a855f7)", borderRadius: 6, transition: "width .4s ease" }} />
+                    <div style={{ height: 4, background: "#18181c", overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${progressPct}%`, background: tier.c, transition: "width .4s" }} />
                     </div>
-                    {progressToNext < 3 && (
-                      <div style={{ fontSize: 9, color: "#52525b", marginTop: 4 }}>{nextMilestone} more paid referral{nextMilestone !== 1 ? "s" : ""} to unlock your next free month</div>
-                    )}
                   </div>
 
                   {/* Referral link */}
-                  <div>
-                    <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 6 }}>YOUR UNIQUE REFERRAL LINK</div>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <div style={{ flex: 1, background: "#09090b", border: "1px solid #7c3aed50", borderRadius: 9, padding: "11px 14px", fontFamily: "monospace", fontSize: isMobile ? 9 : 11, color: "#a855f7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {shareUrl}
-                      </div>
-                      <button onClick={copyRefLink}
-                        style={{ padding: "0 18px", borderRadius: 9, border: "none", fontWeight: 700, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap",
-                          background: refCopied ? "#10b981" : "linear-gradient(135deg,#7c3aed,#a855f7)",
-                          color: "#fff", transition: "background .2s" }}>
-                        {refCopied ? "✓ Copied!" : "Copy"}
-                      </button>
+                  <div style={{ ...MONO_STYLE, fontSize: 9, color: "#48484f", letterSpacing: "1px", marginBottom: 6 }}>YOUR_REF_LINK</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <div style={{ flex: 1, background: "#000", border: `1px solid ${tier.c}40`, padding: "11px 14px", ...MONO_STYLE, fontSize: isMobile ? 9 : 11, color: tier.c, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {shareUrl}
                     </div>
-                    <div style={{ marginTop: 6, fontSize: 9, color: "#3f3f46" }}>
-                      Your referral code: <span style={{ fontFamily: "monospace", color: "#a855f7", fontWeight: 700 }}>{refCode}</span>
-                    </div>
+                    <button onClick={copyRefLink} style={{ padding: "0 18px", border: `1px solid ${refCopied ? "#10b981" : tier.c}`, background: refCopied ? "#10b981" : "transparent", color: refCopied ? "#fff" : tier.c, fontWeight: 700, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap", transition: "all .2s", ...MONO_STYLE }}>
+                      {refCopied ? "COPIED" : "COPY ▸"}
+                    </button>
+                  </div>
+                  <div style={{ marginTop: 6, fontSize: 9, color: "#34343a", ...MONO_STYLE }}>
+                    code: <span style={{ color: tier.c }}>{refCode}</span>
                   </div>
                 </div>
 
-                {/* Stats */}
-                <div className="app-g3" style={{ marginBottom: 20 }}>
+                {/* Stats row */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 1, background: "#18181c", marginBottom: 1 }}>
                   {[
-                    { l: "Link Clicks",    v: refStats?.clicks    ?? "—", c: "#3b82f6", sub: "total visits" },
-                    { l: "Paid Referrals", v: refs || "—",                c: "#a855f7", sub: `${3 - progressToNext} more for next reward` },
-                    { l: "Free Months",    v: freeMonths || "—",          c: "#10b981", sub: "earned so far" },
+                    { l: "GP Balance",     v: geassPoints.toLocaleString(), c: "#ff2b4e", sub: "geass points" },
+                    { l: "SOL Earned",     v: solEarned,                    c: "#10b981", sub: "fee share" },
+                    { l: "Referrals",      v: refs || "—",                  c: tier.c,   sub: "paid users" },
+                    { l: "Link Clicks",    v: clicks || "—",                c: "#3b82f6", sub: "total visits" },
                   ].map(s => (
-                    <div key={s.l} style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 12, padding: "14px 16px", textAlign: "center" }}>
-                      <div style={{ fontSize: isMobile ? 22 : 28, fontWeight: 900, color: s.c, marginBottom: 2 }}>{s.v}</div>
-                      <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 3 }}>{s.l}</div>
-                      <div style={{ fontSize: 8, color: "#3f3f46" }}>{s.sub}</div>
+                    <div key={s.l} style={{ background: "#050506", padding: "14px 12px", textAlign: "center" }}>
+                      <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, color: s.c, marginBottom: 2, ...MONO_STYLE }}>{s.v}</div>
+                      <div style={{ fontSize: 9, color: "#5a5a63", letterSpacing: "1px", marginBottom: 2, ...MONO_STYLE }}>{s.l}</div>
+                      <div style={{ fontSize: 8, color: "#34343a", ...MONO_STYLE }}>{s.sub}</div>
                     </div>
                   ))}
                 </div>
 
-                {/* Tier ladder */}
-                <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "16px 18px", marginBottom: 20 }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: "#52525b", letterSpacing: "1.5px", marginBottom: 12 }}>REFERRAL TIERS</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {/* GP Earn rates */}
+                <div style={{ background: "#050506", border: "1px solid #18181c", padding: "16px 18px", marginBottom: 1, position: "relative" }}>
+                  <div style={{ position: "absolute", top: 0, left: 0, width: 2, height: "100%", background: "#ff2b4e" }} />
+                  <div style={{ ...MONO_STYLE, fontSize: 9, fontWeight: 700, color: "#ff2b4e", letterSpacing: "2px", marginBottom: 12 }}>[ EARN_RATES ]</div>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 8 }}>
                     {[
-                      { t: "🥉 Bronze",   r: "0–2 refs",  reward: "Thank you!",         c: "#f97316", reached: refs >= 0  },
-                      { t: "🥈 Silver",   r: "3–5 refs",  reward: "+1 free month",      c: "#94a3b8", reached: refs >= 3  },
-                      { t: "🥇 Gold",     r: "6–9 refs",  reward: "+2 more free months", c: "#eab308", reached: refs >= 6  },
-                      { t: "🏆 Platinum", r: "10+ refs",  reward: "Lifetime Pro deal",  c: "#a855f7", reached: refs >= 10 },
-                    ].map(tier => (
-                      <div key={tier.t} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 10px", borderRadius: 9, background: tier.reached ? tier.c + "10" : "transparent", border: `1px solid ${tier.reached ? tier.c + "30" : "#1e1e21"}` }}>
-                        <span style={{ fontSize: 15, flexShrink: 0 }}>{tier.t.split(" ")[0]}</span>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: tier.reached ? tier.c : "#52525b" }}>{tier.t.split(" ")[1]} <span style={{ fontSize: 9, fontWeight: 400, color: "#3f3f46" }}>({tier.r})</span></div>
-                          <div style={{ fontSize: 10, color: tier.reached ? "#d4d4d8" : "#3f3f46" }}>{tier.reward}</div>
-                        </div>
-                        {tier.reached && <span style={{ fontSize: 10, color: tier.c, fontWeight: 700 }}>✓</span>}
+                      { event: "Friend signs up",          gp: "+50 GP",        c: "#3b82f6" },
+                      { event: "Friend pays for Pro",       gp: "+300 GP",       c: "#ff2b4e" },
+                      { event: "Friend's trade (ongoing)",  gp: `${tier.feeShare} fee share`, c: "#10b981" },
+                      { event: "Link click",                gp: "+2 GP",         c: "#5a5a63" },
+                    ].map(r => (
+                      <div key={r.event} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", background: "#070708", border: "1px solid #18181c" }}>
+                        <span style={{ ...MONO_STYLE, fontSize: 11, color: "#9a9aa2" }}>{r.event}</span>
+                        <span style={{ ...MONO_STYLE, fontSize: 11, fontWeight: 700, color: r.c }}>{r.gp}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {/* Share buttons */}
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+                {/* Redeem GP */}
+                <div style={{ background: "#050506", border: "1px solid #18181c", padding: "16px 18px", marginBottom: 1, position: "relative" }}>
+                  <div style={{ position: "absolute", top: 0, left: 0, width: 2, height: "100%", background: "#10b981" }} />
+                  <div style={{ ...MONO_STYLE, fontSize: 9, fontWeight: 700, color: "#10b981", letterSpacing: "2px", marginBottom: 12 }}>[ REDEEM_GP ]</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {[
+                      { cost: "250 GP",  reward: "1 month Pro access",  c: "#8b5cf6", canAfford: geassPoints >= 250  },
+                      { cost: "500 GP",  reward: "0.05 SOL",            c: "#10b981", canAfford: geassPoints >= 500  },
+                      { cost: "1000 GP", reward: "0.12 SOL (24% bonus)", c: "#10b981", canAfford: geassPoints >= 1000 },
+                      { cost: "5000 GP", reward: "Lifetime Pro + Insider access", c: "#ff2b4e", canAfford: geassPoints >= 5000 },
+                    ].map(r => (
+                      <div key={r.cost} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: "#070708", border: `1px solid ${r.canAfford ? r.c + "40" : "#18181c"}` }}>
+                        <span style={{ ...MONO_STYLE, fontSize: 11, fontWeight: 700, color: "#ff2b4e", minWidth: 60 }}>{r.cost}</span>
+                        <span style={{ ...MONO_STYLE, fontSize: 11, color: r.canAfford ? "#f5f5f7" : "#5a5a63", flex: 1 }}>{r.reward}</span>
+                        <button style={{ ...MONO_STYLE, padding: "5px 12px", border: `1px solid ${r.canAfford ? r.c : "#222226"}`, background: "transparent", color: r.canAfford ? r.c : "#34343a", fontSize: 9, fontWeight: 700, cursor: r.canAfford ? "pointer" : "not-allowed", letterSpacing: "1px" }}
+                          disabled={!r.canAfford}>
+                          {r.canAfford ? "REDEEM ▸" : "LOCKED"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tier ladder */}
+                <div style={{ background: "#050506", border: "1px solid #18181c", padding: "16px 18px", marginBottom: 1, position: "relative" }}>
+                  <div style={{ position: "absolute", top: 0, left: 0, width: 2, height: "100%", background: "#3b82f6" }} />
+                  <div style={{ ...MONO_STYLE, fontSize: 9, fontWeight: 700, color: "#3b82f6", letterSpacing: "2px", marginBottom: 12 }}>[ TIERS ]</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {[
+                      { name: "RECRUITER", r: "0–3 refs",  feeShare: "1%",  gpBonus: "base", c: "#10b981", reached: refs >= 0  },
+                      { name: "SCOUT",     r: "4–7 refs",  feeShare: "2%",  gpBonus: "+20%", c: "#3b82f6", reached: refs >= 4  },
+                      { name: "COMMANDER", r: "8–14 refs", feeShare: "5%",  gpBonus: "+40%", c: "#ff2b4e", reached: refs >= 8  },
+                      { name: "LEGEND",    r: "15+ refs",  feeShare: "10%", gpBonus: "+60%", c: "#a855f7", reached: refs >= 15 },
+                    ].map(t => (
+                      <div key={t.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: t.reached ? t.c + "08" : "transparent", border: `1px solid ${t.reached ? t.c + "30" : "#18181c"}` }}>
+                        <span style={{ ...MONO_STYLE, fontSize: 10, fontWeight: 700, color: t.reached ? t.c : "#34343a", minWidth: 80 }}>{t.name}</span>
+                        <span style={{ ...MONO_STYLE, fontSize: 9, color: "#5a5a63", flex: 1 }}>{t.r}</span>
+                        <span style={{ ...MONO_STYLE, fontSize: 9, color: t.reached ? "#10b981" : "#34343a" }}>fee {t.feeShare}</span>
+                        <span style={{ ...MONO_STYLE, fontSize: 9, color: t.reached ? t.c : "#34343a", minWidth: 40, textAlign: "right" }}>{t.gpBonus}</span>
+                        {t.reached && <span style={{ color: t.c, fontSize: 10, fontWeight: 700 }}>✓</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Share */}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 1 }}>
                   <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${shareText}\n${shareUrl}`)}`}
                     target="_blank" rel="noopener noreferrer"
-                    style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 9, border: "1px solid #1d9bf030", background: "#1d9bf012", color: "#1d9bf0", textDecoration: "none", fontSize: 11, fontWeight: 700 }}>
-                    𝕏 Share on X
+                    style={{ ...MONO_STYLE, display: "flex", alignItems: "center", gap: 7, padding: "9px 14px", border: "1px solid #1d9bf030", background: "#1d9bf010", color: "#1d9bf0", textDecoration: "none", fontSize: 11, fontWeight: 700 }}>
+                    𝕏 X / Twitter
                   </a>
                   <a href={`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`}
                     target="_blank" rel="noopener noreferrer"
-                    style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 9, border: "1px solid #24a1de30", background: "#24a1de12", color: "#24a1de", textDecoration: "none", fontSize: 11, fontWeight: 700 }}>
-                    ✈️ Telegram
+                    style={{ ...MONO_STYLE, display: "flex", alignItems: "center", gap: 7, padding: "9px 14px", border: "1px solid #24a1de30", background: "#24a1de10", color: "#24a1de", textDecoration: "none", fontSize: 11, fontWeight: 700 }}>
+                    Telegram
                   </a>
                   <a href={`https://wa.me/?text=${encodeURIComponent(`${shareText}\n${shareUrl}`)}`}
                     target="_blank" rel="noopener noreferrer"
-                    style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 9, border: "1px solid #25d36630", background: "#25d36612", color: "#25d366", textDecoration: "none", fontSize: 11, fontWeight: 700 }}>
-                    💬 WhatsApp
+                    style={{ ...MONO_STYLE, display: "flex", alignItems: "center", gap: 7, padding: "9px 14px", border: "1px solid #25d36630", background: "#25d36610", color: "#25d366", textDecoration: "none", fontSize: 11, fontWeight: 700 }}>
+                    WhatsApp
                   </a>
                   <button onClick={copyRefLink}
-                    style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 9, border: "1px solid #27272a", background: "transparent", color: refCopied ? "#10b981" : "#71717a", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-                    {refCopied ? "✓ Copied!" : "Copy link"}
+                    style={{ ...MONO_STYLE, display: "flex", alignItems: "center", gap: 7, padding: "9px 14px", border: "1px solid #222226", background: "transparent", color: refCopied ? "#10b981" : "#5a5a63", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                    {refCopied ? "COPIED" : "Copy link"}
                   </button>
                 </div>
 
                 {/* How it works */}
-                <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 20px" }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: "#52525b", letterSpacing: "1.5px", marginBottom: 14 }}>HOW IT WORKS</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ background: "#050506", border: "1px solid #18181c", padding: "16px 18px", position: "relative" }}>
+                  <div style={{ position: "absolute", top: 0, left: 0, width: 2, height: "100%", background: "#f59e0b" }} />
+                  <div style={{ ...MONO_STYLE, fontSize: 9, fontWeight: 700, color: "#f59e0b", letterSpacing: "2px", marginBottom: 12 }}>[ HOW_IT_WORKS ]</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     {[
-                      { n: "01", t: "Share your link", d: "Send your unique link to traders, Crypto Twitter, Telegram, or WhatsApp groups." },
-                      { n: "02", t: "Friend joins & upgrades", d: "They connect Phantom and pay 2.7 SOL (10% off). Activation is instant." },
-                      { n: "03", t: "You earn free Pro", d: "Every 3 paid referrals unlock 1 free month added to your account automatically." },
+                      { n: "01", t: "Share your link", d: "Post to Crypto Twitter, Telegram groups, or DM traders directly. Every click earns GP." },
+                      { n: "02", t: "Friend signs up + upgrades", d: "They use your link to access GEASS. On Pro upgrade you get +300 GP instantly." },
+                      { n: "03", t: "Earn GP + fee share forever", d: `You earn ${tier.feeShare} of every trade your referrals execute — paid weekly in SOL to your wallet. No cap.` },
+                      { n: "04", t: "Redeem GP for SOL or Pro", d: "Convert points to SOL or Pro access anytime. Higher tiers unlock bonus GP rates and higher fee shares." },
                     ].map(s => (
-                      <div key={s.n} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-                        <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#7c3aed18", border: "1px solid #7c3aed40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "#a855f7", flexShrink: 0 }}>{s.n}</div>
+                      <div key={s.n} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                        <div style={{ ...MONO_STYLE, width: 26, height: 26, background: "#0a0a0c", border: "1px solid #18181c", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "#f59e0b", flexShrink: 0 }}>{s.n}</div>
                         <div>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: "#e2d9f3", marginBottom: 2 }}>{s.t}</div>
-                          <div style={{ fontSize: 10, color: "#52525b", lineHeight: 1.6 }}>{s.d}</div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#f5f5f7", marginBottom: 2 }}>{s.t}</div>
+                          <div style={{ ...MONO_STYLE, fontSize: 10, color: "#5a5a63", lineHeight: 1.65 }}>{s.d}</div>
                         </div>
                       </div>
                     ))}
