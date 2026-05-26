@@ -1,6 +1,6 @@
 {
   "buildCommand": "cd $(git rev-parse --show-toplevel) && pnpm --filter @geass/web build",
-  "outputDirectory": "apps/web/.next",
+  "outputDirectory": ".next",
   "installCommand": "cd $(git rev-parse --show-toplevel) && pnpm install --frozen-lockfile",
   "framework": "nextjs"
 }
