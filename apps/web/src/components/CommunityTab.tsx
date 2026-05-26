@@ -237,7 +237,7 @@ function GoLiveModal({ alias, wallet, onStart, onClose }: { alias: string; walle
 }
 
 // ── Payment modal ─────────────────────────────────────────────────────────────
-function PayModal({ channel, onPaid, onClose }: { channel: Community; onPaid: () => void; onClose: () => void }) {
+function PayModal({ channel, onPaid, onClose }: { channel: Community | CommunityDetail; onPaid: () => void; onClose: () => void }) {
   const [paying, setPaying] = useState(false);
   const [done, setDone] = useState(false);
 
@@ -260,7 +260,7 @@ function PayModal({ channel, onPaid, onClose }: { channel: Community; onPaid: ()
           </div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 800, color: "#e4e4e7", fontFamily: MONO }}>{channel.name}</div>
-            <div style={{ fontSize: 9, color: "#52525b", fontFamily: MONO, marginTop: 2 }}>{channel.memberCount} members</div>
+            <div style={{ fontSize: 9, color: "#52525b", fontFamily: MONO, marginTop: 2 }}>{"memberCount" in channel ? channel.memberCount : channel.members.length} members</div>
           </div>
         </div>
         <div style={{ background: "#0a0a0c", border: "1px solid #28282e", padding: "14px 16px", marginBottom: 16, textAlign: "center" }}>
