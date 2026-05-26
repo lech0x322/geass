@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Keypair } from "@solana/web3.js";
+import { Keypair, PublicKey, Transaction, SystemProgram, Connection, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import {
   generateWallet, keypairFromPrivateKey, encryptAndStore,
   decryptStoredWallet, getStoredWalletMeta, clearStoredWallet,
 } from "./internalWallet";
 import { fetchBalance } from "./api";
+
+const RPC = process.env.NEXT_PUBLIC_RPC_URL ?? "https://api.mainnet-beta.solana.com";
 
 export type WalletStatus = "none" | "locked" | "unlocked";
 
@@ -28,6 +30,8 @@ export interface UseInternalWallet {
   importKey: (privateKeyB58: string, password: string) => Promise<void>;
   /** Sign a VersionedTransaction with the internal wallet. */
   sign: (tx: import("@solana/web3.js").VersionedTransaction) => void;
+  /** Send SOL to any address. Returns the transaction signature. */
+  sendSol: (toAddress: string, amountSol: number) => Promise<string>;
   /** Delete the wallet from storage entirely. */
   destroy: () => void;
   /** Refresh balance. */
@@ -91,6 +95,30 @@ export function useInternalWallet(): UseInternalWallet {
     tx.sign([keypair]);
   }, [keypair]);
 
+  const sendSol = useCallback(async (toAddress: string, amountSol: number): Promise<string> => {
+    if (!keypair) throw new Error("Wallet is locked — unlock it first");
+    if (amountSol <= 0) throw new Error("Amount must be greater than 0");
+    const toPk = new PublicKey(toAddress);
+    const conn = new Connection(RPC, "confirmed");
+    const { blockhash } = await conn.getLatestBlockhash("confirmed");
+    const tx = new Transaction({ recentBlockhash: blockhash, feePayer: keypair.publicKey });
+    tx.add(SystemProgram.transfer({
+      fromPubkey: keypair.publicKey,
+      toPubkey: toPk,
+      lamports: Math.round(amountSol * LAMPORTS_PER_SOL),
+    }));
+    tx.sign(keypair);
+    const signedTxBase64 = Buffer.from(tx.serialize()).toString("base64");
+    const res = await fetch("/api/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ signedTxBase64 }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    return data.signature as string;
+  }, [keypair]);
+
   const destroy = useCallback(() => {
     clearStoredWallet();
     setKeypair(null);
@@ -98,5 +126,5 @@ export function useInternalWallet(): UseInternalWallet {
     setBalance(null);
   }, []);
 
-  return { status, publicKey, balance, preview: null, create, save, unlock, lock, importKey, sign, destroy, refreshBalance };
+  return { status, publicKey, balance, preview: null, create, save, unlock, lock, importKey, sign, sendSol, destroy, refreshBalance };
 }

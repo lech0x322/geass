@@ -9,7 +9,7 @@ interface Props {
   iw: UseInternalWallet;
 }
 
-type Screen = "menu" | "create-show" | "create-password" | "import" | "unlock" | "manage";
+type Screen = "menu" | "create-show" | "create-password" | "import" | "unlock" | "manage" | "send";
 
 function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   const [copied, setCopied] = useState(false);
@@ -60,14 +60,32 @@ export function InternalWalletPanel({ iw }: Props) {
   const [privKeyPreview, setPrivKeyPreview] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [showPrivKey, setShowPrivKey] = useState(false);
+  const [sendTo, setSendTo]     = useState("");
+  const [sendAmt, setSendAmt]   = useState("");
+  const [sendSig, setSendSig]   = useState("");
 
   const go = (s: Screen) => {
-    setErr("");
-    setPw("");
-    setPw2("");
+    setErr(""); setPw(""); setPw2("");
     if (s !== "create-password") setConfirmed(false);
+    if (s !== "send") { setSendTo(""); setSendAmt(""); setSendSig(""); }
     setScreen(s);
   };
+
+  async function doSendSol() {
+    setErr(""); setSendSig("");
+    const amt = parseFloat(sendAmt);
+    if (!sendTo.trim()) { setErr("Enter a recipient address."); return; }
+    if (!amt || amt <= 0) { setErr("Enter a valid amount."); return; }
+    setBusy(true);
+    try {
+      const sig = await iw.sendSol(sendTo.trim(), amt);
+      setSendSig(sig);
+      setSendTo(""); setSendAmt("");
+      iw.refreshBalance();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Send failed");
+    } finally { setBusy(false); }
+  }
 
   async function doCreate() {
     const { keypair, privateKeyB58 } = iw.create();
@@ -224,6 +242,57 @@ export function InternalWalletPanel({ iw }: Props) {
       </div>
     );
 
+    if (screen === "send") return (
+      <div>
+        <p style={{ fontSize: 11, color: "#71717a", marginBottom: 16, lineHeight: 1.6 }}>
+          Send SOL from your trading wallet to any Solana address.
+        </p>
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 5 }}>RECIPIENT ADDRESS</div>
+          <input
+            value={sendTo} onChange={e => setSendTo(e.target.value)}
+            placeholder="Solana wallet address…"
+            style={{ width: "100%", background: "#09090b", border: "1px solid #27272a", borderRadius: 8, color: "#f4f4f5", padding: "9px 12px", fontSize: 11, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }}
+          />
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 5 }}>AMOUNT (SOL)</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input
+              type="number" value={sendAmt} onChange={e => setSendAmt(e.target.value)}
+              placeholder="0.00" min="0" step="0.001"
+              style={{ flex: 1, background: "#09090b", border: "1px solid #27272a", borderRadius: 8, color: "#f4f4f5", padding: "9px 12px", fontSize: 11, outline: "none" }}
+            />
+            {iw.balance !== null && (
+              <button onClick={() => setSendAmt(Math.max(0, iw.balance! - 0.001).toFixed(4))}
+                style={{ padding: "0 12px", borderRadius: 8, border: "1px solid #27272a", background: "transparent", color: "#52525b", fontSize: 10, cursor: "pointer", whiteSpace: "nowrap" }}>
+                Max
+              </button>
+            )}
+          </div>
+          {iw.balance !== null && (
+            <div style={{ fontSize: 9, color: "#3f3f46", marginTop: 4 }}>Available: {iw.balance.toFixed(4)} SOL (≈0.001 reserved for fees)</div>
+          )}
+        </div>
+        {err && <div style={{ fontSize: 10, color: "#ef4444", marginBottom: 10 }}>{err}</div>}
+        {sendSig && (
+          <div style={{ fontSize: 10, color: "#10b981", marginBottom: 10, wordBreak: "break-all", background: "#10b98110", border: "1px solid #10b98130", borderRadius: 8, padding: "8px 10px" }}>
+            Sent! <a href={`https://solscan.io/tx/${sendSig}`} target="_blank" rel="noopener noreferrer" style={{ color: "#10b981", textDecoration: "underline" }}>View on Solscan</a>
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => go("manage")}
+            style={{ flex: 1, padding: "10px", borderRadius: 9, border: "1px solid #27272a", background: "transparent", color: "#52525b", fontSize: 11, cursor: "pointer" }}>
+            Back
+          </button>
+          <button onClick={doSendSol} disabled={busy}
+            style={{ flex: 2, padding: "10px", borderRadius: 9, border: "none", background: busy ? "#27272a" : "linear-gradient(135deg,#dc2626,#7c3aed)", color: busy ? "#52525b" : "#fff", fontSize: 11, fontWeight: 700, cursor: busy ? "wait" : "pointer" }}>
+            {busy ? "Sending…" : "Send SOL"}
+          </button>
+        </div>
+      </div>
+    );
+
     if (screen === "unlock") return (
       <div>
         <p style={{ fontSize: 11, color: "#71717a", marginBottom: 14, lineHeight: 1.6 }}>
@@ -267,7 +336,11 @@ export function InternalWalletPanel({ iw }: Props) {
         </div>
 
         {/* Quick actions */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
+          <button onClick={() => go("send")}
+            style={{ padding: "8px", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#dc2626,#7c3aed)", color: "#fff", fontSize: 10, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+            <IconArrowUpRight size={11} /> Send
+          </button>
           <a href={`https://solscan.io/account/${iw.publicKey}`} target="_blank" rel="noopener noreferrer"
             style={{ padding: "8px", borderRadius: 8, border: "1px solid #27272a", background: "transparent", color: "#a1a1aa", fontSize: 10, fontWeight: 600, textDecoration: "none", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
             <IconArrowUpRight size={11} /> Solscan

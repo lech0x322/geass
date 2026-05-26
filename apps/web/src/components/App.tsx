@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { Keypair, VersionedTransaction } from "@solana/web3.js";
+import { Keypair, VersionedTransaction, PublicKey, Transaction, SystemProgram, Connection, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import bs58 from "bs58";
 import { KOLS, NAV, TIER, SETTINGS_TAB_OVERRIDES } from "@/lib/config";
 import { fmtAge, shortAddr } from "@/lib/utils";
@@ -146,6 +146,10 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
     : [];
   const [ctMintAddress, setCtMintAddress] = useState<string | null>(null);
   const [wBal, setWBal]       = useState<string | null>(initialBalance);
+  const [phantomSendTo,  setPhantomSendTo]  = useState("");
+  const [phantomSendAmt, setPhantomSendAmt] = useState("");
+  const [phantomSendMsg, setPhantomSendMsg] = useState("");
+  const [phantomSending, setPhantomSending] = useState(false);
   const [filters, setFilters] = useState({ minScore: 0, tiers: [] as string[], hasKol: false, noFlags: false });
   const feedTrades = useKolFeed();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -1767,7 +1771,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
                   <IconWallet size={11} /> PHANTOM WALLET
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                   <div>
                     <div style={{ fontSize: 11, color: "#a1a1aa", fontFamily: "monospace" }}>{shortAddr(wallet)}</div>
                     {wBal && <div style={{ fontSize: 10, color: "#3f3f46" }}>{wBal} SOL balance</div>}
@@ -1776,6 +1780,45 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                     style={{ padding: "6px 14px", borderRadius: 7, border: "1px solid #ef444430", background: "#ef444408", color: "#ef4444", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
                     Disconnect
                   </button>
+                </div>
+                {/* Send SOL from Phantom */}
+                <div style={{ borderTop: "1px solid #1e1e21", paddingTop: 14 }}>
+                  <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 10, fontWeight: 700 }}>SEND SOL</div>
+                  <div style={{ marginBottom: 8 }}>
+                    <input value={phantomSendTo} onChange={e => setPhantomSendTo(e.target.value)}
+                      placeholder="Recipient address…"
+                      style={{ width: "100%", background: "#09090b", border: "1px solid #27272a", borderRadius: 8, color: "#f4f4f5", padding: "8px 12px", fontSize: 11, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }} />
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                    <input type="number" value={phantomSendAmt} onChange={e => setPhantomSendAmt(e.target.value)}
+                      placeholder="SOL amount" min="0" step="0.001"
+                      style={{ flex: 1, background: "#09090b", border: "1px solid #27272a", borderRadius: 8, color: "#f4f4f5", padding: "8px 12px", fontSize: 11, outline: "none" }} />
+                    <button disabled={phantomSending} onClick={async () => {
+                      setPhantomSendMsg("");
+                      const amt = parseFloat(phantomSendAmt);
+                      if (!phantomSendTo.trim() || !amt || amt <= 0) { setPhantomSendMsg("Enter a valid address and amount."); return; }
+                      setPhantomSending(true);
+                      try {
+                        const ph = (window as { solana?: { signAndSendTransaction: (tx: Transaction) => Promise<{ signature: string }> } }).solana;
+                        if (!ph) throw new Error("Phantom not found");
+                        const conn = new Connection(process.env.NEXT_PUBLIC_RPC_URL ?? "https://api.mainnet-beta.solana.com", "confirmed");
+                        const { blockhash } = await conn.getLatestBlockhash("confirmed");
+                        const tx = new Transaction({ recentBlockhash: blockhash, feePayer: new PublicKey(wallet) });
+                        tx.add(SystemProgram.transfer({ fromPubkey: new PublicKey(wallet), toPubkey: new PublicKey(phantomSendTo.trim()), lamports: Math.round(amt * LAMPORTS_PER_SOL) }));
+                        const { signature } = await ph.signAndSendTransaction(tx);
+                        setPhantomSendMsg("✅ Sent! " + signature.slice(0, 16) + "…");
+                        setPhantomSendTo(""); setPhantomSendAmt("");
+                        fetchBalance(wallet).then(b => b !== null && setWBal(b.toFixed(4)));
+                      } catch (e) { setPhantomSendMsg("❌ " + (e instanceof Error ? e.message : String(e))); }
+                      finally { setPhantomSending(false); }
+                    }}
+                      style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: phantomSending ? "#27272a" : "linear-gradient(135deg,#dc2626,#7c3aed)", color: phantomSending ? "#52525b" : "#fff", fontSize: 11, fontWeight: 700, cursor: phantomSending ? "wait" : "pointer", whiteSpace: "nowrap" }}>
+                      {phantomSending ? "Sending…" : "Send"}
+                    </button>
+                  </div>
+                  {phantomSendMsg && (
+                    <div style={{ fontSize: 10, color: phantomSendMsg.startsWith("✅") ? "#10b981" : "#ef4444", wordBreak: "break-all" }}>{phantomSendMsg}</div>
+                  )}
                 </div>
               </div>
 
