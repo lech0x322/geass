@@ -2279,6 +2279,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
               solPrice={solPrice}
               isPro={pro.active}
               isMobile={isMobile}
+              iw={iw}
             />
           )}
 

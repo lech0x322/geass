@@ -1,8 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { PublicKey, Transaction, SystemProgram, Connection, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { IconUser, IconWallet, IconActivity, IconCopy, IconCheck, IconRefresh, IconArrowUpRight, IconCrown, IconChart, IconVerified, IconCamera } from "./icons";
 import JupiterSwapModal from "./JupiterSwapModal";
+import type { UseInternalWallet } from "@/lib/useInternalWallet";
+
+const RPC = process.env.NEXT_PUBLIC_RPC_URL ?? "https://api.mainnet-beta.solana.com";
 
 const CARD: React.CSSProperties = {
   background: "#111113",
@@ -37,9 +41,10 @@ interface Props {
   solPrice: number | null;
   isPro: boolean;
   isMobile: boolean;
+  iw: UseInternalWallet;
 }
 
-export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile }: Props) {
+export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile, iw }: Props) {
   const [copied, setCopied]     = useState(false);
   const [editing, setEditing]   = useState(false);
   const [username, setUsername] = useState("Anon Trader");
@@ -47,6 +52,13 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile }: Pr
   const [avatar, setAvatar]     = useState<string | null>(null);
   const [draftName, setDraftName] = useState("Anon Trader");
   const [draftEmoji, setDraftEmoji] = useState("🧠");
+
+  // Transfer state
+  const [txSource, setTxSource]   = useState<"phantom" | "internal">("phantom");
+  const [txTo, setTxTo]           = useState("");
+  const [txAmt, setTxAmt]         = useState("");
+  const [txMsg, setTxMsg]         = useState("");
+  const [txBusy, setTxBusy]       = useState(false);
 
   const uploadAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -271,6 +283,111 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile }: Pr
             Solscan <IconArrowUpRight size={10} />
           </a>
         </div>
+      </div>
+
+      {/* Transfer */}
+      <div style={{ ...CARD, border: "1px solid #3b82f630" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#3b82f6", marginBottom: 14, display: "flex", alignItems: "center", gap: 7 }}>
+          <IconArrowUpRight size={14} /> Transfer SOL
+        </div>
+
+        {/* Source selector */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+          {(["phantom", "internal"] as const).map(src => {
+            const label = src === "phantom" ? "Phantom Wallet" : "Trading Wallet";
+            const locked = src === "internal" && iw.status !== "unlocked";
+            const active = txSource === src;
+            return (
+              <button key={src} onClick={() => { if (!locked) setTxSource(src); }}
+                title={locked ? "Unlock your trading wallet first" : undefined}
+                style={{ flex: 1, padding: "8px 10px", borderRadius: 9, border: `1px solid ${active ? "#3b82f6" : "#27272a"}`, background: active ? "#3b82f615" : "transparent", color: active ? "#3b82f6" : locked ? "#3f3f46" : "#71717a", fontSize: 11, fontWeight: active ? 700 : 500, cursor: locked ? "not-allowed" : "pointer" }}>
+                {label}
+                {locked && <span style={{ fontSize: 9, marginLeft: 5, color: "#3f3f46" }}>locked</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Own-account quick-send shortcuts */}
+        {iw.publicKey && iw.status === "unlocked" && (
+          <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+            {txSource === "phantom" ? (
+              <button onClick={() => setTxTo(iw.publicKey!)}
+                style={{ flex: 1, padding: "6px 10px", borderRadius: 8, border: "1px dashed #27272a", background: "transparent", color: "#52525b", fontSize: 10, cursor: "pointer", textAlign: "left" }}>
+                To my Trading Wallet <span style={{ fontFamily: "monospace", color: "#3b82f6" }}>{iw.publicKey.slice(0,6)}…{iw.publicKey.slice(-4)}</span>
+              </button>
+            ) : (
+              <button onClick={() => setTxTo(wallet)}
+                style={{ flex: 1, padding: "6px 10px", borderRadius: 8, border: "1px dashed #27272a", background: "transparent", color: "#52525b", fontSize: 10, cursor: "pointer", textAlign: "left" }}>
+                To my Phantom Wallet <span style={{ fontFamily: "monospace", color: "#3b82f6" }}>{wallet.slice(0,6)}…{wallet.slice(-4)}</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Recipient */}
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 5, fontWeight: 700 }}>RECIPIENT ADDRESS</div>
+          <input value={txTo} onChange={e => setTxTo(e.target.value)} placeholder="Solana wallet address…"
+            style={{ width: "100%", background: "#09090b", border: "1px solid #27272a", borderRadius: 8, color: "#f4f4f5", padding: "9px 12px", fontSize: 11, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }} />
+        </div>
+
+        {/* Amount */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 5, fontWeight: 700 }}>AMOUNT (SOL)</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input type="number" value={txAmt} onChange={e => setTxAmt(e.target.value)} placeholder="0.00" min="0" step="0.001"
+              style={{ flex: 1, background: "#09090b", border: "1px solid #27272a", borderRadius: 8, color: "#f4f4f5", padding: "9px 12px", fontSize: 11, outline: "none" }} />
+            {txSource === "phantom" && solBalance && (
+              <button onClick={() => setTxAmt(Math.max(0, parseFloat(solBalance) - 0.001).toFixed(4))}
+                style={{ padding: "0 12px", borderRadius: 8, border: "1px solid #27272a", background: "transparent", color: "#52525b", fontSize: 10, cursor: "pointer" }}>Max</button>
+            )}
+            {txSource === "internal" && iw.balance !== null && (
+              <button onClick={() => setTxAmt(Math.max(0, iw.balance! - 0.001).toFixed(4))}
+                style={{ padding: "0 12px", borderRadius: 8, border: "1px solid #27272a", background: "transparent", color: "#52525b", fontSize: 10, cursor: "pointer" }}>Max</button>
+            )}
+          </div>
+          <div style={{ fontSize: 9, color: "#3f3f46", marginTop: 4 }}>
+            {txSource === "phantom" && solBalance && <>Phantom balance: {parseFloat(solBalance).toFixed(4)} SOL</>}
+            {txSource === "internal" && iw.balance !== null && <>Trading wallet: {iw.balance.toFixed(4)} SOL</>}
+          </div>
+        </div>
+
+        {txMsg && (
+          <div style={{ fontSize: 10, padding: "8px 12px", borderRadius: 8, background: txMsg.startsWith("✅") ? "#10b98110" : "#ef444410", border: `1px solid ${txMsg.startsWith("✅") ? "#10b98130" : "#ef444430"}`, color: txMsg.startsWith("✅") ? "#10b981" : "#ef4444", marginBottom: 12, wordBreak: "break-all" }}>
+            {txMsg}
+          </div>
+        )}
+
+        <button disabled={txBusy} onClick={async () => {
+          setTxMsg("");
+          const amt = parseFloat(txAmt);
+          if (!txTo.trim()) { setTxMsg("Enter a recipient address."); return; }
+          if (!amt || amt <= 0) { setTxMsg("Enter a valid amount."); return; }
+          setTxBusy(true);
+          try {
+            if (txSource === "internal") {
+              const sig = await iw.sendSol(txTo.trim(), amt);
+              setTxMsg("✅ Sent! " + sig.slice(0, 20) + "…");
+              iw.refreshBalance();
+            } else {
+              const ph = (window as { solana?: { signAndSendTransaction: (tx: Transaction) => Promise<{ signature: string }> } }).solana;
+              if (!ph) throw new Error("Phantom not found");
+              const conn = new Connection(RPC, "confirmed");
+              const { blockhash } = await conn.getLatestBlockhash("confirmed");
+              const tx = new Transaction({ recentBlockhash: blockhash, feePayer: new PublicKey(wallet) });
+              tx.add(SystemProgram.transfer({ fromPubkey: new PublicKey(wallet), toPubkey: new PublicKey(txTo.trim()), lamports: Math.round(amt * LAMPORTS_PER_SOL) }));
+              const { signature } = await ph.signAndSendTransaction(tx);
+              setTxMsg("✅ Sent! " + signature.slice(0, 20) + "…");
+            }
+            setTxTo(""); setTxAmt("");
+          } catch (e) {
+            setTxMsg("❌ " + (e instanceof Error ? e.message : String(e)));
+          } finally { setTxBusy(false); }
+        }}
+          style={{ width: "100%", padding: "11px", borderRadius: 10, border: "none", background: txBusy ? "#27272a" : "linear-gradient(135deg,#1d4ed8,#7c3aed)", color: txBusy ? "#52525b" : "#fff", fontSize: 12, fontWeight: 700, cursor: txBusy ? "wait" : "pointer" }}>
+          {txBusy ? "Sending…" : "Send"}
+        </button>
       </div>
 
       {/* Pump.fun Profile Sync */}
