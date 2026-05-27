@@ -3,9 +3,8 @@ import {
   SystemProgram, Connection, LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 
-// Replace after deploying: `anchor build && anchor deploy --provider.cluster devnet`
 export const PREDICTIONS_PROGRAM_ID = new PublicKey(
-  "GEASSPred1111111111111111111111111111111111"
+  "BwjuHiMenCuF45T82rMerzeqgbVQLqrKyxmb5pyBD4xm"
 );
 
 export const RPC_ENDPOINT =

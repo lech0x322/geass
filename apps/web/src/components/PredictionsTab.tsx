@@ -32,24 +32,6 @@ function outcomeColor(w: number) {
 }
 
 // ── sub-components ─────────────────────────────────────────────────────────
-function DeployBanner() {
-  return (
-    <div style={{ background: "#1c1c1e", border: "1px solid #f59e0b44", borderRadius: 10, padding: "14px 18px", marginBottom: 20, display: "flex", gap: 12, alignItems: "flex-start" }}>
-      <span style={{ fontSize: 22 }}>⚠️</span>
-      <div>
-        <div style={{ fontWeight: 700, color: "#f59e0b", fontSize: 13, marginBottom: 4 }}>Program not deployed</div>
-        <div style={{ fontSize: 12, color: "#a1a1aa", lineHeight: 1.6 }}>
-          The on-chain prediction program uses a placeholder ID. Deploy it first:<br />
-          <code style={{ background: "#09090b", padding: "2px 6px", borderRadius: 4, color: "#ef4444" }}>
-            anchor build &amp;&amp; anchor deploy --provider.cluster devnet
-          </code><br />
-          Then update <code style={{ background: "#09090b", padding: "2px 6px", borderRadius: 4, color: "#a78bfa" }}>PREDICTIONS_PROGRAM_ID</code> in <code>predictions.ts</code> and <code>lib.rs</code>.
-        </div>
-      </div>
-    </div>
-  );
-}
-
 interface MarketCardProps {
   m: MarketAccount;
   pos: PositionAccount | null;
@@ -370,7 +352,6 @@ export function PredictionsTab({ wallet, isMobile }: Props) {
   // ── list view ──────────────────────────────────────────────────────────
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: isMobile ? "16px 12px" : "24px 0" }}>
-      <DeployBanner />
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <div>

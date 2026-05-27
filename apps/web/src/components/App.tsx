@@ -1775,13 +1775,39 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           {/* SETTINGS TAB */}
           {tab === "settings" && (
             <SettingsBody section={settingsSection}>
+            {(() => {
+            const activeSettings: SettingsSection = settingsSection === "wallet" ? "wallet" : "sounds";
+            return (
             <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px", maxWidth: 560 }}>
               <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
                 <IconCog size={isMobile ? 16 : 18} /> Settings
               </h1>
-              <p style={{ fontSize: 11, color: "#3f3f46", marginBottom: 24 }}>Configure your GEASS experience</p>
+              <p style={{ fontSize: 11, color: "#3f3f46", marginBottom: 16 }}>Configure your GEASS experience</p>
+
+              {/* Section toggle — keeps Sound Alerts and Wallet fully separate */}
+              <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
+                {([
+                  ["sounds", "Sound Alerts", <IconSpeaker key="s" size={11} />],
+                  ["wallet", "Wallet",       <IconWallet  key="w" size={11} />],
+                ] as [SettingsSection, string, React.ReactNode][]).map(([id, label, icon]) => {
+                  const active = activeSettings === id;
+                  return (
+                    <button key={id} onClick={() => setSettingsSection(id)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 8,
+                        border: `1px solid ${active ? "#a855f7" : "#27272a"}`,
+                        background: active ? "#a855f722" : "transparent",
+                        color: active ? "#a855f7" : "#71717a",
+                        fontSize: 11, fontWeight: active ? 700 : 500, cursor: "pointer",
+                      }}>
+                      {icon} {label}
+                    </button>
+                  );
+                })}
+              </div>
 
               {/* Sounds */}
+              {activeSettings === "sounds" && (
               <div id="settings-sounds" style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 16px", marginBottom: 16, scrollMarginTop: 80 }}>
                 <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
                   <IconSpeaker size={11} /> SOUND ALERTS
@@ -1837,8 +1863,11 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   );
                 })}
               </div>
+              )}
 
               {/* Phantom wallet */}
+              {activeSettings === "wallet" && (
+              <>
               <div id="settings-wallet" style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 16px", marginBottom: 16, scrollMarginTop: 80 }}>
                 <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
                   <IconWallet size={11} /> PHANTOM WALLET
@@ -1896,7 +1925,11 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
               {/* Internal trading wallet */}
               <InternalWalletPanel iw={iw} />
+              </>
+              )}
             </div>
+            );
+            })()}
             </SettingsBody>
           )}
 

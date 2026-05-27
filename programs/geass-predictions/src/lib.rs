@@ -1,7 +1,6 @@
 use anchor_lang::prelude::*;
 
-// Replace after `anchor keys list` and `anchor deploy --provider.cluster devnet`
-declare_id!("GEASSPred1111111111111111111111111111111111");
+declare_id!("BwjuHiMenCuF45T82rMerzeqgbVQLqrKyxmb5pyBD4xm");
 
 pub const MAX_QUESTION_LEN: usize = 200;
 pub const MAX_OUTCOME_LEN:  usize = 60;
