@@ -312,3 +312,44 @@ export const IconCamera = (p: IconProps) => (
     <circle cx="12" cy="13" r="4" />
   </Svg>
 );
+
+/** Globe / Social Tracker icon. */
+export const IconGlobe = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M2 12h20" />
+    <path d="M12 2a14.5 14.5 0 0 1 0 20A14.5 14.5 0 0 1 12 2Z" />
+  </Svg>
+);
+
+/** Newspaper / feed icon. */
+export const IconNewspaper = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
+    <path d="M8 7h8M8 11h8M8 15h5" />
+  </Svg>
+);
+
+/** Eye / watch icon. */
+export const IconEye = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+    <circle cx="12" cy="12" r="3" />
+  </Svg>
+);
+
+/** Bell / alert icon. */
+export const IconBell = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+    <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+  </Svg>
+);
+
+/** Trending up arrow. */
+export const IconTrendingUp = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="m22 7-8.5 8.5-5-5L2 17" />
+    <path d="M16 7h6v6" />
+  </Svg>
+);
