@@ -346,6 +346,17 @@ export const IconBell = (p: IconProps) => (
   </Svg>
 );
 
+/** Bot / AI icon. */
+export const IconBot = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3" y="8" width="18" height="12" rx="2" />
+    <path d="M9 12h.01M15 12h.01" />
+    <path d="M9 16h6" />
+    <path d="M12 2v4" />
+    <path d="M8 8V6a4 4 0 0 1 8 0v2" />
+  </Svg>
+);
+
 /** Trending up arrow. */
 export const IconTrendingUp = (p: IconProps) => (
   <Svg {...p}>

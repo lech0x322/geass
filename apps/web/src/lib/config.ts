@@ -17,11 +17,11 @@ export const TIER: Record<string, { l: string; c: string }> = {
   RUGGED: { l: "RUG", c: "#6b7280" },
 };
 
-export type NavId = "home" | "trades" | "launch" | "gems" | "referral" | "pro" | "autosnipe" | "settings" | "trending" | "profile" | "community" | "predictions" | "social";
+export type NavId = "home" | "trades" | "launch" | "gems" | "referral" | "pro" | "autosnipe" | "settings" | "trending" | "profile" | "community" | "predictions" | "social" | "ai-trading";
 
 export type NavIconId =
   | "home" | "broadcast" | "flame" | "rocket" | "zap" | "target"
-  | "users" | "cog" | "crown" | "user" | "chart" | "globe";
+  | "users" | "cog" | "crown" | "user" | "chart" | "globe" | "bot";
 
 export type SettingsSection = "sounds" | "referral" | "wallet";
 /** Settings sub-items that navigate to a different tab entirely. */
@@ -58,6 +58,7 @@ export const NAV: NavItem[] = [
   { id: "community",   label: "Channel",        badge: "NEW", iconId: "users" },
   { id: "predictions", label: "Predictions",    badge: "NEW", iconId: "chart" },
   { id: "social",      label: "Social Tracker", badge: "NEW", iconId: "globe" },
+  { id: "ai-trading",  label: "AI Trading",     badge: "NEW", iconId: "bot"   },
   {
     id: "settings",
     label: "Settings",

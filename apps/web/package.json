@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.99.0",
     "@geass/sdk": "workspace:^",
     "@solana/web3.js": "^1.98.4",
     "@upstash/redis": "^1.38.0",

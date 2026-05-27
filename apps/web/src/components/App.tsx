@@ -24,7 +24,7 @@ import {
   IconCog, IconCrown, IconChevronDown, IconSolana, IconSearch, IconX,
   IconMenu, IconRefresh, IconLock, IconSpeaker, IconWallet, IconPower,
   IconCheck, IconChart, IconArrowUpRight, IconCopy, IconUser, IconHome,
-  IconGlobe,
+  IconGlobe, IconBot,
 } from "./icons";
 import { ProfileTab } from "./ProfileTab";
 import { ProfilePanel } from "./ProfilePanel";
@@ -32,6 +32,7 @@ import { HomeTab } from "./HomeTab";
 import { CommunityTab } from "./CommunityTab";
 import { PredictionsTab } from "./PredictionsTab";
 import { SocialTrackerTab } from "./SocialTrackerTab";
+import { AiTradingTab } from "./AiTradingTab";
 import JupiterSwapModal from "./JupiterSwapModal";
 import type { NavIconId, SettingsSection } from "@/lib/config";
 
@@ -48,6 +49,7 @@ const NAV_ICON: Record<NavIconId, React.FC<{ size?: number }>> = {
   user:      IconUser,
   chart:     IconChart,
   globe:     IconGlobe,
+  bot:       IconBot,
 };
 
 const MONO = "'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace";
@@ -149,7 +151,7 @@ interface Props {
 }
 
 export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
-  const [tab, setTab]         = useState<"home" | "trades" | "launch" | "gems" | "autosnipe" | "referral" | "pro" | "settings" | "trending" | "profile" | "community" | "predictions" | "social">("home");
+  const [tab, setTab]         = useState<"home" | "trades" | "launch" | "gems" | "autosnipe" | "referral" | "pro" | "settings" | "trending" | "profile" | "community" | "predictions" | "social" | "ai-trading">("home");
   const [gems, setGems]       = useState<Gem[]>([]);
   const [loading, setLoading] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
@@ -2402,6 +2404,10 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {tab === "social" && (
             <SocialTrackerTab wallet={wallet} isMobile={isMobile} />
+          )}
+
+          {tab === "ai-trading" && (
+            <AiTradingTab wallet={wallet} isMobile={isMobile} isElite={pro.active} />
           )}
         </main>
 
