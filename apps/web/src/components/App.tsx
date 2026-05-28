@@ -33,6 +33,8 @@ import { CommunityTab } from "./CommunityTab";
 import { PredictionsTab } from "./PredictionsTab";
 import { SocialTrackerTab } from "./SocialTrackerTab";
 import { AiTradingTab } from "./AiTradingTab";
+import { NotificationsBell } from "./NotificationsBell";
+import { pushNotification } from "@/lib/useNotifications";
 import JupiterSwapModal from "./JupiterSwapModal";
 import type { NavIconId, SettingsSection } from "@/lib/config";
 
@@ -373,6 +375,20 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
       return next;
     });
     if (soundRef.current.gems !== "off" && freshGems.length > 0) playSound(soundRef.current.gems);
+    // Push notifications for newly detected high-tier gems
+    freshGems
+      .filter(g => g.tier === "S_TIER" || g.tier === "A_TIER")
+      .slice(0, 5)
+      .forEach(g => {
+        pushNotification({
+          kind:     "gem",
+          severity: g.tier === "S_TIER" ? "success" : "info",
+          title:    `New ${g.tier.replace("_", "-")} gem · $${g.sym}`,
+          body:     `Score ${g.score}${g.kol > 0 ? ` · ${g.kol} KOL${g.kol > 1 ? "s" : ""}` : ""}`,
+          tab:      "gems",
+          meta:     { mint: g.contractAddress },
+        });
+      });
     stream.clear();
     // Auto-snipe newly detected gems if enabled
     const cfg = asRef.current;
@@ -921,9 +937,10 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 {solChange !== 0 && <span style={{ fontSize: 9, color: solChange >= 0 ? "#10b981" : "#ef4444" }}>{solChange >= 0 ? "+" : ""}{solChange.toFixed(1)}%</span>}
               </div>
             )}
-            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 5 }}>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
               {streamConnected && <div className="live-dot" style={{ background: statusColor }} />}
               <span style={{ fontSize: 8, color: statusColor, fontWeight: 600 }}>{statusLabel}</span>
+              <NotificationsBell isMobile onNavigate={t => setTab(t as typeof tab)} />
             </div>
           </div>
         )}
@@ -957,8 +974,8 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
         )}
 
         {/* Multifunctional Search bar */}
-        <div style={{ padding: isMobile ? "8px 12px" : "8px 18px", borderBottom: "1px solid #18181b", background: "#0c0c0e", flexShrink: 0, position: "relative" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, maxWidth: 600 }}>
+        <div style={{ padding: isMobile ? "8px 12px" : "8px 18px", borderBottom: "1px solid #18181b", background: "#0c0c0e", flexShrink: 0, position: "relative", display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, maxWidth: 600, flex: 1 }}>
             {/* Category tabs */}
             {!isMobile && (
               <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
@@ -998,6 +1015,11 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
               )}
             </div>
           </div>
+
+          {/* Notifications bell — desktop only (mobile has it in top bar) */}
+          {!isMobile && (
+            <NotificationsBell onNavigate={t => setTab(t as typeof tab)} />
+          )}
 
           {/* Unified search dropdown */}
           {searchOpen && searchQ.length >= 2 && (kolMatches.length > 0 || searchResults.length > 0 || isSolanaAddress(searchQ)) && (
