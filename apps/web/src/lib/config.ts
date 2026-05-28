@@ -17,7 +17,7 @@ export const TIER: Record<string, { l: string; c: string }> = {
   RUGGED: { l: "RUG", c: "#6b7280" },
 };
 
-export type NavId = "home" | "trades" | "launch" | "gems" | "referral" | "pro" | "autosnipe" | "settings" | "trending" | "profile" | "community" | "predictions" | "social" | "ai-trading";
+export type NavId = "home" | "trades" | "launch" | "gems" | "referral" | "pro" | "autosnipe" | "settings" | "trending" | "profile" | "community" | "predictions" | "social" | "ai-trading" | "intel";
 
 export type NavIconId =
   | "home" | "broadcast" | "flame" | "rocket" | "zap" | "target"
@@ -59,6 +59,7 @@ export const NAV: NavItem[] = [
   { id: "predictions", label: "Predictions",    badge: "NEW", iconId: "chart" },
   { id: "social",      label: "Tracker",        badge: "NEW", iconId: "globe" },
   { id: "ai-trading",  label: "AI Trading",     badge: "NEW", iconId: "bot"   },
+  { id: "intel",       label: "Intel",          badge: "NEW", iconId: "zap"   },
   {
     id: "settings",
     label: "Settings",
