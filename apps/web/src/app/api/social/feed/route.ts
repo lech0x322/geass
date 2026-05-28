@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { firecrawlScrape, firecrawlEnabled } from "@/lib/server/firecrawl";
 
 export const runtime     = "nodejs";
 export const dynamic     = "force-dynamic";
@@ -95,6 +96,45 @@ function parseRSS(xml: string, handle: string): XTweet[] {
   return tweets;
 }
 
+// ── Firecrawl fallback (X profile via JS-rendered scrape) ─────────────────────
+
+async function firecrawlFallback(handle: string): Promise<XTweet[]> {
+  const url = `https://x.com/${handle}`;
+  const res = await firecrawlScrape(url, {
+    formats:         ["markdown"],
+    onlyMainContent: true,
+    waitFor:         2500,
+    timeout:         20_000,
+  });
+  const md = res?.markdown;
+  if (!md) return [];
+
+  // X markdown tweets are loose — split on common separators and treat each
+  // chunk containing time-like text as a candidate tweet. We only need CA hits
+  // to be useful for KOL monitoring.
+  const chunks = md.split(/\n{2,}/).map(s => s.trim()).filter(Boolean);
+  const tweets: XTweet[] = [];
+  const now = Date.now();
+  for (let i = 0; i < chunks.length && tweets.length < 40; i++) {
+    const text = chunks[i].slice(0, 560);
+    if (text.length < 12) continue;
+    const cas = extractCAs(text);
+    // Skip pure navigation chunks (no letters or just hashes/handles)
+    if (!cas.length && !/[a-z]{4,}/i.test(text)) continue;
+    tweets.push({
+      id:      `fc-${handle}-${i}-${now}`,
+      handle,
+      text,
+      pubDate: now - i * 60_000, // approximate ordering
+      url,
+      cas,
+      isRT:    /^rt\s/i.test(text),
+      imgUrl:  null,
+    });
+  }
+  return tweets;
+}
+
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
@@ -113,8 +153,15 @@ export async function GET(req: NextRequest) {
   for (let i = 0; i < handles.length; i += BATCH) {
     const batch  = handles.slice(i, i + BATCH);
     const xmlArr = await Promise.all(batch.map(h => fetchRSS(h)));
+    const failed: string[] = [];
     for (let j = 0; j < batch.length; j++) {
       if (xmlArr[j]) all.push(...parseRSS(xmlArr[j]!, batch[j]));
+      else failed.push(batch[j]);
+    }
+    // Firecrawl fallback for handles where every Nitter host failed
+    if (failed.length && firecrawlEnabled()) {
+      const fcResults = await Promise.all(failed.map(h => firecrawlFallback(h)));
+      for (const list of fcResults) all.push(...list);
     }
   }
 
