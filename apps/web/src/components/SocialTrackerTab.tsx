@@ -3,9 +3,10 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { KOLS } from "@/lib/config";
 import { useKolFeed } from "@/lib/useKolFeed";
+import { KolScanPanel } from "./KolScanPanel";
 import {
   IconGlobe, IconEye, IconNewspaper, IconBell, IconRefresh,
-  IconX, IconArrowUpRight, IconTrendingUp, IconVerified,
+  IconX, IconArrowUpRight, IconTrendingUp, IconVerified, IconRocket,
 } from "./icons";
 import type { HeliusEnhancedTransaction } from "@/types/helius";
 import type { XTweet } from "@/app/api/social/feed/route";
@@ -816,7 +817,7 @@ export function SocialTrackerTab({ wallet: _wallet, isMobile }: SocialTrackerTab
     { id: "xtracker", label: "X Tracker",  icon: <IconGlobe      size={11} />, badge: "NEW" },
     { id: "wallets",  label: "Wallets",     icon: <IconEye        size={11} /> },
     { id: "news",     label: "Alpha News",  icon: <IconNewspaper  size={11} /> },
-    { id: "kol",      label: "KOL Feed",    icon: <IconTrendingUp size={11} /> },
+    { id: "kol",      label: "KOL Scan",    icon: <IconRocket size={11} />, badge: "NEW" },
   ];
 
   return (
@@ -863,7 +864,7 @@ export function SocialTrackerTab({ wallet: _wallet, isMobile }: SocialTrackerTab
       {mainTab === "xtracker" && <XTrackerPanel isMobile={isMobile} />}
       {mainTab === "wallets"  && <WatchlistPanel isMobile={isMobile} />}
       {mainTab === "news"     && <AlphaNewsPanel />}
-      {mainTab === "kol"      && <KolActivityPanel />}
+      {mainTab === "kol"      && <KolScanPanel />}
     </div>
   );
 }
