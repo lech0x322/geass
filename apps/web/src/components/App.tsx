@@ -976,20 +976,6 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
         {/* Multifunctional Search bar */}
         <div style={{ padding: isMobile ? "8px 12px" : "8px 18px", borderBottom: "1px solid #18181b", background: "#0c0c0e", flexShrink: 0, position: "relative", display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, maxWidth: 600, flex: 1 }}>
-            {/* Category tabs */}
-            {!isMobile && (
-              <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
-                {(["all", "tokens", "kol", "wallets"] as const).map(cat => (
-                  <button key={cat} onClick={() => setSearchCategory(cat)}
-                    style={{ padding: "4px 9px", borderRadius: 6, border: "1px solid", fontSize: 9, fontWeight: 700, cursor: "pointer", letterSpacing: "0.5px",
-                      borderColor: searchCategory === cat ? "#a855f7" : "#27272a",
-                      background: searchCategory === cat ? "#a855f718" : "transparent",
-                      color: searchCategory === cat ? "#a855f7" : "#52525b" }}>
-                    {cat === "all" ? "ALL" : cat === "tokens" ? "TOKENS" : cat === "kol" ? "KOL" : "WALLETS"}
-                  </button>
-                ))}
-              </div>
-            )}
             <div style={{ position: "relative", flex: 1 }}>
               <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#52525b", pointerEvents: "none", display: "flex" }}>
                 <IconSearch size={12} />
