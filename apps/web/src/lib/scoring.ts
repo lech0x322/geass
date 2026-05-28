@@ -15,7 +15,7 @@ export function buildGem(
   const vol = pair.volume?.h24 || 0;
   const vmr = mc > 0 ? vol / mc : 0;
   const age = pair.pairCreatedAt ? (Date.now() - pair.pairCreatedAt) / 3600000 : null;
-  if (age !== null && age > 12) return null;
+  if (age !== null && age > 4) return null; // reject anything older than 4h
 
   const pc1 = pair.priceChange?.h1 || 0;
   const buys = pair.txns?.h1?.buys || 0;

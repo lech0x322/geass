@@ -7,26 +7,48 @@ import {
   enrichedTransactions,
   extractMintCandidates,
 } from "./helius";
-import { fetchTokenPair, fetchLatestProfiles } from "./dexscreener";
+import { fetchTokenPair, fetchLatestProfiles, fetchNewPumpTokens } from "./dexscreener";
 import { enrichGems } from "./enrich";
 import { cached } from "./cache";
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-export async function scanViaHelius(count: number): Promise<Gem[]> {
-  const sigs = await pumpSignatures(30);
-  if (!sigs.length) throw new Error("No pump signatures");
-  const txs = await enrichedTransactions(sigs.slice(0, 15).map(s => s.signature));
-  const counts = extractMintCandidates(txs);
-  const mints = [...counts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, SCAN_LIMIT)
-    .map(([m]) => m);
+// ── Helius: only process pump.fun CREATE transactions ─────────────────────────
+// Previously: any token transfer on pump.fun — included old tokens being traded.
+// Now: filter to signatures whose logs contain "Instruction: Create" so we only
+// see genuinely freshly minted tokens.
 
-  if (!mints.length) throw new Error("No mints found");
+export async function scanViaHelius(count: number): Promise<Gem[]> {
+  const sigs = await pumpSignatures(60);
+  if (!sigs.length) throw new Error("No pump signatures");
+
+  const createMints: string[] = [];
+  for (let i = 0; i < sigs.length && createMints.length < SCAN_LIMIT * 2; i += 15) {
+    const batch = sigs.slice(i, i + 15).map(s => s.signature);
+    const txs = await enrichedTransactions(batch);
+    for (const tx of txs) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const logs: string[] = (tx as any).logs ?? [];
+      const isCreate = logs.some(l => /Instruction:\s*Create\b/i.test(l));
+      if (!isCreate) continue;
+      for (const t of tx.tokenTransfers ?? []) {
+        if (t.mint && !createMints.includes(t.mint)) createMints.push(t.mint);
+      }
+    }
+  }
+
+  // Supplement with pump.fun API sorted by creation_time
+  try {
+    const pumpNew = await fetchNewPumpTokens();
+    for (const t of pumpNew.slice(0, 20)) {
+      if (!createMints.includes(t.mint)) createMints.push(t.mint);
+    }
+  } catch { /* optional supplement */ }
+
+  if (!createMints.length) throw new Error("No new mints found");
 
   const gems: Gem[] = [];
-  for (const mint of mints) {
+  for (const mint of createMints.slice(0, SCAN_LIMIT)) {
     if (gems.length >= count) break;
     const pair = await fetchTokenPair(mint);
     if (pair) {
@@ -36,21 +58,31 @@ export async function scanViaHelius(count: number): Promise<Gem[]> {
     await sleep(180);
   }
 
-  // Enrich top results with on-chain safety + holder data in parallel.
   await enrichGems(gems.slice(0, 5), 4);
-
   return gems.sort((a, b) => b.score - a.score);
 }
 
+// ── Pump.fun new token feed (primary) + DexScreener profiles (fallback) ───────
+// fetchLatestProfiles returns tokens that updated logo/socials — could be old.
+// fetchNewPumpTokens returns tokens sorted by creation_time — genuinely new.
+
 export async function scanViaDexScreener(count: number): Promise<Gem[]> {
-  const profiles = await fetchLatestProfiles();
-  if (!profiles.length) throw new Error("No DexScreener profiles");
+  let mints: string[] = [];
+  const pumpNew = await fetchNewPumpTokens();
+  if (pumpNew.length) {
+    mints = pumpNew.slice(0, SCAN_LIMIT * 2).map(t => t.mint);
+  } else {
+    const profiles = await fetchLatestProfiles();
+    if (!profiles.length) throw new Error("No token sources available");
+    mints = profiles.slice(0, SCAN_LIMIT).map(p => p.tokenAddress);
+  }
+
   const gems: Gem[] = [];
-  for (const p of profiles.slice(0, SCAN_LIMIT)) {
+  for (const mint of mints) {
     if (gems.length >= count) break;
-    const pair = await fetchTokenPair(p.tokenAddress);
+    const pair = await fetchTokenPair(mint);
     if (pair) {
-      const g = buildGem(p.tokenAddress, pair, "dex");
+      const g = buildGem(mint, pair, "dex");
       if (g && g.score >= SCORE_MIN_DEX) gems.push(g);
     }
     await sleep(100);
