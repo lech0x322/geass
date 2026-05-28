@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useKolWatch, useGems, useCompetitors, useKbSearch } from "@/lib/useFirecrawl";
 import { KOLS } from "@/lib/config";
 import { pushNotification } from "@/lib/useNotifications";
+import MriLeaderboard from "./MriLeaderboard";
 
 const MONO = "'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace";
 const RED  = "#ff2b4e";
@@ -26,10 +27,10 @@ interface Props {
   isMobile?: boolean;
 }
 
-type Section = "kol" | "gems" | "competitors" | "kb";
+type Section = "mri" | "kol" | "gems" | "competitors" | "kb";
 
 export function IntelTab({ isMobile = false }: Props) {
-  const [section, setSection] = useState<Section>("kol");
+  const [section, setSection] = useState<Section>("mri");
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, fontFamily: MONO, background: "#08080d" }}>
@@ -46,8 +47,8 @@ export function IntelTab({ isMobile = false }: Props) {
 
         {/* Section tabs */}
         <div style={{ display: "flex", gap: 4, borderBottom: "1px solid #18181c", paddingBottom: 0 }}>
-          {(["kol", "gems", "competitors", "kb"] as Section[]).map(s => {
-            const labels: Record<Section, string> = { kol: "KOL Watch", gems: "Gem Scraper", competitors: "Competitors", kb: "KB Search" };
+          {(["mri", "kol", "gems", "competitors", "kb"] as Section[]).map(s => {
+            const labels: Record<Section, string> = { mri: "MRI Radar", kol: "KOL Watch", gems: "Gem Scraper", competitors: "Competitors", kb: "KB Search" };
             const active = section === s;
             return (
               <button key={s} onClick={() => setSection(s)} style={{
@@ -67,6 +68,7 @@ export function IntelTab({ isMobile = false }: Props) {
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? "14px" : "20px 24px" }}>
+        {section === "mri"          && <MriLeaderboard   isMobile={isMobile} />}
         {section === "kol"         && <KolWatchPanel    isMobile={isMobile} />}
         {section === "gems"        && <GemsPanel        isMobile={isMobile} />}
         {section === "competitors" && <CompetitorsPanel isMobile={isMobile} />}
