@@ -57,7 +57,7 @@ export const NAV: NavItem[] = [
   { id: "autosnipe",  label: "Auto-Snipe",                               badge: "NEW",   pro: true, iconId: "target" },
   { id: "community",   label: "Channel",        badge: "NEW", iconId: "users" },
   { id: "predictions", label: "Predictions",    badge: "NEW", iconId: "chart" },
-  { id: "social",      label: "Social Tracker", badge: "NEW", iconId: "globe" },
+  { id: "social",      label: "Tracker",        badge: "NEW", iconId: "globe" },
   { id: "ai-trading",  label: "AI Trading",     badge: "NEW", iconId: "bot"   },
   {
     id: "settings",

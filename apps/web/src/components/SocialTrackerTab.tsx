@@ -832,7 +832,7 @@ export function SocialTrackerTab({ wallet: _wallet, isMobile }: SocialTrackerTab
       <div style={{ marginBottom: 18 }}>
         <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8, margin: 0, marginBottom: 4 }}>
           <IconGlobe size={isMobile ? 16 : 18} style={{ color: "#ff2b4e" }} />
-          Social Tracker
+          Tracker
         </h1>
         <p style={{ fontSize: 11, color: "#3f3f46", margin: 0 }}>
           X/Twitter feed · Wallet watcher · Alpha signals · KOL trades
