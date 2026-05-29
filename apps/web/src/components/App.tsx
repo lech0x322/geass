@@ -34,6 +34,8 @@ import { PredictionsTab } from "./PredictionsTab";
 import { SocialTrackerTab } from "./SocialTrackerTab";
 import { AiTradingTab } from "./AiTradingTab";
 import IntelTab from "./IntelTab";
+import { WatchlistTab } from "./WatchlistTab";
+import { useWatchlist } from "@/lib/useWatchlist";
 import { NotificationsBell } from "./NotificationsBell";
 import { pushNotification } from "@/lib/useNotifications";
 import JupiterSwapModal from "./JupiterSwapModal";
@@ -235,6 +237,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [communitySoundId,  setCommunitySoundId]  = useState<SoundId>("ping");
   const [geassAlertSoundId, setGeassAlertSoundId] = useState<SoundId>("alert");
   const [soundExpandedKey,  setSoundExpandedKey]  = useState<string | null>(null);
+  const watchlist = useWatchlist();
   const [tradingSlippage,   setTradingSlippage]   = useState<string>("10");
   const [tradingPriorityFee,setTradingPriorityFee]= useState<string>("0.0005");
   const [tradingMaxBuy,     setTradingMaxBuy]     = useState<string>("0.1");
@@ -1257,7 +1260,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                       <div className="pulse" style={{ fontSize: 11, color: "#dc262680", marginTop: 10, letterSpacing: "2px" }}>SCANNING SOLANA MATRIX...</div>
                     </div>
                   )}
-                  {filtered.map(g => <GemCard key={g.id} gem={g} isNew={newIds.has(g.id)} onSnipe={setSnipeGem} onDex={(addr, sym) => setDexToken({ address: addr, symbol: sym })} />)}
+                  {filtered.map(g => <GemCard key={g.id} gem={g} isNew={newIds.has(g.id)} onSnipe={setSnipeGem} onDex={(addr, sym) => setDexToken({ address: addr, symbol: sym })} onWatch={(mint, sym, name) => watchlist.has(mint) ? watchlist.remove(mint) : watchlist.add({ mint, sym, name })} isWatched={watchlist.has(g.id)} />)}
                   {!loading && gems.length > 0 && filtered.length === 0 && (
                     <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: "#3f3f46" }}>
                       <div style={{ color: "#3f3f46", marginBottom: 6, display: "flex", justifyContent: "center" }}><IconSearch size={24} /></div>
@@ -2494,6 +2497,10 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {tab === "intel" && (
             <IntelTab isMobile={isMobile} />
+          )}
+
+          {tab === "watchlist" && (
+            <WatchlistTab isMobile={isMobile} />
           )}
         </main>
 

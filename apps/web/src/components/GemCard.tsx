@@ -79,11 +79,13 @@ function SafetyBadge({ ok, label }: { ok: boolean; label: string }) {
   );
 }
 
-export function GemCard({ gem, isNew, onSnipe, onDex }: {
+export function GemCard({ gem, isNew, onSnipe, onDex, onWatch, isWatched }: {
   gem: Gem;
   isNew: boolean;
   onSnipe: (g: Gem) => void;
   onDex?: (address: string, symbol: string) => void;
+  onWatch?: (mint: string, sym: string, name: string) => void;
+  isWatched?: boolean;
 }) {
   const tier = TIER[gem.tier] || TIER.C_TIER;
   const mcap = fmtMcap(gem.mcap);
@@ -179,6 +181,13 @@ export function GemCard({ gem, isNew, onSnipe, onDex }: {
             fontSize: 10, fontWeight: 600, textDecoration: "none", textAlign: "center" }}>
           Pump ↗
         </a>
+        {onWatch && gem.contractAddress && (
+          <button onClick={() => onWatch(gem.contractAddress, gem.sym, gem.name)}
+            title={isWatched ? "Remove from watchlist" : "Add to watchlist"}
+            style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${isWatched ? "#f59e0b55" : "#27272a"}`, background: isWatched ? "#f59e0b18" : "transparent", color: isWatched ? "#f59e0b" : "#71717a", fontSize: 10, fontWeight: 600, cursor: "pointer" }}>
+            {isWatched ? "★" : "☆"}
+          </button>
+        )}
         {onDex && gem.contractAddress && (
           <button onClick={() => onDex(gem.contractAddress, gem.sym)}
             style={{ flex: 1, background: "#f9731612", border: "1px solid #f9731640", color: "#f97316",
