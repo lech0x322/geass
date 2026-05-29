@@ -79,16 +79,18 @@ function SafetyBadge({ ok, label }: { ok: boolean; label: string }) {
   );
 }
 
-export function GemCard({ gem, isNew, onSnipe, onDex, onWatch, isWatched }: {
+export function GemCard({ gem, isNew, onSnipe, onDex, onWatch, isWatched, isMobile }: {
   gem: Gem;
   isNew: boolean;
   onSnipe: (g: Gem) => void;
   onDex?: (address: string, symbol: string) => void;
   onWatch?: (mint: string, sym: string, name: string) => void;
   isWatched?: boolean;
+  isMobile?: boolean;
 }) {
   const tier = TIER[gem.tier] || TIER.C_TIER;
   const mcap = fmtMcap(gem.mcap);
+  const btnH = isMobile ? 40 : 30;
 
   return (
     <div className={isNew ? "gem-new" : ""}
@@ -177,27 +179,30 @@ export function GemCard({ gem, isNew, onSnipe, onDex, onWatch, isWatched }: {
       {/* Actions */}
       <div style={{ display: "flex", gap: 5 }}>
         <a href={gem.contractAddress ? `https://pump.fun/coin/${gem.contractAddress}` : "#"} target="_blank" rel="noreferrer"
-          style={{ flex: 1, background: "#18181b", border: "1px solid #27272a", color: "#a1a1aa", padding: "7px", borderRadius: 7,
-            fontSize: 10, fontWeight: 600, textDecoration: "none", textAlign: "center" }}>
+          style={{ flex: 1, background: "#18181b", border: "1px solid #27272a", color: "#a1a1aa", padding: `0 4px`,
+            minHeight: btnH, borderRadius: 7, fontSize: 10, fontWeight: 600, textDecoration: "none",
+            display: "flex", alignItems: "center", justifyContent: "center" }}>
           Pump ↗
         </a>
         {onWatch && gem.contractAddress && (
           <button onClick={() => onWatch(gem.contractAddress, gem.sym, gem.name)}
             title={isWatched ? "Remove from watchlist" : "Add to watchlist"}
-            style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${isWatched ? "#f59e0b55" : "#27272a"}`, background: isWatched ? "#f59e0b18" : "transparent", color: isWatched ? "#f59e0b" : "#71717a", fontSize: 10, fontWeight: 600, cursor: "pointer" }}>
+            style={{ minWidth: btnH, minHeight: btnH, borderRadius: 7, border: `1px solid ${isWatched ? "#f59e0b55" : "#27272a"}`,
+              background: isWatched ? "#f59e0b18" : "transparent", color: isWatched ? "#f59e0b" : "#71717a",
+              fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
             {isWatched ? "★" : "☆"}
           </button>
         )}
         {onDex && gem.contractAddress && (
           <button onClick={() => onDex(gem.contractAddress, gem.sym)}
-            style={{ flex: 1, background: "#f9731612", border: "1px solid #f9731640", color: "#f97316",
-              padding: "7px", borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
+            style={{ flex: 1, background: "#f9731612", border: "1px solid #f9731640", color: "#f97316", minHeight: btnH,
+              borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
             DEX ↗
           </button>
         )}
         <button onClick={() => onSnipe(gem)}
-          style={{ flex: 1, background: "linear-gradient(135deg,#dc2626,#7c3aed)", border: "none", color: "#fff",
-            padding: "7px", borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: ".5px",
+          style={{ flex: 1, background: "linear-gradient(135deg,#dc2626,#7c3aed)", border: "none", color: "#fff", minHeight: btnH,
+            borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: ".5px",
             display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
           <IconZap size={11} /> SNIPE
         </button>

@@ -116,6 +116,9 @@ input[type=range]::-moz-range-thumb     { width:14px;height:14px;background:#ff2
   .app-g3 { grid-template-columns:1fr 1fr !important;gap:8px !important }
   .app-g2 { grid-template-columns:1fr !important;gap:10px !important }
   .desktop-col { display:none !important }
+  * { -webkit-tap-highlight-color:transparent }
+  button,a { touch-action:manipulation }
+  button:active { opacity:.72 }
 }
 `;
 
@@ -948,25 +951,25 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Mobile top bar */}
         {isMobile && (
-          <div style={{ height: 50, background: "#08080d", borderBottom: "1px solid #151520", display: "flex", alignItems: "center", padding: "0 14px", gap: 10, flexShrink: 0 }}>
+          <div style={{ height: 52, background: "#08080d", borderBottom: "1px solid #151520", display: "flex", alignItems: "center", padding: "0 10px", gap: 8, flexShrink: 0 }}>
+            {/* Hamburger — 44×44 touch target */}
             <button onClick={() => setSidebarOpen(true)} aria-label="Open menu"
-              style={{ background: "transparent", border: "1px solid #27272a", color: "#a1a1aa", width: 32, height: 32, borderRadius: 7, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <IconMenu size={16} />
+              style={{ background: "transparent", border: "none", color: "#a1a1aa", width: 44, height: 44, borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <IconMenu size={18} />
             </button>
-            <div style={{ filter: "drop-shadow(0 0 5px rgba(244,63,94,0.3))", display: "flex" }}>
-              <GeassLogo size={22} />
+            <div style={{ filter: "drop-shadow(0 0 5px rgba(255,43,78,0.3))", display: "flex", flexShrink: 0 }}>
+              <GeassLogo size={20} />
             </div>
-            <span style={{ fontWeight: 800, fontSize: 12, letterSpacing: "1.5px", background: "linear-gradient(90deg,#f4f4f5,#a1a1aa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>GEASS</span>
+            <span style={{ fontWeight: 800, fontSize: 12, letterSpacing: "2px", color: "#f4f4f5", flexShrink: 0 }}>GEASS</span>
             {solPrice && (
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <IconSolana size={12} />
+              <div style={{ display: "flex", alignItems: "center", gap: 4, background: "#111113", border: "1px solid #1e1e24", borderRadius: 6, padding: "3px 8px", flexShrink: 0 }}>
+                <IconSolana size={11} />
                 <span style={{ fontSize: 11, fontWeight: 700, color: "#f4f4f5" }}>${solPrice.toFixed(2)}</span>
                 {solChange !== 0 && <span style={{ fontSize: 9, color: solChange >= 0 ? "#10b981" : "#ef4444" }}>{solChange >= 0 ? "+" : ""}{solChange.toFixed(1)}%</span>}
               </div>
             )}
-            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
               {streamConnected && <div className="live-dot" style={{ background: statusColor }} />}
-              <span style={{ fontSize: 8, color: statusColor, fontWeight: 600 }}>{statusLabel}</span>
               <NotificationsBell isMobile onNavigate={t => setTab(t as typeof tab)} />
             </div>
           </div>
@@ -1013,12 +1016,13 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 onFocus={() => setSearchOpen(true)}
                 onBlur={() => setTimeout(() => setSearchOpen(false), 300)}
                 placeholder={
+                  isMobile ? "Search or paste CA…" :
                   searchCategory === "tokens"  ? "Search token name, symbol or mint…" :
                   searchCategory === "kol"     ? "Search KOL name or @handle…" :
                   searchCategory === "wallets" ? "Paste Solana wallet address…" :
                   "Search tokens, KOL traders, wallets…"
                 }
-                style={{ width: "100%", background: "#111113", border: "1px solid #27272a", borderRadius: 9, color: "#f4f4f5", padding: "7px 30px 7px 30px", fontSize: 11, outline: "none", transition: "border .15s", boxSizing: "border-box" }}
+                style={{ width: "100%", background: "#111113", border: "1px solid #27272a", borderRadius: 9, color: "#f4f4f5", padding: isMobile ? "10px 32px 10px 32px" : "7px 30px 7px 30px", fontSize: isMobile ? 13 : 11, outline: "none", transition: "border .15s", boxSizing: "border-box" }}
               />
               {searchQ && (
                 <button onClick={() => { setSearchQ(""); setSearchResults([]); }} aria-label="Clear"
@@ -1157,7 +1161,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* ALPHA SCANNER TAB */}
           {tab === "gems" && (
-            <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px" }}>
+            <div style={{ padding: isMobile ? "14px 14px 88px" : "18px 22px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 5, flexWrap: "wrap" }}>
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", letterSpacing: ".3px", display: "flex", alignItems: "center", gap: 8 }}>
                   <IconZap size={isMobile ? 16 : 18} /> Alpha Scanner
@@ -1260,7 +1264,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                       <div className="pulse" style={{ fontSize: 11, color: "#dc262680", marginTop: 10, letterSpacing: "2px" }}>SCANNING SOLANA MATRIX...</div>
                     </div>
                   )}
-                  {filtered.map(g => <GemCard key={g.id} gem={g} isNew={newIds.has(g.id)} onSnipe={setSnipeGem} onDex={(addr, sym) => setDexToken({ address: addr, symbol: sym })} onWatch={(mint, sym, name) => watchlist.has(mint) ? watchlist.remove(mint) : watchlist.add({ mint, sym, name })} isWatched={watchlist.has(g.id)} />)}
+                  {filtered.map(g => <GemCard key={g.id} gem={g} isNew={newIds.has(g.id)} isMobile={isMobile} onSnipe={setSnipeGem} onDex={(addr, sym) => setDexToken({ address: addr, symbol: sym })} onWatch={(mint, sym, name) => watchlist.has(mint) ? watchlist.remove(mint) : watchlist.add({ mint, sym, name })} isWatched={watchlist.has(g.id)} />)}
                   {!loading && gems.length > 0 && filtered.length === 0 && (
                     <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: "#3f3f46" }}>
                       <div style={{ color: "#3f3f46", marginBottom: 6, display: "flex", justifyContent: "center" }}><IconSearch size={24} /></div>
@@ -1280,7 +1284,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* HOME TAB */}
           {tab === "home" && (
-            <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px" }}>
+            <div style={{ padding: isMobile ? "14px 14px 88px" : "18px 22px" }}>
               <HomeTab
                 solPrice={solPrice}
                 solChange={solChange}
@@ -1297,7 +1301,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* LIVE FEED TAB */}
           {tab === "trades" && (
-            <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px" }}>
+            <div style={{ padding: isMobile ? "14px 14px 88px" : "18px 22px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8 }}>
                   <IconBroadcast size={isMobile ? 16 : 18} /> Live KOL Feed
@@ -1355,7 +1359,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* LAUNCH TAB */}
           {tab === "launch" && (
-            <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px", maxWidth: 500 }}>
+            <div style={{ padding: isMobile ? "14px 14px 88px" : "18px 22px", maxWidth: 500 }}>
               <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
                 <IconRocket size={isMobile ? 16 : 18} /> Launch Token
               </h1>
@@ -1501,7 +1505,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* AUTO-SNIPE TAB */}
           {tab === "autosnipe" && (
-            <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px", maxWidth: 560 }}>
+            <div style={{ padding: isMobile ? "14px 14px 88px" : "18px 22px", maxWidth: 560 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8 }}>
                   <IconTarget size={isMobile ? 16 : 18} /> Auto-Snipe
@@ -1658,7 +1662,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
             const nextTierRefs = refs >= 15 ? null : refs >= 8 ? 15 : refs >= 4 ? 8 : 4;
             const progressPct  = nextTierRefs ? Math.min((refs / nextTierRefs) * 100, 100) : 100;
             return (
-              <div style={{ padding: isMobile ? "14px 14px 80px" : "24px 28px", maxWidth: 700 }}>
+              <div style={{ padding: isMobile ? "14px 14px 88px" : "24px 28px", maxWidth: 700 }}>
 
                 {/* Header */}
                 <div style={{ position: "relative", background: "#070708", border: "1px solid #18181c", padding: isMobile ? "20px 16px" : "28px 24px", marginBottom: 1, overflow: "hidden" }}>
@@ -1837,7 +1841,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
             {(() => {
             const activeSettings: SettingsSection = settingsSection === "wallet" ? "wallet" : settingsSection === "trading" ? "trading" : "sounds";
             return (
-            <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px", maxWidth: 560 }}>
+            <div style={{ padding: isMobile ? "14px 14px 88px" : "18px 22px", maxWidth: 560 }}>
               <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
                 <IconCog size={isMobile ? 16 : 18} /> Settings
               </h1>
@@ -1854,8 +1858,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                   return (
                     <button key={id} onClick={() => setSettingsSection(id)}
                       style={{
-                        display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 8,
-                        border: `1px solid ${active ? "#a855f7" : "#27272a"}`,
+                        display: "flex", alignItems: "center", gap: 6,
+                        padding: isMobile ? "10px 14px" : "8px 16px", minHeight: isMobile ? 44 : 36,
+                        borderRadius: 8, border: `1px solid ${active ? "#a855f7" : "#27272a"}`,
                         background: active ? "#a855f722" : "transparent",
                         color: active ? "#a855f7" : "#71717a",
                         fontSize: 11, fontWeight: active ? 700 : 500, cursor: "pointer",
@@ -2036,7 +2041,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* TRENDING TAB */}
           {tab === "trending" && (
-            <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px" }}>
+            <div style={{ padding: isMobile ? "14px 14px 88px" : "18px 22px" }}>
               {/* Header */}
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8 }}>
@@ -2335,7 +2340,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* PRO TAB */}
           {tab === "pro" && (
-            <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px", maxWidth: 700 }}>
+            <div style={{ padding: isMobile ? "14px 14px 88px" : "18px 22px", maxWidth: 700 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8 }}>
                   <IconCrown size={isMobile ? 16 : 18} /> GEASS Pro
@@ -2514,23 +2519,23 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           )}
         </main>
 
-        {/* Mobile bottom tab bar — only essential items, settings lives in hamburger */}
+        {/* Mobile bottom tab bar */}
         {isMobile && (
-          <nav style={{ height: 60, background: "#08080d", borderTop: "1px solid #151520", display: "flex", alignItems: "stretch", flexShrink: 0 }}>
+          <nav style={{ height: 64, background: "#08080d", borderTop: "1px solid #151520", display: "flex", alignItems: "stretch", flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom,0px)" }}>
             {NAV.filter(n => n.mobile).map(n => {
               const isActive = tab === n.id;
-              const accent = n.pro ? "#a855f7" : "#f43f5e";
+              const accent = n.pro ? "#a855f7" : "#ff2b4e";
               return (
                 <button key={n.id} onClick={() => { setTab(n.id as typeof tab); setSettingsOpen(false); }}
-                  style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
-                    background: isActive ? (n.pro ? "rgba(168,85,247,0.06)" : "rgba(244,63,94,0.06)") : "transparent",
-                    border: "none", cursor: "pointer",
+                  style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+                    background: isActive ? (n.pro ? "rgba(168,85,247,0.08)" : "rgba(255,43,78,0.07)") : "transparent",
+                    border: "none", cursor: "pointer", minWidth: 0, padding: "0 4px",
                     color: isActive ? accent : "#4a4a5a",
                     borderTop: isActive ? `2px solid ${accent}` : "2px solid transparent",
-                    transition: "background .15s, color .15s",
+                    transition: "color .12s",
                   }}>
-                  <NavIcon id={n.iconId} size={18} />
-                  <span style={{ fontSize: 9, fontWeight: isActive ? 700 : 500, letterSpacing: isActive ? ".3px" : "0" }}>{n.mobileLabel ?? n.label}</span>
+                  <NavIcon id={n.iconId} size={20} />
+                  <span style={{ fontSize: 10, fontWeight: isActive ? 700 : 400, letterSpacing: isActive ? ".2px" : "0", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.mobileLabel ?? n.label}</span>
                 </button>
               );
             })}
