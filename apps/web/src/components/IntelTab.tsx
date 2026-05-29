@@ -30,7 +30,7 @@ interface Props {
 type Section = "mri" | "kol" | "gems" | "competitors" | "kb";
 
 export function IntelTab({ isMobile = false }: Props) {
-  const [section, setSection] = useState<Section>("mri");
+  const [section, setSection] = useState<Section>("kol");
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, fontFamily: MONO, background: "#08080d" }}>

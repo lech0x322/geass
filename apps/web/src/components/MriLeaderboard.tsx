@@ -107,8 +107,9 @@ export default function MriLeaderboard({ isMobile }: { isMobile?: boolean }) {
         if (!r.ok) throw new Error("failed");
         return r.json();
       })
-      .then((data: MriScore[]) => {
-        setScores(data);
+      .then((data: { scores?: MriScore[] } | MriScore[]) => {
+        const list = Array.isArray(data) ? data : (data.scores ?? []);
+        setScores(list);
         setLastUpdated(Date.now());
         setLoading(false);
       })
