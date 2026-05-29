@@ -2016,6 +2016,16 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 <div style={{ fontSize: 10, color: "#3f3f46", marginTop: 4, padding: "8px 10px", background: "#0a0a0c", borderRadius: 8, border: "1px solid #1e1e21" }}>
                   These values apply to all buy/sell transactions from the Alpha Scanner and Auto-Snipe.
                 </div>
+                <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid #1e1e21" }}>
+                  <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 10 }}>TELEGRAM ALERTS</div>
+                  <div style={{ fontSize: 11, color: "#71717a", lineHeight: 1.7 }}>
+                    Set <code style={{ background: "#1e1e24", padding: "1px 5px", borderRadius: 4, fontSize: 10 }}>TELEGRAM_BOT_TOKEN</code> and{" "}
+                    <code style={{ background: "#1e1e24", padding: "1px 5px", borderRadius: 4, fontSize: 10 }}>TELEGRAM_CHAT_ID</code> in your environment to receive KOL and gem alerts on Telegram.
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 10, color: "#3f3f46" }}>
+                    Alerts fire automatically for gems scoring ≥ 75 and KOL trades tracked by the feed.
+                  </div>
+                </div>
               </div>
               )}
             </div>
