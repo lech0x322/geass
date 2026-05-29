@@ -182,6 +182,15 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isSolanaAddress = (q: string) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q.trim());
+  const [caScore, setCaScore] = useState<{ total: number; tier: string; sym: string; signals: string[] } | null>(null);
+  const [caScoreLoading, setCaScoreLoading] = useState(false);
+  const scanCA = useCallback((mint: string) => {
+    setCaScore(null); setCaScoreLoading(true);
+    fetch(`/api/mri/score?mint=${encodeURIComponent(mint)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { setCaScore(d); setCaScoreLoading(false); })
+      .catch(() => setCaScoreLoading(false));
+  }, []);
   const kolMatches = searchQ.length >= 2
     ? KOLS.filter(k =>
         k.name.toLowerCase().includes(searchQ.toLowerCase()) ||
@@ -1050,21 +1059,40 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 </>
               )}
 
-              {/* Wallet / address section */}
+              {/* CA / address section */}
               {(searchCategory === "all" || searchCategory === "wallets") && isSolanaAddress(searchQ) && (
                 <>
-                  <div style={{ padding: "6px 12px 3px", fontSize: 8, fontWeight: 700, color: "#52525b", letterSpacing: "1px" }}>WALLET ADDRESS</div>
-                  <button onMouseDown={() => { window.open(`https://solscan.io/account/${searchQ.trim()}`, "_blank"); setSearchOpen(false); }}
-                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "transparent", border: "none", borderBottom: "1px solid #18181b", cursor: "pointer", textAlign: "left" }}>
-                    <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#10b98115", border: "1px solid #10b98130", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <IconWallet size={12} style={{ color: "#10b981" }} />
+                  <div style={{ padding: "6px 12px 3px", fontSize: 8, fontWeight: 700, color: "#52525b", letterSpacing: "1px" }}>CONTRACT ADDRESS</div>
+                  <div style={{ padding: "8px 12px", borderBottom: "1px solid #18181b" }}>
+                    <div style={{ fontSize: 9, color: "#3f3f46", fontFamily: "monospace", marginBottom: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{searchQ.trim()}</div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onMouseDown={() => { scanCA(searchQ.trim()); }}
+                        style={{ flex: 1, padding: "7px 0", borderRadius: 7, border: "1px solid #ff2b4e55", background: "#ff2b4e12", color: "#ff2b4e", fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: "0.05em" }}>
+                        {caScoreLoading ? "Scanning…" : "Scan Token"}
+                      </button>
+                      <button onMouseDown={() => { window.open(`https://solscan.io/token/${searchQ.trim()}`, "_blank"); setSearchOpen(false); }}
+                        style={{ padding: "7px 12px", borderRadius: 7, border: "1px solid #27272a", background: "transparent", color: "#71717a", fontSize: 10, cursor: "pointer" }}>
+                        Solscan ↗
+                      </button>
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "#f4f4f5" }}>Open on Solscan</div>
-                      <div style={{ fontSize: 9, color: "#52525b", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{searchQ.trim()}</div>
-                    </div>
-                    <span style={{ fontSize: 9, color: "#10b981", flexShrink: 0 }}>Solscan ↗</span>
-                  </button>
+                    {caScore && (
+                      <div style={{ marginTop: 8, padding: "8px 10px", background: "#0a0a0c", borderRadius: 8, border: "1px solid #1e1e24" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontWeight: 800, fontSize: 13, color: "#f4f4f5" }}>{caScore.sym}</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 4,
+                            background: caScore.tier === "ALERT" ? "#ff2b4e22" : caScore.tier === "S" ? "#10b98122" : "#3b82f622",
+                            color: caScore.tier === "ALERT" ? "#ff2b4e" : caScore.tier === "S" ? "#10b981" : "#3b82f6",
+                            border: `1px solid ${caScore.tier === "ALERT" ? "#ff2b4e44" : caScore.tier === "S" ? "#10b98144" : "#3b82f644"}` }}>
+                            {caScore.tier}
+                          </span>
+                          <span style={{ marginLeft: "auto", fontSize: 15, fontWeight: 800, color: "#f4f4f5" }}>{caScore.total}</span>
+                        </div>
+                        {caScore.signals.slice(0,3).map((s, i) => (
+                          <div key={i} style={{ fontSize: 9, color: "#71717a", marginTop: 2 }}>· {s}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
 
