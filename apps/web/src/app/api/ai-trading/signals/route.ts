@@ -1,21 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { TradingSignal } from "@/lib/server/aiTradingEngine";
+import { GET as memeGET } from "@/app/api/trends/meme/route";
+import { GET as trendingGET } from "@/app/api/dex/trending/route";
 
 export const runtime  = "nodejs";
 export const dynamic  = "force-dynamic";
 export const maxDuration = 30;
 
-// Aggregate signals from multiple sources
+// Aggregate signals from multiple sources. Underlying data routes are invoked
+// directly (not via HTTP self-fetch) so this works in any deployment without a
+// hardcoded origin.
 export async function GET(_req: NextRequest) {
   const signals: TradingSignal[] = [];
   const now = Date.now();
 
   // ── 1. Meme signals (pump.fun trending) ───────────────────────────────────
   try {
-    const r = await fetch(new URL("/api/trends/meme", "http://localhost:3000").toString(), {
-      cache: "no-store",
-      signal: AbortSignal.timeout(8_000),
-    });
+    const r = await memeGET();
     if (r.ok) {
       const { signals: memeList } = await r.json() as {
         signals: {
@@ -50,10 +51,7 @@ export async function GET(_req: NextRequest) {
 
   // ── 2. DEXScreener trending (volume surges) ───────────────────────────────
   try {
-    const r = await fetch(new URL("/api/dex/trending", "http://localhost:3000").toString(), {
-      cache: "no-store",
-      signal: AbortSignal.timeout(8_000),
-    });
+    const r = await trendingGET();
     if (r.ok) {
       const { tokens } = await r.json() as {
         tokens: {

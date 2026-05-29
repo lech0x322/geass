@@ -39,27 +39,30 @@ const CAT_COLORS: Record<AccountCategory, string> = {
 
 // ── Pre-curated top accounts ──────────────────────────────────────────────────
 
+// Curated suggestions of real Solana/crypto accounts. Follower counts are
+// intentionally omitted — we don't have a live Twitter feed to keep them
+// accurate, so showing stale numbers would mislead.
 const TOP_ACCOUNTS: XAccount[] = [
-  { handle: "muradmahmudov",   displayName: "Murad",           category: "KOL",      followers: "350K",  verified: true,  addedAt: 0 },
-  { handle: "blknoiz06",       displayName: "Ansem",           category: "KOL",      followers: "420K",  verified: true,  addedAt: 0 },
-  { handle: "HsakaTrades",     displayName: "Hsaka",           category: "Trader",   followers: "290K",  verified: true,  addedAt: 0 },
-  { handle: "cobie",           displayName: "Cobie",           category: "KOL",      followers: "680K",  verified: true,  addedAt: 0 },
-  { handle: "lookonchain",     displayName: "Lookonchain",     category: "Whale",    followers: "490K",  verified: true,  addedAt: 0 },
-  { handle: "DegenSpartan",    displayName: "Degen Spartan",   category: "Trader",   followers: "185K",  verified: false, addedAt: 0 },
-  { handle: "CryptoHayes",     displayName: "Arthur Hayes",    category: "KOL",      followers: "680K",  verified: true,  addedAt: 0 },
-  { handle: "binance",         displayName: "Binance",         category: "Exchange", followers: "12.8M", verified: true,  addedAt: 0 },
-  { handle: "cointelegraph",   displayName: "CoinTelegraph",   category: "Media",    followers: "3.4M",  verified: true,  addedAt: 0 },
-  { handle: "solana",          displayName: "Solana",          category: "Others",   followers: "2.1M",  verified: true,  addedAt: 0 },
-  { handle: "pumpdotfun",      displayName: "pump.fun",        category: "Others",   followers: "190K",  verified: false, addedAt: 0 },
-  { handle: "RaydiumProtocol", displayName: "Raydium",         category: "Exchange", followers: "280K",  verified: true,  addedAt: 0 },
-  { handle: "inversebrah",     displayName: "inversebrah",     category: "KOL",      followers: "120K",  verified: false, addedAt: 0 },
-  { handle: "0xMert_",         displayName: "Mert",            category: "Founders", followers: "95K",   verified: true,  addedAt: 0 },
-  { handle: "rajgokal",        displayName: "Raj Gokal",       category: "Founders", followers: "145K",  verified: true,  addedAt: 0 },
-  { handle: "aeyakovenko",     displayName: "toly",            category: "Founders", followers: "390K",  verified: true,  addedAt: 0 },
-  { handle: "Pentosh1",        displayName: "Pentoshi",        category: "Trader",   followers: "170K",  verified: true,  addedAt: 0 },
-  { handle: "GiganticRebirth", displayName: "GCR",             category: "Trader",   followers: "260K",  verified: false, addedAt: 0 },
-  { handle: "CoinGecko",       displayName: "CoinGecko",       category: "Media",    followers: "2.2M",  verified: true,  addedAt: 0 },
-  { handle: "DegenerateNews",  displayName: "Degenerate News", category: "Media",    followers: "55K",   verified: false, addedAt: 0 },
+  { handle: "muradmahmudov",   displayName: "Murad",           category: "KOL",      verified: true,  addedAt: 0 },
+  { handle: "blknoiz06",       displayName: "Ansem",           category: "KOL",      verified: true,  addedAt: 0 },
+  { handle: "HsakaTrades",     displayName: "Hsaka",           category: "Trader",   verified: true,  addedAt: 0 },
+  { handle: "cobie",           displayName: "Cobie",           category: "KOL",      verified: true,  addedAt: 0 },
+  { handle: "lookonchain",     displayName: "Lookonchain",     category: "Whale",    verified: true,  addedAt: 0 },
+  { handle: "DegenSpartan",    displayName: "Degen Spartan",   category: "Trader",   verified: false, addedAt: 0 },
+  { handle: "CryptoHayes",     displayName: "Arthur Hayes",    category: "KOL",      verified: true,  addedAt: 0 },
+  { handle: "binance",         displayName: "Binance",         category: "Exchange", verified: true,  addedAt: 0 },
+  { handle: "cointelegraph",   displayName: "CoinTelegraph",   category: "Media",    verified: true,  addedAt: 0 },
+  { handle: "solana",          displayName: "Solana",          category: "Others",   verified: true,  addedAt: 0 },
+  { handle: "pumpdotfun",      displayName: "pump.fun",        category: "Others",   verified: false, addedAt: 0 },
+  { handle: "RaydiumProtocol", displayName: "Raydium",         category: "Exchange", verified: true,  addedAt: 0 },
+  { handle: "inversebrah",     displayName: "inversebrah",     category: "KOL",      verified: false, addedAt: 0 },
+  { handle: "0xMert_",         displayName: "Mert",            category: "Founders", verified: true,  addedAt: 0 },
+  { handle: "rajgokal",        displayName: "Raj Gokal",       category: "Founders", verified: true,  addedAt: 0 },
+  { handle: "aeyakovenko",     displayName: "toly",            category: "Founders", verified: true,  addedAt: 0 },
+  { handle: "Pentosh1",        displayName: "Pentoshi",        category: "Trader",   verified: true,  addedAt: 0 },
+  { handle: "GiganticRebirth", displayName: "GCR",             category: "Trader",   verified: false, addedAt: 0 },
+  { handle: "CoinGecko",       displayName: "CoinGecko",       category: "Media",    verified: true,  addedAt: 0 },
+  { handle: "DegenerateNews",  displayName: "Degenerate News", category: "Media",    verified: false, addedAt: 0 },
 ];
 
 // ── LocalStorage helpers ──────────────────────────────────────────────────────
