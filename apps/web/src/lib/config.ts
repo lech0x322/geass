@@ -54,7 +54,7 @@ export const NAV: NavItem[] = [
   { id: "home",      label: "Home",                                                         iconId: "home",      mobile: true },
   { id: "trades",    label: "Realtime Trades", mobileLabel: "KOL",     badge: "LIVE",  iconId: "broadcast", mobile: true, sidebarHidden: true },
   { id: "trending",  label: "Trending",                                 badge: "NEW",   iconId: "flame",     mobile: true, sidebarHidden: true },
-  { id: "launch",    label: "Launch",                                                    iconId: "rocket",    mobile: true, sidebarHidden: true },
+  { id: "launch",    label: "Launch",                                                    iconId: "rocket"     },
   { id: "gems",      label: "Alpha Scanner",   mobileLabel: "Scanner", badge: "PRO",   pro: true, iconId: "zap",    mobile: true },
   { id: "autosnipe",  label: "Auto-Snipe",                               badge: "NEW",   pro: true, iconId: "target" },
   { id: "community",   label: "Channel",        badge: "SOON", iconId: "users", comingSoon: true },
