@@ -33,7 +33,7 @@ import { CommunityTab } from "./CommunityTab";
 import { PredictionsTab } from "./PredictionsTab";
 import { SocialTrackerTab } from "./SocialTrackerTab";
 import { AiTradingTab } from "./AiTradingTab";
-import { IntelTab } from "./IntelTab";
+import IntelTab from "./IntelTab";
 import { NotificationsBell } from "./NotificationsBell";
 import { pushNotification } from "@/lib/useNotifications";
 import JupiterSwapModal from "./JupiterSwapModal";
@@ -132,6 +132,17 @@ function SettingsBody({ section, children }: { section: SettingsSection | null; 
   return <>{children}</>;
 }
 
+function ComingSoonTab({ label, desc, isMobile }: { label: string; desc: string; isMobile?: boolean }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 400, padding: isMobile ? 24 : 48, textAlign: "center" }}>
+      <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
+      <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 800, color: "#f4f4f5", marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 13, color: "#52525b", maxWidth: 320, lineHeight: 1.6, marginBottom: 20 }}>{desc}</div>
+      <div style={{ padding: "6px 16px", borderRadius: 20, background: "#ff2b4e18", border: "1px solid #ff2b4e44", color: "#ff2b4e", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em" }}>COMING SOON</div>
+    </div>
+  );
+}
+
 // ── Sound system ──────────────────────────────────────────────────────────────
 export type SoundId = "chime" | "ping" | "bell" | "buzz" | "tap" | "arcade" | "alert" | "soft" | "off";
 
@@ -215,6 +226,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [communitySoundId,  setCommunitySoundId]  = useState<SoundId>("ping");
   const [geassAlertSoundId, setGeassAlertSoundId] = useState<SoundId>("alert");
   const [soundExpandedKey,  setSoundExpandedKey]  = useState<string | null>(null);
+  const [tradingSlippage,   setTradingSlippage]   = useState<string>("10");
+  const [tradingPriorityFee,setTradingPriorityFee]= useState<string>("0.0005");
+  const [tradingMaxBuy,     setTradingMaxBuy]     = useState<string>("0.1");
   const [solPrice, setSolPrice]     = useState<number | null>(null);
   const [solChange, setSolChange]   = useState(0);
 
@@ -1790,7 +1804,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           {tab === "settings" && (
             <SettingsBody section={settingsSection}>
             {(() => {
-            const activeSettings: SettingsSection = settingsSection === "wallet" ? "wallet" : "sounds";
+            const activeSettings: SettingsSection = settingsSection === "wallet" ? "wallet" : settingsSection === "trading" ? "trading" : "sounds";
             return (
             <div style={{ padding: isMobile ? "14px 14px 80px" : "18px 22px", maxWidth: 560 }}>
               <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
@@ -1801,8 +1815,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
               {/* Section toggle — keeps Sound Alerts and Wallet fully separate */}
               <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
                 {([
-                  ["sounds", "Sound Alerts", <IconSpeaker key="s" size={11} />],
-                  ["wallet", "Wallet",       <IconWallet  key="w" size={11} />],
+                  ["sounds",  "Sound Alerts", <IconSpeaker key="s" size={11} />],
+                  ["wallet",  "Wallet",       <IconWallet  key="w" size={11} />],
+                  ["trading", "Trading",      <IconZap     key="t" size={11} />],
                 ] as [SettingsSection, string, React.ReactNode][]).map(([id, label, icon]) => {
                   const active = activeSettings === id;
                   return (
@@ -1940,6 +1955,37 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
               {/* Internal trading wallet */}
               <InternalWalletPanel iw={iw} />
               </>
+              )}
+
+              {activeSettings === "trading" && (
+              <div id="settings-trading" style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 14, padding: "18px 16px", marginBottom: 16, scrollMarginTop: 80 }}>
+                <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+                  <IconZap size={11} /> TRADING DEFAULTS
+                </div>
+                {([
+                  ["Slippage Tolerance", "%", tradingSlippage, setTradingSlippage, "10", "Max price movement allowed (e.g. 10 = 10%)"],
+                  ["Priority Fee", "SOL", tradingPriorityFee, setTradingPriorityFee, "0.0005", "Jito tip / priority fee per transaction"],
+                  ["Max Buy Amount", "SOL", tradingMaxBuy, setTradingMaxBuy, "0.1", "Maximum SOL per single buy"],
+                ] as [string, string, string, (v: string) => void, string, string][]).map(([label, unit, val, set, placeholder, desc]) => (
+                  <div key={label} style={{ marginBottom: 14 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#e2d9f3" }}>{label}</span>
+                      <span style={{ fontSize: 10, color: "#52525b" }}>{desc}</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <input
+                        type="number" value={val} onChange={e => set(e.target.value)}
+                        placeholder={placeholder} step="any" min="0"
+                        style={{ flex: 1, background: "#09090b", border: "1px solid #27272a", borderRadius: 8, color: "#f4f4f5", padding: "8px 12px", fontSize: 12, outline: "none", fontFamily: MONO }}
+                      />
+                      <span style={{ fontSize: 11, color: "#71717a", minWidth: 30 }}>{unit}</span>
+                    </div>
+                  </div>
+                ))}
+                <div style={{ fontSize: 10, color: "#3f3f46", marginTop: 4, padding: "8px 10px", background: "#0a0a0c", borderRadius: 8, border: "1px solid #1e1e21" }}>
+                  These values apply to all buy/sell transactions from the Alpha Scanner and Auto-Snipe.
+                </div>
+              </div>
               )}
             </div>
             );
@@ -2403,12 +2449,11 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           )}
 
           {tab === "community" && (
-            <CommunityTab wallet={wallet} isMobile={isMobile}
-              onNewPost={() => { if (soundRef.current.community !== "off") playSound(soundRef.current.community); }} />
+            <ComingSoonTab label="Channel" desc="Live community chat and alpha sharing — launching soon." isMobile={isMobile} />
           )}
 
           {tab === "predictions" && (
-            <PredictionsTab wallet={wallet} isMobile={isMobile} />
+            <ComingSoonTab label="Predictions" desc="On-chain prediction markets powered by GEASS — launching soon." isMobile={isMobile} />
           )}
 
           {tab === "social" && (

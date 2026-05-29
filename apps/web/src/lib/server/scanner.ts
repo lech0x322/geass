@@ -1,7 +1,7 @@
 import "server-only";
 import { buildGem } from "../scoring";
 import type { Gem } from "../types";
-import { SCAN_LIMIT, SCORE_MIN_HELIUS, SCORE_MIN_DEX, ANTHROPIC_KEY } from "../env";
+import { SCAN_LIMIT, SCORE_MIN_HELIUS, SCORE_MIN_DEX } from "../env";
 import {
   pumpSignatures,
   enrichedTransactions,
@@ -91,35 +91,6 @@ export async function scanViaDexScreener(count: number): Promise<Gem[]> {
   return gems.sort((a, b) => b.score - a.score);
 }
 
-export async function scanViaAI(count: number): Promise<Gem[]> {
-  if (!ANTHROPIC_KEY) throw new Error("ANTHROPIC_API_KEY missing");
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": ANTHROPIC_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-5",
-      max_tokens: 3000,
-      system: `Generate ${count} realistic Solana memecoin candidates (<6h old). Output ONLY a raw JSON array, no prose. Each item must match the Gem schema with fields: id, sym, name, score, tier, mcap, priceSol, vol24h, bc, kol, kolBuyers, holders, ageHours, xPotential, priceChange1h, buyPressure, contractAddress, reasons, redFlags, mintRev, freezeRev, source, dexUrl, detectedAt.`,
-      messages: [{ role: "user", content: "Pre-pump scan. JSON only." }],
-    }),
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!res.ok) throw new Error(`AI ${res.status}`);
-  const d = await res.json();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const txt: string = (d.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("");
-  const si = txt.indexOf("["), ei = txt.lastIndexOf("]");
-  if (si === -1 || ei === -1) throw new Error("AI parse fail");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const parsed: any[] = JSON.parse(txt.slice(si, ei + 1));
-  const now = new Date().toISOString();
-  return parsed.map(p => ({ ...p, source: "ai" as const, detectedAt: p.detectedAt || now }));
-}
-
 async function runScanUncached(count: number): Promise<{ gems: Gem[]; source: string; error?: string }> {
   try {
     const gems = await scanViaHelius(count);
@@ -132,14 +103,6 @@ async function runScanUncached(count: number): Promise<{ gems: Gem[]; source: st
     return { gems, source: "DEXSCREENER" };
   } catch (e) {
     console.warn("[scan] dex failed:", e instanceof Error ? e.message : e);
-  }
-  if (ANTHROPIC_KEY) {
-    try {
-      const gems = await scanViaAI(count);
-      return { gems, source: "AI" };
-    } catch (e) {
-      console.warn("[scan] ai failed:", e instanceof Error ? e.message : e);
-    }
   }
   return { gems: [], source: "NONE", error: "All scan sources failed" };
 }

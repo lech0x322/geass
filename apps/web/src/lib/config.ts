@@ -23,7 +23,7 @@ export type NavIconId =
   | "home" | "broadcast" | "flame" | "rocket" | "zap" | "target"
   | "users" | "cog" | "crown" | "user" | "chart" | "globe" | "bot";
 
-export type SettingsSection = "sounds" | "referral" | "wallet";
+export type SettingsSection = "sounds" | "referral" | "wallet" | "trading";
 /** Settings sub-items that navigate to a different tab entirely. */
 export const SETTINGS_TAB_OVERRIDES: Partial<Record<SettingsSection, NavId>> = {
   referral: "referral",
@@ -44,6 +44,8 @@ export interface NavItem {
   mobileOnly?: boolean;
   /** Hidden from the desktop/sidebar nav — accessible via mobile bottom bar or Home shortcuts. */
   sidebarHidden?: boolean;
+  /** Show a "Coming Soon" overlay instead of real content. */
+  comingSoon?: boolean;
   /** Sub-items shown when the nav item expands (e.g. Settings). */
   sub?: { id: SettingsSection; label: string }[];
 }
@@ -55,8 +57,8 @@ export const NAV: NavItem[] = [
   { id: "launch",    label: "Launch",                                                    iconId: "rocket",    mobile: true, sidebarHidden: true },
   { id: "gems",      label: "Alpha Scanner",   mobileLabel: "Scanner", badge: "PRO",   pro: true, iconId: "zap",    mobile: true },
   { id: "autosnipe",  label: "Auto-Snipe",                               badge: "NEW",   pro: true, iconId: "target" },
-  { id: "community",   label: "Channel",        badge: "NEW", iconId: "users" },
-  { id: "predictions", label: "Predictions",    badge: "NEW", iconId: "chart" },
+  { id: "community",   label: "Channel",        badge: "SOON", iconId: "users", comingSoon: true },
+  { id: "predictions", label: "Predictions",    badge: "SOON", iconId: "chart", comingSoon: true },
   { id: "social",      label: "Tracker",        badge: "NEW", iconId: "globe" },
   { id: "ai-trading",  label: "AI Trading",     badge: "NEW", iconId: "bot"   },
   { id: "intel",       label: "Intel",          badge: "NEW", iconId: "zap"   },
@@ -68,6 +70,7 @@ export const NAV: NavItem[] = [
       { id: "sounds",   label: "Sound Alerts" },
       { id: "referral", label: "Rewards" },
       { id: "wallet",   label: "Wallet" },
+      { id: "trading",  label: "Trading" },
     ],
   },
   { id: "pro",     label: "GEASS Pro",                                   pro: true, iconId: "crown" },
