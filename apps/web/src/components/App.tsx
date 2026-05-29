@@ -1060,10 +1060,6 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                         <div style={{ fontSize: 12, fontWeight: 700, color: "#f4f4f5" }}>{k.name}</div>
                         <div style={{ fontSize: 9, color: "#52525b", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>@{k.tw} · {k.addr.slice(0,8)}…</div>
                       </div>
-                      <div style={{ textAlign: "right", flexShrink: 0 }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: "#10b981" }}>{k.pnl}</div>
-                        <div style={{ fontSize: 9, color: "#52525b" }}>{k.wr}% WR</div>
-                      </div>
                       <span style={{ fontSize: 9, color: "#3b82f6", flexShrink: 0 }}>X ↗</span>
                     </button>
                   ))}
@@ -1327,8 +1323,8 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                           </div>
                         </div>
                         <div style={{ textAlign: "right" }}>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: k.pnl.startsWith("+") ? "#10b981" : "#ef4444" }}>{k.pnl}</div>
-                          <div style={{ fontSize: 8, color: "#3f3f46" }}>Win {k.wr}%</div>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: "#f4f4f5" }}>{kTrades.length}</div>
+                          <div style={{ fontSize: 8, color: "#3f3f46" }}>live trades</div>
                         </div>
                       </div>
                       <div style={{ maxHeight: 160, overflowY: "auto" }}>
@@ -2424,7 +2420,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                           <div style={{ fontSize: 12, fontWeight: 700, color: "#f4f4f5" }}>{k.name}</div>
                           <div style={{ fontSize: 10, color: "#52525b" }}>@{k.tw}</div>
                         </div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#10b981" }}>{k.pnl}</div>
+                        <span style={{ fontSize: 9, color: "#3b82f6", flexShrink: 0 }}>X ↗</span>
                       </button>
                     ))}
                   </>

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { KOLS } from "@/lib/config";
+import { useKolStats } from "@/lib/useKolStats";
 import type { FeedTrade } from "@/lib/types";
 import type { TrendingToken, MemeSignal, XSignal } from "@/lib/api";
 import { IconBroadcast, IconFlame, IconZap, IconRocket, IconSolana, IconArrowUpRight, IconCrown, IconTarget, IconActivity } from "./icons";
@@ -67,6 +68,9 @@ export function HomeTab({ solPrice, solChange, feedTrades, trendingTokens, memeS
   const recentTrades   = feedTrades.slice(0, 6);
   const topMemecoins   = [...trendingTokens].sort((a, b) => b.boostAmount - a.boostAmount).slice(0, 5);
   const topMemeSignals = [...memeSignals].sort((a, b) => b.score - a.score).slice(0, 5);
+  const { stats: kolStats, loading: kolStatsLoading } = useKolStats(KOLS.map(k => k.addr));
+  // Rank KOLs by real 30d net SOL flow (falls back to config order while loading).
+  const rankedKols = [...KOLS].sort((a, b) => (kolStats[b.addr]?.netSol30d ?? 0) - (kolStats[a.addr]?.netSol30d ?? 0));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -206,7 +210,11 @@ export function HomeTab({ solPrice, solChange, feedTrades, trendingTokens, memeS
             </button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {KOLS.map((k, i) => (
+            {rankedKols.map((k, i) => {
+              const s = kolStats[k.addr];
+              const net = s?.netSol30d;
+              const netColor = net === undefined ? "#475569" : net >= 0 ? "#10b981" : "#ef4444";
+              return (
               <div key={k.addr} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 8px", borderRadius: 10, background: i % 2 === 0 ? "#0a0a0f" : "transparent", transition: "background 0.15s" }}>
                 <span style={{ fontSize: 9, fontWeight: 800, color: k.c, width: 14, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
                 <div style={{ width: 26, height: 26, borderRadius: "50%", overflow: "hidden", border: `2px solid ${k.c}44`, flexShrink: 0, background: k.c + "15" }}>
@@ -214,15 +222,19 @@ export function HomeTab({ solPrice, solChange, feedTrades, trendingTokens, memeS
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: "#f1f5f9" }}>{k.name}</div>
-                  <div style={{ fontSize: 9, color: "#475569" }}>@{k.tw} · {k.trades.toLocaleString()} trades</div>
+                  <div style={{ fontSize: 9, color: "#475569" }}>
+                    @{k.tw} · {kolStatsLoading && !s ? "…" : `${(s?.swaps30d ?? 0).toLocaleString()} swaps (30d)`}
+                  </div>
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: "#10b981" }}>{k.pnl}</div>
-                  <div style={{ fontSize: 9, color: "#475569" }}>{k.wr}% WR</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: netColor }}>
+                    {kolStatsLoading && !s ? "—" : net === undefined ? "—" : `${net >= 0 ? "+" : ""}${net.toFixed(1)} SOL`}
+                  </div>
+                  <div style={{ fontSize: 9, color: "#475569" }}>net 30d</div>
                 </div>
                 <a href={`https://x.com/${k.tw}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2d2d42", flexShrink: 0 }}><IconArrowUpRight size={10} /></a>
               </div>
-            ))}
+            );})}
           </div>
         </div>
 

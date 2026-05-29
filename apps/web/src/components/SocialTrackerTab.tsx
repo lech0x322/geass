@@ -753,8 +753,7 @@ function KolActivityPanel() {
                 <span style={{ fontSize: 10, fontWeight: 800, color: k.c }}>{k.name}</span>
                 <IconVerified size={9} />
               </div>
-              <div style={{ fontSize: 9, color: "#52525b" }}>WR {k.wr}%</div>
-              <div style={{ fontSize: 9, color: "#22c55e", fontWeight: 700 }}>{k.pnl}</div>
+              <div style={{ fontSize: 9, color: "#52525b" }}>@{k.tw}</div>
             </div>
           </a>
         ))}

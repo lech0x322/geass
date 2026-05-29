@@ -77,7 +77,7 @@ function computeLeaderboard(trades: FeedTrade[], tf: TimeFrame) {
     const wins   = winMap.get(k.name)  ?? 0;
     const losses = lossMap.get(k.name) ?? 0;
     const solVol = solMap.get(k.name)  ?? 0;
-    const liveWr = wins + losses > 0 ? Math.round((wins / (wins + losses)) * 100) : k.wr;
+    const liveWr = wins + losses > 0 ? Math.round((wins / (wins + losses)) * 100) : 0;
     return { ...k, rank: i + 1, wins, losses, solVol, liveWr };
   })
     .sort((a, b) => b.liveWr - a.liveWr)
@@ -158,23 +158,19 @@ function KolLeaderboard({ trades }: { trades: FeedTrade[] }) {
             {/* Wins / Losses */}
             <div style={{ textAlign: "center", minWidth: 54, flexShrink: 0 }}>
               <div style={{ fontSize: 11, fontWeight: 700, ...MONO }}>
-                <span style={{ color: "#22c55e" }}>
-                  {k.wins > 0 ? k.wins : k.trades}
-                </span>
+                <span style={{ color: "#22c55e" }}>{k.wins}</span>
                 <span style={{ color: "#3f3f46" }}>/</span>
-                <span style={{ color: "#ef4444" }}>
-                  {k.losses > 0 ? k.losses : Math.floor(k.trades * (1 - k.wr / 100))}
-                </span>
+                <span style={{ color: "#ef4444" }}>{k.losses}</span>
               </div>
-              <div style={{ fontSize: 9, color: "#3f3f46" }}>W/L</div>
+              <div style={{ fontSize: 9, color: "#3f3f46" }}>W/L (live)</div>
             </div>
 
             {/* PnL */}
             <div style={{ textAlign: "right", flexShrink: 0, minWidth: 90 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: "#10b981", ...MONO }}>{k.pnl}</div>
-              {k.solVol > 0 && (
-                <div style={{ fontSize: 9, color: "#52525b" }}>{k.solVol.toFixed(2)} SOL live</div>
-              )}
+              <div style={{ fontSize: 12, fontWeight: 800, color: k.solVol > 0 ? "#10b981" : "#3f3f46", ...MONO }}>
+                {k.solVol > 0 ? `${k.solVol.toFixed(2)} SOL` : "—"}
+              </div>
+              <div style={{ fontSize: 9, color: "#52525b" }}>buy vol (live)</div>
             </div>
           </div>
         ))}
@@ -459,7 +455,7 @@ function LiveTradesPanel({ trades }: { trades: FeedTrade[] }) {
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 11, fontWeight: 800, color: k.c, ...MONO }}>{k.name}</div>
-                    <div style={{ fontSize: 9, color: "#3f3f46" }}>WR {k.wr}% · {k.pnl}</div>
+                    <div style={{ fontSize: 9, color: "#3f3f46" }}>@{k.tw}</div>
                   </div>
                   <a href={`https://solscan.io/account/${k.addr}`} target="_blank" rel="noreferrer"
                     style={{ color: "#3f3f46", display: "flex" }}>

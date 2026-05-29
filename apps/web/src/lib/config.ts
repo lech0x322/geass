@@ -1,12 +1,14 @@
 // Pure client-safe config: no secrets, no API keys.
 
+// Tracked KOL wallets. Live 30d activity (swap count + net SOL) is fetched at
+// runtime from /api/kol/stats — these entries hold only stable identity data.
 export const KOLS = [
-  { name: "Murad",     addr: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM", tw: "MustStopMurad", wr: 71, trades: 1240, pnl: "+$84.2k", c: "#ef4444" },
-  { name: "Hsaka",     addr: "HNF1us7JFyfEm3MEjyNMBSfKUjDuKTnK4VAqMVmdRH6e", tw: "HsakaTrades",   wr: 68, trades: 2100, pnl: "+$61.8k", c: "#f97316" },
-  { name: "Ansem",     addr: "5tzFkiKscXHK5ZXCGbCe9PSNY2BNoNNsZzMBzuLKkrxM", tw: "blknoiz06",     wr: 62, trades: 1560, pnl: "+$38.4k", c: "#eab308" },
-  { name: "Cobie",     addr: "2AQdpHJ2JpcEgPiATUXjQxA8QmafFegfQwSLWSprPicm", tw: "cobie",         wr: 74, trades: 3200, pnl: "+$112k",  c: "#22c55e" },
-  { name: "Gainzy",    addr: "3vefHNMbBPUNnJPpQS3nKRQKAH8K4o8y5TvE3cB3pHKr", tw: "gainzy222",     wr: 65, trades: 1870, pnl: "+$29.1k", c: "#a855f7" },
-  { name: "Dingaling", addr: "HnCGCGGHk6sVRPpADMGsGqtSHFHpUWQ7sREBRfFNFcLf", tw: "dingalingts",  wr: 77, trades: 4100, pnl: "+$203k",  c: "#ec4899" },
+  { name: "Murad",     addr: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM", tw: "MustStopMurad", c: "#ef4444" },
+  { name: "Hsaka",     addr: "HNF1us7JFyfEm3MEjyNMBSfKUjDuKTnK4VAqMVmdRH6e", tw: "HsakaTrades",   c: "#f97316" },
+  { name: "Ansem",     addr: "5tzFkiKscXHK5ZXCGbCe9PSNY2BNoNNsZzMBzuLKkrxM", tw: "blknoiz06",     c: "#eab308" },
+  { name: "Cobie",     addr: "2AQdpHJ2JpcEgPiATUXjQxA8QmafFegfQwSLWSprPicm", tw: "cobie",         c: "#22c55e" },
+  { name: "Gainzy",    addr: "3vefHNMbBPUNnJPpQS3nKRQKAH8K4o8y5TvE3cB3pHKr", tw: "gainzy222",     c: "#a855f7" },
+  { name: "Dingaling", addr: "HnCGCGGHk6sVRPpADMGsGqtSHFHpUWQ7sREBRfFNFcLf", tw: "dingalingts",  c: "#ec4899" },
 ] as const;
 
 export const TIER: Record<string, { l: string; c: string }> = {
