@@ -14,7 +14,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   if (!wallet) return NextResponse.json({ error: "Wallet required" }, { status: 400 });
 
-  const result = joinCommunity(id, wallet, inviteCode);
+  const result = await joinCommunity(id, wallet, inviteCode);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.error === "Community not found" ? 404 : 403 });
   return NextResponse.json({ ok: true });
 }

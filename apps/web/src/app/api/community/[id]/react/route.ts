@@ -15,5 +15,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!postId) return NextResponse.json({ error: "postId required" }, { status: 400 });
   if (!["fire", "gem", "rug"].includes(reaction)) return NextResponse.json({ error: "Invalid reaction" }, { status: 400 });
 
-  return NextResponse.json({ ok: reactToPost(id, postId, reaction as "fire" | "gem" | "rug").ok });
+  return NextResponse.json({ ok: (await reactToPost(id, postId, reaction as "fire" | "gem" | "rug")).ok });
 }

@@ -9,7 +9,7 @@ const COLORS = ["#ef4444","#f97316","#eab308","#10b981","#3b82f6","#a855f7","#ec
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const wallet = searchParams.get("wallet") ?? undefined;
-  const communities = listCommunities(wallet).map(c => ({
+  const communities = (await listCommunities(wallet)).map(c => ({
     id: c.id, name: c.name, description: c.description, type: c.type,
     owner: c.owner, memberCount: c.members.length, postCount: c.posts.length,
     createdAt: c.createdAt, emoji: c.emoji, color: c.color, tags: c.tags,
@@ -34,6 +34,7 @@ export async function POST(req: Request) {
   if (!name || name.length < 3) return NextResponse.json({ error: "Name must be at least 3 characters" }, { status: 400 });
   if (!owner) return NextResponse.json({ error: "Owner wallet required" }, { status: 400 });
 
-  const community = createCommunity({ name, description: desc, type, emoji, color, tags, owner, ownerAlias });
+  const price = typeof body.price === "number" && body.price > 0 ? body.price : undefined;
+  const community = await createCommunity({ name, description: desc, type, emoji, color, tags, owner, ownerAlias, price });
   return NextResponse.json({ community });
 }

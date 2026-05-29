@@ -2355,11 +2355,11 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           )}
 
           {tab === "community" && (
-            <ComingSoonTab label="Channel" desc="Live community chat and alpha sharing — launching soon." isMobile={isMobile} />
+            <CommunityTab wallet={wallet} isMobile={isMobile} />
           )}
 
           {tab === "predictions" && (
-            <ComingSoonTab label="Predictions" desc="On-chain prediction markets powered by GEASS — launching soon." isMobile={isMobile} />
+            <PredictionsTab wallet={wallet} isMobile={isMobile} />
           )}
 
           {tab === "social" && (

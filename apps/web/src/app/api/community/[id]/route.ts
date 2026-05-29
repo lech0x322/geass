@@ -9,7 +9,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { searchParams } = new URL(req.url);
   const wallet = searchParams.get("wallet") ?? "";
 
-  const c = getCommunity(id);
+  const c = await getCommunity(id);
   if (!c) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const canView = c.type === "public" || c.members.includes(wallet) || c.owner === wallet;

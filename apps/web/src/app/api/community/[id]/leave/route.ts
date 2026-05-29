@@ -12,5 +12,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const wallet = String(body.wallet ?? "").trim();
   if (!wallet) return NextResponse.json({ error: "Wallet required" }, { status: 400 });
 
-  return NextResponse.json({ ok: leaveCommunity(id, wallet).ok });
+  return NextResponse.json({ ok: (await leaveCommunity(id, wallet)).ok });
 }
