@@ -1161,7 +1161,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* ALPHA SCANNER TAB */}
           {tab === "gems" && (
-            <div style={{ padding: isMobile ? "14px 14px 88px" : "18px 22px" }}>
+            <div style={{ padding: isMobile ? "14px 14px 72px" : "18px 22px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 5, flexWrap: "wrap" }}>
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", letterSpacing: ".3px", display: "flex", alignItems: "center", gap: 8 }}>
                   <IconZap size={isMobile ? 16 : 18} /> Alpha Scanner
@@ -1284,7 +1284,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* HOME TAB */}
           {tab === "home" && (
-            <div style={{ padding: isMobile ? "14px 14px 88px" : "18px 22px" }}>
+            <div style={{ padding: isMobile ? "14px 14px 72px" : "18px 22px" }}>
               <HomeTab
                 solPrice={solPrice}
                 solChange={solChange}
@@ -1301,7 +1301,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* LIVE FEED TAB */}
           {tab === "trades" && (
-            <div style={{ padding: isMobile ? "14px 14px 88px" : "18px 22px" }}>
+            <div style={{ padding: isMobile ? "14px 14px 72px" : "18px 22px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8 }}>
                   <IconBroadcast size={isMobile ? 16 : 18} /> Live KOL Feed
@@ -1359,7 +1359,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* LAUNCH TAB */}
           {tab === "launch" && (
-            <div style={{ padding: isMobile ? "14px 14px 88px" : "18px 22px", maxWidth: 500 }}>
+            <div style={{ padding: isMobile ? "14px 14px 72px" : "18px 22px", maxWidth: 500 }}>
               <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
                 <IconRocket size={isMobile ? 16 : 18} /> Launch Token
               </h1>
@@ -1505,7 +1505,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* AUTO-SNIPE TAB */}
           {tab === "autosnipe" && (
-            <div style={{ padding: isMobile ? "14px 14px 88px" : "18px 22px", maxWidth: 560 }}>
+            <div style={{ padding: isMobile ? "14px 14px 72px" : "18px 22px", maxWidth: 560 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8 }}>
                   <IconTarget size={isMobile ? 16 : 18} /> Auto-Snipe
@@ -1662,7 +1662,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
             const nextTierRefs = refs >= 15 ? null : refs >= 8 ? 15 : refs >= 4 ? 8 : 4;
             const progressPct  = nextTierRefs ? Math.min((refs / nextTierRefs) * 100, 100) : 100;
             return (
-              <div style={{ padding: isMobile ? "14px 14px 88px" : "24px 28px", maxWidth: 700 }}>
+              <div style={{ padding: isMobile ? "14px 14px 72px" : "24px 28px", maxWidth: 700 }}>
 
                 {/* Header */}
                 <div style={{ position: "relative", background: "#070708", border: "1px solid #18181c", padding: isMobile ? "20px 16px" : "28px 24px", marginBottom: 1, overflow: "hidden" }}>
@@ -1841,7 +1841,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
             {(() => {
             const activeSettings: SettingsSection = settingsSection === "wallet" ? "wallet" : settingsSection === "trading" ? "trading" : "sounds";
             return (
-            <div style={{ padding: isMobile ? "14px 14px 88px" : "18px 22px", maxWidth: 560 }}>
+            <div style={{ padding: isMobile ? "14px 14px 72px" : "18px 22px", maxWidth: 560 }}>
               <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
                 <IconCog size={isMobile ? 16 : 18} /> Settings
               </h1>
@@ -2041,7 +2041,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* TRENDING TAB */}
           {tab === "trending" && (
-            <div style={{ padding: isMobile ? "14px 14px 88px" : "18px 22px" }}>
+            <div style={{ padding: isMobile ? "14px 14px 72px" : "18px 22px" }}>
               {/* Header */}
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8 }}>
@@ -2340,7 +2340,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* PRO TAB */}
           {tab === "pro" && (
-            <div style={{ padding: isMobile ? "14px 14px 88px" : "18px 22px", maxWidth: 700 }}>
+            <div style={{ padding: isMobile ? "14px 14px 72px" : "18px 22px", maxWidth: 700 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8 }}>
                   <IconCrown size={isMobile ? 16 : 18} /> GEASS Pro
@@ -2521,21 +2521,21 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
         {/* Mobile bottom tab bar */}
         {isMobile && (
-          <nav style={{ height: 64, background: "#08080d", borderTop: "1px solid #151520", display: "flex", alignItems: "stretch", flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom,0px)" }}>
+          <nav style={{ height: 50, background: "#08080d", borderTop: "1px solid #151520", display: "flex", alignItems: "stretch", flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom,0px)" }}>
             {NAV.filter(n => n.mobile).map(n => {
               const isActive = tab === n.id;
               const accent = n.pro ? "#a855f7" : "#ff2b4e";
               return (
                 <button key={n.id} onClick={() => { setTab(n.id as typeof tab); setSettingsOpen(false); }}
-                  style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+                  style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
                     background: isActive ? (n.pro ? "rgba(168,85,247,0.08)" : "rgba(255,43,78,0.07)") : "transparent",
                     border: "none", cursor: "pointer", minWidth: 0, padding: "0 4px",
                     color: isActive ? accent : "#4a4a5a",
                     borderTop: isActive ? `2px solid ${accent}` : "2px solid transparent",
                     transition: "color .12s",
                   }}>
-                  <NavIcon id={n.iconId} size={20} />
-                  <span style={{ fontSize: 10, fontWeight: isActive ? 700 : 400, letterSpacing: isActive ? ".2px" : "0", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.mobileLabel ?? n.label}</span>
+                  <NavIcon id={n.iconId} size={17} />
+                  <span style={{ fontSize: 9, fontWeight: isActive ? 700 : 400, letterSpacing: isActive ? ".2px" : "0", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.mobileLabel ?? n.label}</span>
                 </button>
               );
             })}
