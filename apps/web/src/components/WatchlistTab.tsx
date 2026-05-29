@@ -1,13 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { useWatchlist } from "@/lib/useWatchlist";
+import { useWatchlist, useWatchlistLive } from "@/lib/useWatchlist";
 import { fmtAge } from "@/lib/utils";
 
 const MONO = "'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace";
 
+function fmtUsd(n?: number): string {
+  if (n === undefined || !isFinite(n)) return "—";
+  if (n >= 1)        return `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  if (n >= 0.0001)   return `$${n.toPrecision(3)}`;
+  return `$${n.toExponential(2)}`;
+}
+function fmtCompact(n?: number): string {
+  if (n === undefined || !isFinite(n)) return "—";
+  if (n >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;
+  if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `$${(n / 1e3).toFixed(1)}K`;
+  return `$${n.toFixed(0)}`;
+}
+
 export function WatchlistTab({ isMobile }: { isMobile?: boolean }) {
   const { entries, remove, setAlert } = useWatchlist();
+  const live = useWatchlistLive(entries);
   const [editingAlert, setEditingAlert] = useState<string | null>(null);
   const [alertInput, setAlertInput] = useState("");
 
@@ -33,6 +48,25 @@ export function WatchlistTab({ isMobile }: { isMobile?: boolean }) {
                   <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
                     <span style={{ fontSize: 13, fontWeight: 800, color: "#f4f4f5" }}>{e.sym}</span>
                     <span style={{ fontSize: 10, color: "#52525b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140 }}>{e.name}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 3 }}>
+                    {(() => {
+                      const d = live[e.mint];
+                      if (!d || d.loading) return <span style={{ fontSize: 11, color: "#3f3f46" }}>loading…</span>;
+                      const chg = d.priceChange;
+                      const chgColor = chg === undefined ? "#52525b" : chg >= 0 ? "#22c55e" : "#ef4444";
+                      return (
+                        <>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "#e4e4e7" }}>{fmtUsd(d.priceUsd)}</span>
+                          {chg !== undefined && (
+                            <span style={{ fontSize: 11, fontWeight: 700, color: chgColor }}>
+                              {chg >= 0 ? "+" : ""}{chg.toFixed(1)}%
+                            </span>
+                          )}
+                          <span style={{ fontSize: 9, color: "#52525b" }}>MC {fmtCompact(d.marketCap)} · Vol {fmtCompact(d.volume24h)}</span>
+                        </>
+                      );
+                    })()}
                   </div>
                   <div style={{ fontSize: 9, color: "#3f3f46", marginTop: 2 }}>
                     {e.mint.slice(0, 8)}…{e.mint.slice(-6)} · added {fmtAge(e.addedAt)}
