@@ -971,6 +971,10 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
             )}
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
               {streamConnected && <div className="live-dot" style={{ background: statusColor }} />}
+              <button onClick={() => setMobileSearchOpen(true)} aria-label="Search"
+                style={{ background: "transparent", border: "none", color: "#a1a1aa", width: 38, height: 38, borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <IconSearch size={17} />
+              </button>
               <NotificationsBell isMobile onNavigate={t => setTab(t as typeof tab)} />
             </div>
           </div>
@@ -1004,16 +1008,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           </div>
         )}
 
-        {/* Multifunctional Search bar */}
-        <div style={{ padding: isMobile ? "6px 12px" : "8px 18px", borderBottom: "1px solid #18181b", background: "#0c0c0e", flexShrink: 0, position: "relative", display: "flex", alignItems: "center", gap: 12 }}>
-          {isMobile ? (
-            /* Mobile: just the magnifying glass icon */
-            <button onClick={() => setMobileSearchOpen(true)}
-              aria-label="Search"
-              style={{ background: "#111113", border: "1px solid #27272a", borderRadius: 9, color: "#71717a", width: 38, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
-              <IconSearch size={15} />
-            </button>
-          ) : (
+        {/* Multifunctional Search bar — desktop only (mobile uses top-bar icon + overlay) */}
+        {!isMobile && (
+        <div style={{ padding: "8px 18px", borderBottom: "1px solid #18181b", background: "#0c0c0e", flexShrink: 0, position: "relative", display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, maxWidth: 600, flex: 1 }}>
               <div style={{ position: "relative", flex: 1 }}>
                 <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#52525b", pointerEvents: "none", display: "flex" }}>
@@ -1040,12 +1037,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 )}
               </div>
             </div>
-          )}
 
-          {/* Notifications bell — desktop only (mobile has it in top bar) */}
-          {!isMobile && (
-            <NotificationsBell onNavigate={t => setTab(t as typeof tab)} />
-          )}
+          {/* Notifications bell */}
+          <NotificationsBell onNavigate={t => setTab(t as typeof tab)} />
 
           {/* Unified search dropdown */}
           {searchOpen && searchQ.length >= 2 && (kolMatches.length > 0 || searchResults.length > 0 || isSolanaAddress(searchQ)) && (
@@ -1144,6 +1138,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
             </div>
           )}
         </div>
+        )}
 
         <main style={{ flex: 1, overflow: "auto" }}>
           {snipeGem && <SnipeModal gem={snipeGem} wallet={wallet} onClose={() => setSnipeGem(null)} />}
