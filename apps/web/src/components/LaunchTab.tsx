@@ -1,8 +1,42 @@
 "use client";
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { Keypair, VersionedTransaction } from "@solana/web3.js";
+import { Keypair, VersionedTransaction, Connection, Transaction, SystemProgram, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { pumpTradeTx, pumpIpfs, jitoLaunchBundle, jitoSubmit } from "@/lib/api";
 import { signAllWithPhantom, signAndSendBytes } from "@/lib/wallet";
+
+const TREASURY = process.env.NEXT_PUBLIC_GEASS_WALLET_PUBKEY ?? "";
+const RPC_URL  = process.env.NEXT_PUBLIC_RPC_URL ?? "https://api.mainnet-beta.solana.com";
+
+/* Paid growth-boost tiers — payment sent to the GEASS treasury after launch. */
+const BOOST_TIERS = [
+  {
+    id: "trending", sol: 0.2, label: "Trending Boost", color: "#3b82f6",
+    perks: [
+      "Featured in GEASS Alpha Scanner for 6h",
+      "Instant push to all watchlist users",
+      "Priority MRI re-scan every 5 min",
+    ],
+  },
+  {
+    id: "spotlight", sol: 0.5, label: "KOL Spotlight", color: "#a855f7",
+    perks: [
+      "Everything in Trending Boost",
+      "Broadcast alert to all KOL trackers",
+      "Pinned at top of Trending for 12h",
+      "Highlighted card with glow border",
+    ],
+  },
+  {
+    id: "package", sol: 1, label: "Launch Package", color: "#ff2b4e",
+    perks: [
+      "Everything in KOL Spotlight",
+      "Telegram channel broadcast (10k+ members)",
+      "24h homepage hero feature",
+      "GEASS-verified badge on token card",
+    ],
+  },
+] as const;
+type BoostId = typeof BOOST_TIERS[number]["id"];
 
 const MONO = "'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace";
 const RED  = "#ff2b4e";
@@ -46,13 +80,13 @@ const IcoDiscord = ({ s = 14 }: { s?: number }) => (
 );
 
 /* ── image drop zone ─────────────────────────────────────── */
-function ImageDropZone({ file, preview, onFile, label, aspectRatio, hint }: {
+function ImageDropZone({ file, preview, onFile, aspectRatio, hint, size }: {
   file: File | null;
   preview: string | null;
   onFile: (f: File | null) => void;
-  label: string;
   aspectRatio?: string;
   hint?: string;
+  size?: number;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
@@ -62,41 +96,42 @@ function ImageDropZone({ file, preview, onFile, label, aspectRatio, hint }: {
     onFile(f);
   };
 
+  const box: React.CSSProperties = size
+    ? { width: size, height: size, flexShrink: 0 }
+    : { aspectRatio: aspectRatio ?? "1/1", minHeight: aspectRatio === "3/1" ? 90 : 100 };
+  const compact = !!size && size < 110;
+
   return (
-    <div>
-      <div style={{ fontSize: 9, color: DIM, letterSpacing: "1px", marginBottom: 6, fontFamily: MONO }}>{label}</div>
-      <div
-        onClick={() => inputRef.current?.click()}
-        onDragOver={e => { e.preventDefault(); setDrag(true); }}
-        onDragLeave={() => setDrag(false)}
-        onDrop={e => { e.preventDefault(); setDrag(false); handle(e.dataTransfer.files[0] ?? null); }}
-        style={{
-          position: "relative", background: BG, border: `1.5px dashed ${drag ? RED : file ? "#10b981" : BDR}`,
-          borderRadius: 12, cursor: "pointer", overflow: "hidden",
-          aspectRatio: aspectRatio ?? "1/1",
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          transition: "border-color .15s",
-          minHeight: aspectRatio === "3/1" ? 90 : 100,
-        }}>
-        <input ref={inputRef} type="file" accept="image/*" style={{ display: "none" }}
-          onChange={e => handle(e.target.files?.[0] ?? null)} />
-        {preview ? (
-          <>
-            <img src={preview} alt="preview" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
-            <button
-              onClick={e => { e.stopPropagation(); onFile(null); }}
-              style={{ position: "absolute", top: 6, right: 6, background: "#00000099", border: "none", borderRadius: "50%", width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff" }}>
-              <IcoX s={10} />
-            </button>
-          </>
-        ) : (
-          <>
-            <div style={{ color: drag ? RED : "#3f3f46", marginBottom: 6 }}><IcoImg s={24} /></div>
-            <div style={{ fontSize: 10, color: drag ? RED : "#3f3f46", fontWeight: 600 }}>{drag ? "Drop here" : "Click or drag"}</div>
-            {hint && <div style={{ fontSize: 9, color: "#2a2a2e", marginTop: 3 }}>{hint}</div>}
-          </>
-        )}
-      </div>
+    <div
+      onClick={() => inputRef.current?.click()}
+      onDragOver={e => { e.preventDefault(); setDrag(true); }}
+      onDragLeave={() => setDrag(false)}
+      onDrop={e => { e.preventDefault(); setDrag(false); handle(e.dataTransfer.files[0] ?? null); }}
+      style={{
+        position: "relative", background: BG, border: `1.5px dashed ${drag ? RED : file ? "#10b981" : BDR}`,
+        borderRadius: 12, cursor: "pointer", overflow: "hidden",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        transition: "border-color .15s",
+        ...box,
+      }}>
+      <input ref={inputRef} type="file" accept="image/*" style={{ display: "none" }}
+        onChange={e => handle(e.target.files?.[0] ?? null)} />
+      {preview ? (
+        <>
+          <img src={preview} alt="preview" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+          <button
+            onClick={e => { e.stopPropagation(); onFile(null); }}
+            style={{ position: "absolute", top: 4, right: 4, background: "#00000099", border: "none", borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff" }}>
+            <IcoX s={9} />
+          </button>
+        </>
+      ) : (
+        <>
+          <div style={{ color: drag ? RED : "#3f3f46", marginBottom: compact ? 0 : 6 }}><IcoImg s={compact ? 20 : 24} /></div>
+          {!compact && <div style={{ fontSize: 10, color: drag ? RED : "#3f3f46", fontWeight: 600 }}>{drag ? "Drop here" : "Click or drag"}</div>}
+          {hint && !compact && <div style={{ fontSize: 9, color: "#2a2a2e", marginTop: 3 }}>{hint}</div>}
+        </>
+      )}
     </div>
   );
 }
@@ -285,6 +320,8 @@ export function LaunchTab({ wallet, wBal, isMobile }: {
   const [bannerFile,    setBannerFile]    = useState<File | null>(null);
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
 
+  const [boost,   setBoost]   = useState<BoostId | null>(null);
+
   const [step,        setStep]        = useState<"form" | "done">("form");
   const [loading,     setLoading]     = useState(false);
   const [msg,         setMsg]         = useState("");
@@ -310,14 +347,56 @@ export function LaunchTab({ wallet, wBal, isMobile }: {
   const reset = () => {
     setName(""); setSym(""); setDesc(""); setDevBuy("0.5"); setMsg("");
     setSocials({ website: "", twitter: "", telegram: "", discord: "" });
+    setBoost(null);
     handleLogoFile(null); handleBannerFile(null);
     setStep("form");
+  };
+
+  /** Poll the chain until the mint account actually exists (bundle landed). */
+  const confirmOnChain = async (mint: string): Promise<boolean> => {
+    for (let i = 0; i < 20; i++) {
+      try {
+        const r = await fetch(`/api/pump/confirm?mint=${mint}`, { cache: "no-store" });
+        if (r.ok) {
+          const j = await r.json() as { exists?: boolean };
+          if (j.exists) return true;
+        }
+      } catch { /* retry */ }
+      setMsg(`Confirming on-chain… (${i + 1}/20)`);
+      await new Promise(res => setTimeout(res, 2_000));
+    }
+    return false;
+  };
+
+  /** Charge the selected growth-boost tier — SOL transfer to GEASS treasury. */
+  const payBoost = async (mint: string) => {
+    const tier = BOOST_TIERS.find(t => t.id === boost);
+    if (!tier) return;
+    if (!TREASURY) { setMsg(`Token live ✓ — boost skipped (treasury not configured)`); return; }
+    try {
+      setMsg(`Approve ${tier.label} payment (${tier.sol} SOL)…`);
+      const conn = new Connection(RPC_URL, "confirmed");
+      const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed");
+      const tx = new Transaction({ feePayer: new PublicKey(wallet), blockhash, lastValidBlockHeight });
+      tx.add(SystemProgram.transfer({
+        fromPubkey: new PublicKey(wallet),
+        toPubkey:   new PublicKey(TREASURY),
+        lamports:   Math.floor(tier.sol * LAMPORTS_PER_SOL),
+      }));
+      const bytes = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
+      await signAndSendBytes(bytes);
+      setMsg(`${tier.label} activated ✓`);
+    } catch (e) {
+      // Token already launched — boost payment failure is non-fatal
+      setMsg(`Token live ✓ — boost payment failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
 
   const launch = async () => {
     if (!name || !sym) { setMsg("Fill in Name & Symbol"); return; }
     setLoading(true); setMsg("");
     try {
+      let mint = "";
       if (jito) {
         setMsg("Uploading metadata…");
         const result = await jitoLaunchBundle({
@@ -327,25 +406,22 @@ export function LaunchTab({ wallet, wBal, isMobile }: {
           file: logoFile ?? undefined,
           wallet: jitoMode === "phantom" ? wallet : undefined,
           server: jitoMode === "server",
+          twitter:  socials.twitter  || undefined,
+          telegram: socials.telegram || undefined,
+          website:  socials.website  || undefined,
         });
+        mint = result.mintPubkey;
 
-        if (result.mode === "server") {
-          setMintAddress(result.mintPubkey);
-          setStep("done");
-          setLoading(false);
-          return;
+        if (result.mode !== "server") {
+          const hasBuy = (parseFloat(devBuy) || 0) > 0 && result.buyTxB64;
+          const txsToSign: Uint8Array[] = [new Uint8Array(Buffer.from(result.createTxB64, "base64"))];
+          if (hasBuy) txsToSign.push(new Uint8Array(Buffer.from(result.buyTxB64, "base64")));
+          setMsg(`Sign in Phantom (${txsToSign.length} tx)…`);
+          const signedB64s = await signAllWithPhantom(txsToSign);
+          setMsg("Submitting Jito bundle…");
+          const txsForBundle = hasBuy ? [signedB64s[0], signedB64s[1]] : [signedB64s[0]];
+          await jitoSubmit(txsForBundle, parseFloat(tip) || 0.003);
         }
-
-        const hasBuy = (parseFloat(devBuy) || 0) > 0 && result.buyTxB64;
-        const txsToSign: Uint8Array[] = [new Uint8Array(Buffer.from(result.createTxB64, "base64"))];
-        if (hasBuy) txsToSign.push(new Uint8Array(Buffer.from(result.buyTxB64, "base64")));
-        setMsg(`Sign in Phantom (${txsToSign.length} tx)…`);
-        const signedB64s = await signAllWithPhantom(txsToSign);
-        setMsg("Submitting Jito bundle…");
-        const txsForBundle = hasBuy ? [signedB64s[0], signedB64s[1]] : [signedB64s[0]];
-        await jitoSubmit(txsForBundle, parseFloat(tip) || 0.003);
-        setMintAddress(result.mintPubkey);
-        setStep("done");
       } else {
         setMsg("Uploading metadata…");
         const form = new FormData();
@@ -353,6 +429,9 @@ export function LaunchTab({ wallet, wBal, isMobile }: {
         form.append("symbol", sym.toUpperCase());
         form.append("description", desc || name);
         form.append("showName", "true");
+        if (socials.twitter)  form.append("twitter",  socials.twitter);
+        if (socials.telegram) form.append("telegram", socials.telegram);
+        if (socials.website)  form.append("website",  socials.website);
         if (logoFile) form.append("file", logoFile, logoFile.name);
         const meta = await pumpIpfs(form);
         setMsg("Building transaction…");
@@ -367,11 +446,23 @@ export function LaunchTab({ wallet, wBal, isMobile }: {
         const tx = VersionedTransaction.deserialize(bytes);
         tx.sign([mintKp]);
         setMsg("Sign in Phantom…");
-        const sig = await signAndSendBytes(tx.serialize());
-        setMintAddress(mintKp.publicKey.toBase58());
-        setMsg(`TX: ${sig.slice(0, 18)}…`);
-        setStep("done");
+        await signAndSendBytes(tx.serialize());
+        mint = mintKp.publicKey.toBase58();
       }
+
+      // ── Verify the token is REAL on-chain before declaring success ──
+      setMsg("Confirming on-chain…");
+      const landed = await confirmOnChain(mint);
+      if (!landed) {
+        setMsg("Bundle was accepted but the token did not land on-chain within 40s. It may still appear shortly — check the CA on Solscan. Common cause: Jito tip too low, expired blockhash, or unfunded GEASS tip wallet.");
+        setLoading(false);
+        return;
+      }
+
+      setMintAddress(mint);
+      // Optional paid growth boost (token is already live)
+      if (boost) await payBoost(mint);
+      setStep("done");
     } catch (e) {
       setMsg("Error: " + (e instanceof Error ? e.message : String(e)));
     }
@@ -391,19 +482,24 @@ export function LaunchTab({ wallet, wBal, isMobile }: {
 
       <Section title="TOKEN IDENTITY" defaultOpen>
         <div style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
-          <ImageDropZone file={logoFile} preview={logoPreview} onFile={handleLogoFile}
-            label="TOKEN LOGO" aspectRatio="1/1" hint="512×512 recommended · PNG JPG GIF" />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <Field label="NAME *">
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Moon Pepe" style={inp}
-                onFocus={e => (e.currentTarget.style.borderColor = RED)}
-                onBlur={e => (e.currentTarget.style.borderColor = BDR)} />
-            </Field>
-            <Field label="SYMBOL *">
-              <input value={sym} onChange={e => setSym(e.target.value.slice(0, 10))} placeholder="MPEPE" style={inp}
-                onFocus={e => (e.currentTarget.style.borderColor = RED)}
-                onBlur={e => (e.currentTarget.style.borderColor = BDR)} />
-            </Field>
+          {/* compact logo + name/symbol inline */}
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: 9, color: DIM, letterSpacing: "1px", marginBottom: 6, fontFamily: MONO }}>LOGO</div>
+              <ImageDropZone file={logoFile} preview={logoPreview} onFile={handleLogoFile} size={84} />
+            </div>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
+              <Field label="NAME *">
+                <input value={name} onChange={e => setName(e.target.value)} placeholder="Moon Pepe" style={inp}
+                  onFocus={e => (e.currentTarget.style.borderColor = RED)}
+                  onBlur={e => (e.currentTarget.style.borderColor = BDR)} />
+              </Field>
+              <Field label="SYMBOL *">
+                <input value={sym} onChange={e => setSym(e.target.value.slice(0, 10))} placeholder="MPEPE" style={inp}
+                  onFocus={e => (e.currentTarget.style.borderColor = RED)}
+                  onBlur={e => (e.currentTarget.style.borderColor = BDR)} />
+              </Field>
+            </div>
           </div>
           <Field label="DESCRIPTION">
             <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="What's your token about?" rows={3}
@@ -412,19 +508,57 @@ export function LaunchTab({ wallet, wBal, isMobile }: {
         </div>
       </Section>
 
-      <Section title="BANNER IMAGE" badge="OPTIONAL">
-        <div style={{ paddingTop: 12 }}>
-          <ImageDropZone file={bannerFile} preview={bannerPreview} onFile={handleBannerFile}
-            label="BANNER (1200×400 recommended)" aspectRatio="3/1" hint="Shown behind your token header" />
+      {/* ── all optional metadata in one place ── */}
+      <Section title="OPTIONAL" badge="BANNER + SOCIALS">
+        <div style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <div style={{ fontSize: 9, color: DIM, letterSpacing: "1px", marginBottom: 6, fontFamily: MONO }}>BANNER · 1200×400</div>
+            <ImageDropZone file={bannerFile} preview={bannerPreview} onFile={handleBannerFile}
+              aspectRatio="3/1" hint="Shown behind your token header" />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontSize: 9, color: DIM, letterSpacing: "1px", fontFamily: MONO }}>SOCIAL LINKS</div>
+            <SocialInput icon={<IcoGlobe s={13} />}    label="Website"   value={socials.website}   onChange={v => setSocials(s => ({ ...s, website: v }))}   placeholder="https://yourtoken.xyz" />
+            <SocialInput icon={<IcoTwitter s={13} />}  label="Twitter/X" value={socials.twitter}   onChange={v => setSocials(s => ({ ...s, twitter: v }))}   placeholder="https://x.com/yourtoken" />
+            <SocialInput icon={<IcoTelegram s={13} />} label="Telegram"  value={socials.telegram}  onChange={v => setSocials(s => ({ ...s, telegram: v }))}  placeholder="https://t.me/yourtoken" />
+            <SocialInput icon={<IcoDiscord s={13} />}  label="Discord"   value={socials.discord}   onChange={v => setSocials(s => ({ ...s, discord: v }))}   placeholder="https://discord.gg/yourtoken" />
+          </div>
         </div>
       </Section>
 
-      <Section title="SOCIAL LINKS" badge="OPTIONAL">
+      {/* ── paid growth boosts ── */}
+      <Section title="GROWTH BOOST" badge="OPTIONAL">
         <div style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-          <SocialInput icon={<IcoGlobe s={13} />}    label="Website"   value={socials.website}   onChange={v => setSocials(s => ({ ...s, website: v }))}   placeholder="https://yourtoken.xyz" />
-          <SocialInput icon={<IcoTwitter s={13} />}  label="Twitter/X" value={socials.twitter}   onChange={v => setSocials(s => ({ ...s, twitter: v }))}   placeholder="https://x.com/yourtoken" />
-          <SocialInput icon={<IcoTelegram s={13} />} label="Telegram"  value={socials.telegram}  onChange={v => setSocials(s => ({ ...s, telegram: v }))}  placeholder="https://t.me/yourtoken" />
-          <SocialInput icon={<IcoDiscord s={13} />}  label="Discord"   value={socials.discord}   onChange={v => setSocials(s => ({ ...s, discord: v }))}   placeholder="https://discord.gg/yourtoken" />
+          <div style={{ fontSize: 9, color: DIM, lineHeight: 1.6, marginBottom: 2 }}>
+            Paid promotion to help your token gain traction. Charged on launch — paid to the GEASS treasury.
+          </div>
+          {BOOST_TIERS.map(t => {
+            const active = boost === t.id;
+            return (
+              <button key={t.id} onClick={() => setBoost(active ? null : t.id)}
+                style={{ textAlign: "left", cursor: "pointer", borderRadius: 10, padding: "11px 12px",
+                  border: `1px solid ${active ? t.color : BDR}`,
+                  background: active ? `${t.color}12` : BG, transition: "border-color .15s" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? t.color : "#f4f4f5" }}>{t.label}</span>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: t.color, fontFamily: MONO }}>{t.sol} SOL</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  {t.perks.map((p, i) => (
+                    <div key={i} style={{ fontSize: 9, color: active ? "#a1a1aa" : "#71717a", display: "flex", gap: 5, alignItems: "flex-start" }}>
+                      <span style={{ color: t.color, flexShrink: 0 }}>✓</span>{p}
+                    </div>
+                  ))}
+                </div>
+              </button>
+            );
+          })}
+          {boost && (
+            <button onClick={() => setBoost(null)}
+              style={{ alignSelf: "flex-start", fontSize: 9, color: DIM, background: "none", border: "none", cursor: "pointer", padding: "2px 0", textDecoration: "underline" }}>
+              Clear selection — launch without boost
+            </button>
+          )}
         </div>
       </Section>
 
@@ -491,6 +625,12 @@ export function LaunchTab({ wallet, wBal, isMobile }: {
           background: msg.startsWith("Error") ? "#f59e0b10" : "#10b98110",
           border: `1px solid ${msg.startsWith("Error") ? "#f59e0b30" : "#10b98130"}`, borderRadius: 8, textAlign: "center" }}>
           {msg}
+        </div>
+      )}
+
+      {boost && (
+        <div style={{ fontSize: 9, color: DIM, textAlign: "center" }}>
+          + {BOOST_TIERS.find(t => t.id === boost)?.label} ({BOOST_TIERS.find(t => t.id === boost)?.sol} SOL) charged after launch
         </div>
       )}
 

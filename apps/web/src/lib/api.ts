@@ -224,6 +224,9 @@ export async function jitoLaunchBundle(params: {
   file?:      File;
   wallet?:    string; // Phantom pubkey (phantom mode)
   server?:    boolean; // GEASS server wallet (server mode)
+  twitter?:   string;
+  telegram?:  string;
+  website?:   string;
 }): Promise<LaunchBundleResult> {
   const { Keypair, VersionedTransaction } = await import("@solana/web3.js");
 
@@ -233,6 +236,9 @@ export async function jitoLaunchBundle(params: {
   ipfsForm.append("symbol",      params.symbol.toUpperCase());
   ipfsForm.append("description", params.description ?? params.name);
   ipfsForm.append("showName",    "true");
+  if (params.twitter)  ipfsForm.append("twitter",  params.twitter);
+  if (params.telegram) ipfsForm.append("telegram", params.telegram);
+  if (params.website)  ipfsForm.append("website",  params.website);
   if (params.file) ipfsForm.append("file", params.file, params.file.name);
   const { metadataUri } = await pumpIpfs(ipfsForm);
 
