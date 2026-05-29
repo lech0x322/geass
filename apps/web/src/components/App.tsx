@@ -33,7 +33,7 @@ import { CommunityTab } from "./CommunityTab";
 import { PredictionsTab } from "./PredictionsTab";
 import { SocialTrackerTab } from "./SocialTrackerTab";
 import { AiTradingTab } from "./AiTradingTab";
-import IntelTab from "./IntelTab";
+import { IntelTab } from "./IntelTab";
 import { WatchlistTab } from "./WatchlistTab";
 import { useWatchlist } from "@/lib/useWatchlist";
 import { NotificationsBell } from "./NotificationsBell";
@@ -167,7 +167,7 @@ interface Props {
 }
 
 export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
-  const [tab, setTab]         = useState<"home" | "trades" | "launch" | "gems" | "autosnipe" | "referral" | "pro" | "settings" | "trending" | "profile" | "community" | "predictions" | "social" | "ai-trading" | "intel">("home");
+  const [tab, setTab]         = useState<"home" | "trades" | "launch" | "gems" | "autosnipe" | "referral" | "pro" | "settings" | "trending" | "profile" | "community" | "predictions" | "social" | "ai-trading" | "intel" | "watchlist">("home");
   const [gems, setGems]       = useState<Gem[]>([]);
   const [loading, setLoading] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
