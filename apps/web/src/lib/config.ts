@@ -66,7 +66,7 @@ export const NAV: NavItem[] = [
     iconId: "cog",
     sub: [
       { id: "sounds",   label: "Sound Alerts" },
-      { id: "referral", label: "Referral" },
+      { id: "referral", label: "Rewards" },
       { id: "wallet",   label: "Wallet" },
     ],
   },
