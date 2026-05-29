@@ -327,6 +327,7 @@ export function LaunchTab({ wallet, wBal, isMobile }: {
   const [msg,         setMsg]         = useState("");
   const [mintAddress, setMintAddress] = useState("");
   const [showPreview, setShowPreview] = useState(false);
+  const [failedMint,  setFailedMint]  = useState("");
 
   useEffect(() => () => {
     if (logoPreview)   URL.revokeObjectURL(logoPreview);
@@ -347,14 +348,15 @@ export function LaunchTab({ wallet, wBal, isMobile }: {
   const reset = () => {
     setName(""); setSym(""); setDesc(""); setDevBuy("0.5"); setMsg("");
     setSocials({ website: "", twitter: "", telegram: "", discord: "" });
-    setBoost(null);
+    setBoost(null); setFailedMint("");
     handleLogoFile(null); handleBannerFile(null);
     setStep("form");
   };
 
   /** Poll the chain until the mint account actually exists (bundle landed). */
   const confirmOnChain = async (mint: string): Promise<boolean> => {
-    for (let i = 0; i < 20; i++) {
+    const POLLS = 30, INTERVAL_MS = 3_000;
+    for (let i = 0; i < POLLS; i++) {
       try {
         const r = await fetch(`/api/pump/confirm?mint=${mint}`, { cache: "no-store" });
         if (r.ok) {
@@ -362,8 +364,9 @@ export function LaunchTab({ wallet, wBal, isMobile }: {
           if (j.exists) return true;
         }
       } catch { /* retry */ }
-      setMsg(`Confirming on-chain… (${i + 1}/20)`);
-      await new Promise(res => setTimeout(res, 2_000));
+      const remaining = Math.round(((POLLS - i - 1) * INTERVAL_MS) / 1_000);
+      setMsg(`Confirming on-chain… ~${remaining}s remaining`);
+      await new Promise(res => setTimeout(res, INTERVAL_MS));
     }
     return false;
   };
@@ -392,9 +395,20 @@ export function LaunchTab({ wallet, wBal, isMobile }: {
     }
   };
 
-  const launch = async () => {
+  const launch = async (tipOverride?: string) => {
     if (!name || !sym) { setMsg("Fill in Name & Symbol"); return; }
-    setLoading(true); setMsg("");
+
+    // Pre-launch balance sanity check
+    if (wBal) {
+      const bal = parseFloat(wBal) || 0;
+      const needed = (parseFloat(devBuy) || 0) + (parseFloat(tipOverride ?? tip) || 0.003) + 0.02;
+      if (bal < needed) {
+        setMsg(`Insufficient balance — need ~${needed.toFixed(3)} SOL, have ${bal.toFixed(3)} SOL`);
+        return;
+      }
+    }
+
+    setLoading(true); setMsg(""); setFailedMint("");
     try {
       let mint = "";
       if (jito) {
@@ -402,7 +416,7 @@ export function LaunchTab({ wallet, wBal, isMobile }: {
         const result = await jitoLaunchBundle({
           name, symbol: sym, description: desc || name,
           devBuySol: parseFloat(devBuy) || 0,
-          tipSol: parseFloat(tip) || 0.003,
+          tipSol: parseFloat(tipOverride ?? tip) || 0.003,
           file: logoFile ?? undefined,
           wallet: jitoMode === "phantom" ? wallet : undefined,
           server: jitoMode === "server",
@@ -420,7 +434,7 @@ export function LaunchTab({ wallet, wBal, isMobile }: {
           const signedB64s = await signAllWithPhantom(txsToSign);
           setMsg("Submitting Jito bundle…");
           const txsForBundle = hasBuy ? [signedB64s[0], signedB64s[1]] : [signedB64s[0]];
-          await jitoSubmit(txsForBundle, parseFloat(tip) || 0.003);
+          await jitoSubmit(txsForBundle, parseFloat(tipOverride ?? tip) || 0.003);
         }
       } else {
         setMsg("Uploading metadata…");
@@ -454,7 +468,8 @@ export function LaunchTab({ wallet, wBal, isMobile }: {
       setMsg("Confirming on-chain…");
       const landed = await confirmOnChain(mint);
       if (!landed) {
-        setMsg("Bundle was accepted but the token did not land on-chain within 40s. It may still appear shortly — check the CA on Solscan. Common cause: Jito tip too low, expired blockhash, or unfunded GEASS tip wallet.");
+        setFailedMint(mint);
+        setMsg("Bundle was accepted but the token did not land on-chain within 90s.");
         setLoading(false);
         return;
       }
@@ -621,10 +636,38 @@ export function LaunchTab({ wallet, wBal, isMobile }: {
       </Section>
 
       {msg && (
-        <div style={{ fontSize: 10, color: msg.startsWith("Error") ? "#f59e0b" : "#10b981", padding: "7px 12px",
-          background: msg.startsWith("Error") ? "#f59e0b10" : "#10b98110",
-          border: `1px solid ${msg.startsWith("Error") ? "#f59e0b30" : "#10b98130"}`, borderRadius: 8, textAlign: "center" }}>
+        <div style={{ fontSize: 10, padding: "7px 12px", borderRadius: 8, textAlign: "center",
+          color: failedMint || msg.startsWith("Error") || msg.startsWith("Insufficient") ? "#f59e0b" : "#10b981",
+          background: failedMint || msg.startsWith("Error") || msg.startsWith("Insufficient") ? "#f59e0b10" : "#10b98110",
+          border: `1px solid ${failedMint || msg.startsWith("Error") || msg.startsWith("Insufficient") ? "#f59e0b30" : "#10b98130"}` }}>
           {msg}
+        </div>
+      )}
+
+      {failedMint && !loading && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", background: "#0d0d10", border: `1px solid #f59e0b30`, borderRadius: 10 }}>
+          <div style={{ fontSize: 9, color: "#71717a", lineHeight: 1.5 }}>
+            The token may still appear on-chain within a few minutes. Common causes: Jito tip too low, congestion, or expired blockhash.
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <a href={`https://solscan.io/token/${failedMint}`} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: 10, fontWeight: 700, color: "#a1a1aa", border: `1px solid ${BDR}`, borderRadius: 7, padding: "6px 12px", textDecoration: "none", background: BG }}>
+              Check on Solscan ↗
+            </a>
+            {jito && (
+              <button
+                onClick={() => {
+                  const bumped = Math.min(0.01, (parseFloat(tip) || 0.003) * 2).toFixed(4);
+                  setTip(bumped);
+                  setFailedMint("");
+                  setMsg("");
+                  launch(bumped);
+                }}
+                style={{ fontSize: 10, fontWeight: 700, color: "#a855f7", border: "1px solid #a855f730", borderRadius: 7, padding: "6px 12px", background: "#a855f710", cursor: "pointer" }}>
+                Retry — bump tip to {Math.min(0.01, (parseFloat(tip) || 0.003) * 2).toFixed(4)} SOL
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -634,7 +677,7 @@ export function LaunchTab({ wallet, wBal, isMobile }: {
         </div>
       )}
 
-      <button onClick={launch} disabled={loading || !name || !sym}
+      <button onClick={() => launch()} disabled={loading || !name || !sym}
         style={{ background: jito ? "linear-gradient(135deg,#7c3aed,#a855f7)" : `linear-gradient(135deg,${RED},#7c3aed)`,
           border: "none", color: "#fff", padding: "13px 20px", borderRadius: 10, fontSize: 13, fontWeight: 800,
           cursor: loading ? "wait" : "pointer", letterSpacing: ".5px", opacity: (!name || !sym) ? 0.4 : 1,
