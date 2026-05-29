@@ -35,6 +35,7 @@ import { SocialTrackerTab } from "./SocialTrackerTab";
 import { AiTradingTab } from "./AiTradingTab";
 import { IntelTab } from "./IntelTab";
 import { WatchlistTab } from "./WatchlistTab";
+import { LaunchTab } from "./LaunchTab";
 import { useWatchlist } from "@/lib/useWatchlist";
 import { NotificationsBell } from "./NotificationsBell";
 import { pushNotification } from "@/lib/useNotifications";
@@ -1363,148 +1364,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* LAUNCH TAB */}
           {tab === "launch" && (
-            <div style={{ padding: isMobile ? "14px 14px 64px" : "18px 22px", maxWidth: 500 }}>
-              <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
-                <IconRocket size={isMobile ? 16 : 18} /> Launch Token
-              </h1>
-              <p style={{ fontSize: 11, color: "#3f3f46", marginBottom: 16 }}>Create & launch on Pump.fun · 100% on-chain via Phantom</p>
-              <div style={{ display: "flex", alignItems: "center", padding: "8px 12px", marginBottom: 14, background: "#111113", border: "1px solid #10b98130", borderRadius: 8 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 10, color: "#10b981", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5 }}>
-                    <IconCheck size={10} /> {wallet.slice(0, 16)}...
-                  </div>
-                  {wBal && <div style={{ fontSize: 9, color: "#3f3f46" }}>{wBal} SOL</div>}
-                </div>
-                <span style={{ fontSize: 9, color: "#10b98180" }}>Connected</span>
-              </div>
-              {ctStep === "form" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                    {([["name", "TOKEN NAME *", "Moon Pepe"], ["sym", "SYMBOL *", "MPEPE"]] as [keyof typeof ct, string, string][]).map(([k, l, p]) => (
-                      <div key={k}>
-                        <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 4 }}>{l}</div>
-                        <input value={ct[k]} onChange={e => setCt(pr => ({ ...pr, [k]: e.target.value }))} placeholder={p}
-                          style={{ width: "100%", background: "#09090b", border: "1px solid #27272a", borderRadius: 7, color: "#f4f4f5", padding: "9px 12px", fontSize: 12, outline: "none" }}
-                          onFocus={e => (e.target.style.borderColor = "#dc2626")}
-                          onBlur={e => (e.target.style.borderColor = "#27272a")} />
-                      </div>
-                    ))}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 4 }}>DESCRIPTION</div>
-                    <textarea value={ct.desc} onChange={e => setCt(p => ({ ...p, desc: e.target.value }))} placeholder="Token description..." rows={3}
-                      style={{ width: "100%", background: "#09090b", border: "1px solid #27272a", borderRadius: 7, color: "#f4f4f5", padding: "9px 12px", fontSize: 11, outline: "none", resize: "vertical" }} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 4 }}>IMAGE</div>
-                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "9px 12px", background: "#09090b", border: `1px solid ${ctFile ? "#10b981" : "#27272a"}`, borderRadius: 7 }}>
-                      <input type="file" accept="image/*" style={{ display: "none" }}
-                        onChange={e => { setCtFile(e.target.files?.[0] ?? null); setCt(p => ({ ...p, img: "" })); }} />
-                      <span style={{ fontSize: 11, color: ctFile ? "#10b981" : "#52525b" }}>{ctFile ? ctFile.name : "Upload file..."}</span>
-                      {ctFile && <button onClick={e => { e.preventDefault(); setCtFile(null); }} style={{ marginLeft: "auto", background: "transparent", border: "none", color: "#52525b", cursor: "pointer", fontSize: 12, lineHeight: 1 }}>✕</button>}
-                    </label>
-                    {!ctFile && (
-                      <input value={ct.img} onChange={e => setCt(p => ({ ...p, img: e.target.value }))} placeholder="or paste image URL..."
-                        style={{ width: "100%", marginTop: 6, background: "#09090b", border: "1px solid #27272a", borderRadius: 7, color: "#f4f4f5", padding: "9px 12px", fontSize: 11, outline: "none" }} />
-                    )}
-                  </div>
-                  <div style={{ background: "#111113", border: "1px solid #27272a", borderRadius: 8, padding: 12 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                      <span style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px" }}>DEV BUY (SOL)</span>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: "#eab308" }}>{ct.devBuy} SOL</span>
-                    </div>
-                    <input type="range" min="0" max="5" step="0.1" value={ct.devBuy} onChange={e => setCt(p => ({ ...p, devBuy: e.target.value }))} style={{ width: "100%" }} />
-                  </div>
-                  {/* Jito Bundle toggle */}
-                  <div style={{ background: "#111113", border: `1px solid ${ctJito ? "#7c3aed40" : "#27272a"}`, borderRadius: 10, padding: "12px 14px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: ctJito ? 12 : 0 }}>
-                      <div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: ctJito ? "#a855f7" : "#71717a" }}>Use Jito Bundle <span style={{ fontSize: 8, background: "#10b98120", color: "#10b981", border: "1px solid #10b98140", padding: "1px 5px", borderRadius: 4, marginLeft: 4 }}>RECOMMENDED</span></div>
-                        <div style={{ fontSize: 9, color: "#52525b", marginTop: 1 }}>Atomic create + dev buy · anti-MEV · faster landing</div>
-                      </div>
-                      <button onClick={() => setCtJito(v => !v)}
-                        style={{ width: 40, height: 22, borderRadius: 11, border: "none", cursor: "pointer", position: "relative", background: ctJito ? "#a855f7" : "#27272a", transition: "background .2s", flexShrink: 0 }}>
-                        <span style={{ position: "absolute", top: 2, left: ctJito ? 20 : 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
-                      </button>
-                    </div>
-                    {ctJito && (
-                      <>
-                        <div style={{ display: "flex", gap: 5, marginBottom: 10 }}>
-                          {([["phantom", "Phantom signs"], ["server", "GEASS wallet"]] as ["phantom"|"server", string][]).map(([m, l]) => (
-                            <button key={m} onClick={() => setCtJitoMode(m)}
-                              style={{ flex: 1, padding: "6px 8px", borderRadius: 7, cursor: "pointer", fontSize: 9, fontWeight: 700,
-                                border: `1px solid ${ctJitoMode === m ? "#a855f7" : "#27272a"}`,
-                                background: ctJitoMode === m ? "#a855f712" : "transparent",
-                                color: ctJitoMode === m ? "#a855f7" : "#52525b" }}>{l}</button>
-                          ))}
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#52525b", marginBottom: 4 }}>
-                          <span>JITO TIP</span>
-                          <span style={{ color: "#a855f7", fontWeight: 700 }}>{parseFloat(ctTip).toFixed(4)} SOL</span>
-                        </div>
-                        <input type="range" min="0.001" max="0.01" step="0.0005" value={ctTip}
-                          onChange={e => setCtTip(e.target.value)} style={{ width: "100%" }} />
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8, color: "#3f3f46", marginTop: 2 }}>
-                          <span>0.001 — economical</span><span>0.01 — fastest</span>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {ctMsg && <div style={{ fontSize: 10, color: ctMsg.startsWith("Bundle") || ctMsg.startsWith("Launched") ? "#10b981" : "#f59e0b", textAlign: "center" }}>{ctMsg}</div>}
-                  <button onClick={launchToken} disabled={ctLoad || !ct.name || !ct.sym}
-                    style={{ background: ctJito ? "linear-gradient(135deg,#7c3aed,#a855f7)" : "linear-gradient(135deg,#dc2626,#7c3aed)", border: "none", color: "#fff", padding: 11,
-                      borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: ctLoad ? "wait" : "pointer", letterSpacing: ".5px", opacity: (!ct.name || !ct.sym) ? 0.4 : 1 }}>
-                    {ctLoad
-                      ? <span className="pulse" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconRefresh size={12} /> Processing...</span>
-                      : <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconZap size={12} /> {ctJito ? "LAUNCH VIA JITO BUNDLE" : "LAUNCH ON-CHAIN"}</span>}
-                  </button>
-                </div>
-              )}
-              {ctStep === "done" && (
-                <div style={{ textAlign: "center", padding: "30px 20px", background: "#111113", border: "1px solid #10b98130", borderRadius: 12 }}>
-                  <div style={{ color: "#10b981", marginBottom: 10, display: "flex", justifyContent: "center" }}><IconRocket size={48} /></div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: "#10b981", marginBottom: 6 }}>Token Launched!</div>
-                  <div style={{ fontSize: 11, color: "#52525b", marginBottom: 4 }}>${ct.sym.toUpperCase()} is live on Pump.fun</div>
-                  <div style={{ fontSize: 10, color: "#3f3f46", marginBottom: 10 }}>{ctMsg}</div>
-                  {ctMintAddress && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", marginBottom: 14, padding: "8px 12px", background: "#0a0a0b", border: "1px solid #27272a", borderRadius: 8 }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: "#52525b", letterSpacing: "1px" }}>CA</span>
-                      <span style={{ fontSize: 10, color: "#a1a1aa", fontFamily: "monospace", wordBreak: "break-all" }}>{ctMintAddress}</span>
-                      <button onClick={() => navigator.clipboard.writeText(ctMintAddress)}
-                        style={{ background: "none", border: "none", color: "#52525b", cursor: "pointer", flexShrink: 0, padding: 2 }}
-                        title="Copy CA">
-                        <IconCopy size={13} />
-                      </button>
-                    </div>
-                  )}
-                  {ctMintAddress && (
-                    <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 14 }}>
-                      <a href={`https://pump.fun/coin/${ctMintAddress}`} target="_blank" rel="noopener noreferrer"
-                        style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #27272a", background: "transparent", color: "#a1a1aa", fontSize: 11, fontWeight: 600, textDecoration: "none" }}>
-                        Pump.fun ↗
-                      </a>
-                      <a href={`https://dexscreener.com/solana/${ctMintAddress}`} target="_blank" rel="noopener noreferrer"
-                        style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #f9731640", background: "#f9731612", color: "#f97316", fontSize: 11, fontWeight: 700, textDecoration: "none" }}>
-                        DEX Screener ↗
-                      </a>
-                      <a href={`https://solscan.io/token/${ctMintAddress}`} target="_blank" rel="noopener noreferrer"
-                        style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #3b82f640", background: "#3b82f612", color: "#3b82f6", fontSize: 11, fontWeight: 700, textDecoration: "none" }}>
-                        Solscan ↗
-                      </a>
-                      <button onClick={() => setDexToken({ address: ctMintAddress, symbol: ct.sym })}
-                        style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #10b98140", background: "#10b98112", color: "#10b981", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-                        DEX Info
-                      </button>
-                    </div>
-                  )}
-                  <button onClick={() => { setCtStep("form"); setCt({ name: "", sym: "", desc: "", img: "", devBuy: "0.5" }); setCtMsg(""); setCtFile(null); setCtMintAddress(null); }}
-                    style={{ background: "#dc2626", border: "none", color: "#fff", padding: "8px 20px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-                    Launch Another
-                  </button>
-                </div>
-              )}
-            </div>
+            <LaunchTab wallet={wallet} wBal={wBal} isMobile={isMobile} />
           )}
 
           {/* AUTO-SNIPE TAB */}
