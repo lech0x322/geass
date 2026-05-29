@@ -50,6 +50,28 @@ export const redis = {
     try { return (await getClient()?.hgetall<Record<string, T>>(key)) ?? null; }
     catch (e) { console.error("[redis] hgetall:", e); return null; }
   },
+  /** Push to head of a list, then trim to keep only the newest `keep` items. */
+  async lpushTrim(key: string, value: unknown, keep: number, exSeconds?: number): Promise<void> {
+    try {
+      const c = getClient();
+      if (!c) return;
+      await c.lpush(key, JSON.stringify(value));
+      await c.ltrim(key, 0, keep - 1);
+      if (exSeconds !== undefined) await c.expire(key, exSeconds);
+    } catch (e) { console.error("[redis] lpushTrim:", e); }
+  },
+  /** Read a range of a list (default: entire list), newest first. */
+  async lrange<T>(key: string, start = 0, stop = -1): Promise<T[]> {
+    try {
+      const raw = await getClient()?.lrange(key, start, stop);
+      if (!raw) return [];
+      return raw.map(v => {
+        // Upstash may return already-parsed objects or JSON strings.
+        if (typeof v === "string") { try { return JSON.parse(v) as T; } catch { return v as unknown as T; } }
+        return v as T;
+      });
+    } catch (e) { console.error("[redis] lrange:", e); return []; }
+  },
   available(): boolean {
     return getClient() !== null;
   },

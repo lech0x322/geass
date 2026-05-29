@@ -83,7 +83,6 @@ export async function GET() {
   const signals = all
     .filter(s => { if (seen.has(s.id)) return false; seen.add(s.id); return true; })
     .filter(s => s.score >= 23) // drop articles without any meme keyword
-    .sort((a, b) => b.score - b.score || b.pubDate - a.pubDate)
     .sort((a, b) => b.pubDate - a.pubDate)
     .slice(0, 30);
 
