@@ -183,6 +183,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
   const [searchQ, setSearchQ] = useState("");
   const [searchResults, setSearchResults] = useState<{ baseToken: { address: string; name: string; symbol: string }; priceUsd: string | null; priceChange: Record<string, number> | null; volume: Record<string, number>; liquidity: { usd: number | null } | null; url: string; info?: { imageUrl?: string } }[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [searchCategory, setSearchCategory] = useState<"all" | "tokens" | "kol" | "wallets">("all");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1004,34 +1005,42 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
         )}
 
         {/* Multifunctional Search bar */}
-        <div style={{ padding: isMobile ? "8px 12px" : "8px 18px", borderBottom: "1px solid #18181b", background: "#0c0c0e", flexShrink: 0, position: "relative", display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, maxWidth: 600, flex: 1 }}>
-            <div style={{ position: "relative", flex: 1 }}>
-              <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#52525b", pointerEvents: "none", display: "flex" }}>
-                <IconSearch size={12} />
-              </span>
-              <input
-                value={searchQ}
-                onChange={e => { setSearchQ(e.target.value); setSearchOpen(true); }}
-                onFocus={() => setSearchOpen(true)}
-                onBlur={() => setTimeout(() => setSearchOpen(false), 300)}
-                placeholder={
-                  isMobile ? "Search or paste CA…" :
-                  searchCategory === "tokens"  ? "Search token name, symbol or mint…" :
-                  searchCategory === "kol"     ? "Search KOL name or @handle…" :
-                  searchCategory === "wallets" ? "Paste Solana wallet address…" :
-                  "Search tokens, KOL traders, wallets…"
-                }
-                style={{ width: "100%", background: "#111113", border: "1px solid #27272a", borderRadius: 9, color: "#f4f4f5", padding: isMobile ? "10px 32px 10px 32px" : "7px 30px 7px 30px", fontSize: isMobile ? 13 : 11, outline: "none", transition: "border .15s", boxSizing: "border-box" }}
-              />
-              {searchQ && (
-                <button onClick={() => { setSearchQ(""); setSearchResults([]); }} aria-label="Clear"
-                  style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "#52525b", cursor: "pointer", display: "flex", padding: 2 }}>
-                  <IconX size={12} />
-                </button>
-              )}
+        <div style={{ padding: isMobile ? "6px 12px" : "8px 18px", borderBottom: "1px solid #18181b", background: "#0c0c0e", flexShrink: 0, position: "relative", display: "flex", alignItems: "center", gap: 12 }}>
+          {isMobile ? (
+            /* Mobile: just the magnifying glass icon */
+            <button onClick={() => setMobileSearchOpen(true)}
+              aria-label="Search"
+              style={{ background: "#111113", border: "1px solid #27272a", borderRadius: 9, color: "#71717a", width: 38, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+              <IconSearch size={15} />
+            </button>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, maxWidth: 600, flex: 1 }}>
+              <div style={{ position: "relative", flex: 1 }}>
+                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#52525b", pointerEvents: "none", display: "flex" }}>
+                  <IconSearch size={12} />
+                </span>
+                <input
+                  value={searchQ}
+                  onChange={e => { setSearchQ(e.target.value); setSearchOpen(true); }}
+                  onFocus={() => setSearchOpen(true)}
+                  onBlur={() => setTimeout(() => setSearchOpen(false), 300)}
+                  placeholder={
+                    searchCategory === "tokens"  ? "Search token name, symbol or mint…" :
+                    searchCategory === "kol"     ? "Search KOL name or @handle…" :
+                    searchCategory === "wallets" ? "Paste Solana wallet address…" :
+                    "Search tokens, KOL traders, wallets…"
+                  }
+                  style={{ width: "100%", background: "#111113", border: "1px solid #27272a", borderRadius: 9, color: "#f4f4f5", padding: "7px 30px 7px 30px", fontSize: 11, outline: "none", transition: "border .15s", boxSizing: "border-box" }}
+                />
+                {searchQ && (
+                  <button onClick={() => { setSearchQ(""); setSearchResults([]); }} aria-label="Clear"
+                    style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "#52525b", cursor: "pointer", display: "flex", padding: 2 }}>
+                    <IconX size={12} />
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Notifications bell — desktop only (mobile has it in top bar) */}
           {!isMobile && (
@@ -1161,7 +1170,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* ALPHA SCANNER TAB */}
           {tab === "gems" && (
-            <div style={{ padding: isMobile ? "14px 14px 72px" : "18px 22px" }}>
+            <div style={{ padding: isMobile ? "14px 14px 64px" : "18px 22px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 5, flexWrap: "wrap" }}>
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", letterSpacing: ".3px", display: "flex", alignItems: "center", gap: 8 }}>
                   <IconZap size={isMobile ? 16 : 18} /> Alpha Scanner
@@ -1284,7 +1293,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* HOME TAB */}
           {tab === "home" && (
-            <div style={{ padding: isMobile ? "14px 14px 72px" : "18px 22px" }}>
+            <div style={{ padding: isMobile ? "14px 14px 64px" : "18px 22px" }}>
               <HomeTab
                 solPrice={solPrice}
                 solChange={solChange}
@@ -1301,7 +1310,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* LIVE FEED TAB */}
           {tab === "trades" && (
-            <div style={{ padding: isMobile ? "14px 14px 72px" : "18px 22px" }}>
+            <div style={{ padding: isMobile ? "14px 14px 64px" : "18px 22px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8 }}>
                   <IconBroadcast size={isMobile ? 16 : 18} /> Live KOL Feed
@@ -1359,7 +1368,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* LAUNCH TAB */}
           {tab === "launch" && (
-            <div style={{ padding: isMobile ? "14px 14px 72px" : "18px 22px", maxWidth: 500 }}>
+            <div style={{ padding: isMobile ? "14px 14px 64px" : "18px 22px", maxWidth: 500 }}>
               <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
                 <IconRocket size={isMobile ? 16 : 18} /> Launch Token
               </h1>
@@ -1505,7 +1514,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* AUTO-SNIPE TAB */}
           {tab === "autosnipe" && (
-            <div style={{ padding: isMobile ? "14px 14px 72px" : "18px 22px", maxWidth: 560 }}>
+            <div style={{ padding: isMobile ? "14px 14px 64px" : "18px 22px", maxWidth: 560 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8 }}>
                   <IconTarget size={isMobile ? 16 : 18} /> Auto-Snipe
@@ -1662,7 +1671,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
             const nextTierRefs = refs >= 15 ? null : refs >= 8 ? 15 : refs >= 4 ? 8 : 4;
             const progressPct  = nextTierRefs ? Math.min((refs / nextTierRefs) * 100, 100) : 100;
             return (
-              <div style={{ padding: isMobile ? "14px 14px 72px" : "24px 28px", maxWidth: 700 }}>
+              <div style={{ padding: isMobile ? "14px 14px 64px" : "24px 28px", maxWidth: 700 }}>
 
                 {/* Header */}
                 <div style={{ position: "relative", background: "#070708", border: "1px solid #18181c", padding: isMobile ? "20px 16px" : "28px 24px", marginBottom: 1, overflow: "hidden" }}>
@@ -1841,7 +1850,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
             {(() => {
             const activeSettings: SettingsSection = settingsSection === "wallet" ? "wallet" : settingsSection === "trading" ? "trading" : "sounds";
             return (
-            <div style={{ padding: isMobile ? "14px 14px 72px" : "18px 22px", maxWidth: 560 }}>
+            <div style={{ padding: isMobile ? "14px 14px 64px" : "18px 22px", maxWidth: 560 }}>
               <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
                 <IconCog size={isMobile ? 16 : 18} /> Settings
               </h1>
@@ -2041,7 +2050,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* TRENDING TAB */}
           {tab === "trending" && (
-            <div style={{ padding: isMobile ? "14px 14px 72px" : "18px 22px" }}>
+            <div style={{ padding: isMobile ? "14px 14px 64px" : "18px 22px" }}>
               {/* Header */}
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8 }}>
@@ -2340,7 +2349,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* PRO TAB */}
           {tab === "pro" && (
-            <div style={{ padding: isMobile ? "14px 14px 72px" : "18px 22px", maxWidth: 700 }}>
+            <div style={{ padding: isMobile ? "14px 14px 64px" : "18px 22px", maxWidth: 700 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8 }}>
                   <IconCrown size={isMobile ? 16 : 18} /> GEASS Pro
@@ -2519,23 +2528,103 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           )}
         </main>
 
+        {/* Mobile search overlay */}
+        {isMobile && mobileSearchOpen && (
+          <div style={{ position: "fixed", inset: 0, background: "#09090bf5", zIndex: 300, display: "flex", flexDirection: "column", padding: "16px 14px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <div style={{ position: "relative", flex: 1 }}>
+                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#52525b", pointerEvents: "none", display: "flex" }}>
+                  <IconSearch size={14} />
+                </span>
+                <input
+                  autoFocus
+                  value={searchQ}
+                  onChange={e => { setSearchQ(e.target.value); setSearchOpen(true); }}
+                  onBlur={() => setTimeout(() => setSearchOpen(false), 300)}
+                  placeholder="Search tokens, KOL, paste CA…"
+                  style={{ width: "100%", background: "#111113", border: "1px solid #3f3f46", borderRadius: 9, color: "#f4f4f5", padding: "11px 36px 11px 34px", fontSize: 14, outline: "none", boxSizing: "border-box" }}
+                />
+                {searchQ && (
+                  <button onClick={() => { setSearchQ(""); setSearchResults([]); }} aria-label="Clear"
+                    style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "#52525b", cursor: "pointer", display: "flex", padding: 4 }}>
+                    <IconX size={14} />
+                  </button>
+                )}
+              </div>
+              <button onClick={() => { setMobileSearchOpen(false); setSearchQ(""); setSearchResults([]); setSearchOpen(false); }}
+                style={{ background: "transparent", border: "none", color: "#71717a", fontSize: 14, cursor: "pointer", padding: "0 4px", flexShrink: 0 }}>
+                Cancel
+              </button>
+            </div>
+            {searchQ.length >= 2 && (kolMatches.length > 0 || searchResults.length > 0 || isSolanaAddress(searchQ)) && (
+              <div style={{ background: "#111113", border: "1px solid #27272a", borderRadius: 12, overflow: "hidden", flex: 1, overflowY: "auto" }}>
+                {kolMatches.length > 0 && (
+                  <>
+                    <div style={{ padding: "6px 12px 3px", fontSize: 8, fontWeight: 700, color: "#52525b", letterSpacing: "1px" }}>KOL TRADERS</div>
+                    {kolMatches.map(k => (
+                      <button key={k.addr} onMouseDown={() => { window.open(`https://x.com/${k.tw}`, "_blank"); setMobileSearchOpen(false); setSearchQ(""); }}
+                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "transparent", border: "none", borderBottom: "1px solid #18181b", cursor: "pointer", textAlign: "left" }}>
+                        <div style={{ width: 30, height: 30, borderRadius: "50%", background: k.c + "25", border: `1px solid ${k.c}50`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: k.c, flexShrink: 0 }}>{k.name[0]}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "#f4f4f5" }}>{k.name}</div>
+                          <div style={{ fontSize: 10, color: "#52525b" }}>@{k.tw}</div>
+                        </div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#10b981" }}>{k.pnl}</div>
+                      </button>
+                    ))}
+                  </>
+                )}
+                {isSolanaAddress(searchQ) && (
+                  <div style={{ padding: "10px 12px" }}>
+                    <div style={{ fontSize: 10, color: "#3f3f46", fontFamily: "monospace", marginBottom: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{searchQ.trim()}</div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onMouseDown={() => { scanCA(searchQ.trim()); setMobileSearchOpen(false); }}
+                        style={{ flex: 1, padding: "9px 0", borderRadius: 7, border: "1px solid #ff2b4e55", background: "#ff2b4e12", color: "#ff2b4e", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                        MRI Scan ⚡
+                      </button>
+                      <button onMouseDown={() => { window.open(`https://solscan.io/token/${searchQ.trim()}`, "_blank"); setMobileSearchOpen(false); }}
+                        style={{ padding: "9px 14px", borderRadius: 7, border: "1px solid #27272a", background: "transparent", color: "#71717a", fontSize: 12, cursor: "pointer" }}>
+                        Solscan ↗
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {searchResults.slice(0, 6).map((p, i) => {
+                  const ch24 = p.priceChange?.h24;
+                  return (
+                    <button key={i} onMouseDown={() => { window.open(p.url, "_blank"); setMobileSearchOpen(false); setSearchQ(""); }}
+                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "transparent", border: "none", borderBottom: "1px solid #18181b", cursor: "pointer", textAlign: "left" }}>
+                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#27272a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "#71717a", flexShrink: 0 }}>{p.baseToken.symbol.slice(0,2)}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#f4f4f5" }}>${p.baseToken.symbol}</div>
+                        <div style={{ fontSize: 10, color: "#52525b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.baseToken.name}</div>
+                      </div>
+                      {ch24 !== undefined && ch24 !== null && <span style={{ fontSize: 12, fontWeight: 600, color: ch24 >= 0 ? "#10b981" : "#ef4444", flexShrink: 0 }}>{ch24 >= 0 ? "+" : ""}{ch24.toFixed(1)}%</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Mobile bottom tab bar */}
         {isMobile && (
-          <nav style={{ height: 50, background: "#08080d", borderTop: "1px solid #151520", display: "flex", alignItems: "stretch", flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom,0px)" }}>
+          <nav style={{ height: 46, background: "#08080d", borderTop: "1px solid #151520", display: "flex", alignItems: "stretch", flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom,0px)" }}>
             {NAV.filter(n => n.mobile).map(n => {
               const isActive = tab === n.id;
               const accent = n.pro ? "#a855f7" : "#ff2b4e";
               return (
                 <button key={n.id} onClick={() => { setTab(n.id as typeof tab); setSettingsOpen(false); }}
-                  style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
+                  title={n.mobileLabel ?? n.label}
+                  style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
                     background: isActive ? (n.pro ? "rgba(168,85,247,0.08)" : "rgba(255,43,78,0.07)") : "transparent",
-                    border: "none", cursor: "pointer", minWidth: 0, padding: "0 4px",
+                    border: "none", cursor: "pointer", minWidth: 0, padding: 0,
                     color: isActive ? accent : "#4a4a5a",
                     borderTop: isActive ? `2px solid ${accent}` : "2px solid transparent",
                     transition: "color .12s",
                   }}>
-                  <NavIcon id={n.iconId} size={17} />
-                  <span style={{ fontSize: 9, fontWeight: isActive ? 700 : 400, letterSpacing: isActive ? ".2px" : "0", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.mobileLabel ?? n.label}</span>
+                  <NavIcon id={n.iconId} size={20} />
                 </button>
               );
             })}
