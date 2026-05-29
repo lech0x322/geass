@@ -171,9 +171,12 @@ export async function passesRiskCheck(
   if (signal.confidence < risk.minConfidence)
     return { ok: false, reason: `Confidence ${signal.confidence} < min ${risk.minConfidence}` };
 
-  // Score gate
-  if ((signal.metadata.score ?? 0) < risk.minScore && signal.source !== "kol_buy")
-    return { ok: false, reason: `Score ${signal.metadata.score ?? 0} < min ${risk.minScore}` };
+  // Score gate. volume_surge signals carry no GEASS meme score — they are
+  // ranked by confidence instead, so use confidence as their effective score.
+  const effectiveScore = signal.metadata.score
+    ?? (signal.source === "volume_surge" ? signal.confidence : 0);
+  if (effectiveScore < risk.minScore && signal.source !== "kol_buy")
+    return { ok: false, reason: `Score ${effectiveScore} < min ${risk.minScore}` };
 
   // Age gate
   if (signal.metadata.ageHours != null && signal.metadata.ageHours > risk.maxAgeHours)
