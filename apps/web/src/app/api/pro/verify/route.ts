@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { heliusRpc } from "@/lib/server/helius";
 import { enforceRateLimit } from "@/lib/server/withRateLimit";
-import { PRO_TREASURY_WALLET, PRO_PRICE_SOL, PRO_DURATION_MS } from "@/lib/env";
+import { PRO_TREASURY_WALLET } from "@/lib/env";
+import { tierFromLamports, PLAN_BY_ID } from "@/lib/plans";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,11 +37,10 @@ async function verifyTx(signature: string, wallet: string): Promise<{ ok: true; 
   if (!tx) return { ok: false, error: "Transaction not found or not yet confirmed" };
   if (tx.meta?.err) return { ok: false, error: "Transaction failed on-chain" };
 
-  // Accept ≥ 90 % of full price to allow the referral discount
-  const minLamports = Math.floor(PRO_PRICE_SOL * 0.9 * 1e9);
+  // Minimum = 90% of cheapest paid plan (Millioner = 1 SOL)
+  const minLamports = Math.floor(PLAN_BY_ID.millioner.priceSol * 0.9 * 1e9);
   const blockTime = tx.blockTime ?? Math.floor(Date.now() / 1000);
 
-  // 1) Look for an explicit SystemProgram.transfer instruction (most reliable)
   const ixs = tx.transaction?.message?.instructions || [];
   for (const ix of ixs) {
     const parsed = ix.parsed;
@@ -55,7 +55,6 @@ async function verifyTx(signature: string, wallet: string): Promise<{ ok: true; 
     return { ok: true, lamports: info.lamports, blockTime };
   }
 
-  // 2) Fallback: compute the net balance delta between wallet → treasury
   const keys = tx.transaction?.message?.accountKeys || [];
   const pre = tx.meta?.preBalances || [];
   const post = tx.meta?.postBalances || [];
@@ -73,44 +72,35 @@ async function verifyTx(signature: string, wallet: string): Promise<{ ok: true; 
     }
   }
 
-  return { ok: false, error: `Payment of ≥${PRO_PRICE_SOL} SOL from ${wallet.slice(0, 6)}... to treasury not found in this transaction` };
+  return { ok: false, error: `Payment not found in this transaction` };
 }
 
 async function handle(req: Request, signature: string, wallet: string) {
   const limited = enforceRateLimit(req, { bucket: "pro_verify", max: 30, windowMs: 60_000 });
   if (limited) return limited;
 
-  if (!PRO_TREASURY_WALLET) {
+  if (!PRO_TREASURY_WALLET)
     return NextResponse.json({ error: "PRO_TREASURY_WALLET not configured" }, { status: 503 });
-  }
-  if (!signature || signature.length < 64) {
+  if (!signature || signature.length < 64)
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
-  }
-  if (!wallet || wallet.length < 32) {
+  if (!wallet || wallet.length < 32)
     return NextResponse.json({ error: "Invalid wallet" }, { status: 400 });
-  }
 
   try {
     const r = await verifyTx(signature, wallet);
-    if (!r.ok) {
-      return NextResponse.json({ active: false, error: r.error }, { status: 200 });
-    }
+    if (!r.ok) return NextResponse.json({ active: false, error: r.error });
+
+    const tier = tierFromLamports(r.lamports);
+    if (!tier) return NextResponse.json({ active: false, error: "Payment amount does not match any plan" });
+
+    const plan = PLAN_BY_ID[tier];
     const paidAt = r.blockTime * 1000;
-    const expiresAt = paidAt + PRO_DURATION_MS;
+    const expiresAt = paidAt + plan.durationDays * 24 * 60 * 60 * 1000;
     const active = Date.now() < expiresAt;
-    return NextResponse.json({
-      active,
-      signature,
-      wallet,
-      paidAt,
-      expiresAt,
-      lamports: r.lamports,
-    });
+
+    return NextResponse.json({ active, tier, signature, wallet, paidAt, expiresAt, lamports: r.lamports });
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : String(e) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
 }
 

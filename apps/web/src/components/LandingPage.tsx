@@ -708,70 +708,113 @@ export function LandingPage({ onConnect, connecting }: Props) {
 
       {/* ─── PRICING ─── */}
       <section id="pricing" style={{ padding:"clamp(48px,7vw,96px) clamp(16px,5vw,64px)", position:"relative" }}>
-        <div style={{ maxWidth:820, margin:"0 auto" }}>
+        <div style={{ maxWidth:1100, margin:"0 auto" }}>
           <div style={{ textAlign:"center", marginBottom:56 }}>
             <Label>ACCESS_TIERS</Label>
-            <H2 sub="Free tier is genuinely free — no time limits, no credit card. Pro adds automation, safety tools, and priority execution.">
+            <H2 sub="Start free — no card, no KYC. Upgrade on-chain via Phantom in seconds.">
               Simple. On-chain. Transparent.
             </H2>
           </div>
-          <div className="g-2col">
 
-            {/* Free */}
-            <div className="t-row" style={{ background:"#050506", padding:"34px 30px", fontFamily:MONO }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:"1px", background:"#18181c", border:"1px solid #18181c" }}>
+
+            {/* ── SCOUT ── */}
+            <div style={{ background:"#050506", padding:"34px 28px", fontFamily:MONO, display:"flex", flexDirection:"column" }}>
               <div style={{ fontSize:9, fontWeight:600, color:"#48484f", letterSpacing:"2.5px", marginBottom:20 }}>FREE_FOREVER</div>
-              <div style={{ marginBottom:26 }}>
-                <span style={{ fontSize:54, fontWeight:800, letterSpacing:"-3px", color:"#f5f5f7" }}>0</span>
-                <span style={{ fontSize:18, color:"#5a5a63", fontWeight:400 }}> SOL</span>
-                <div style={{ fontSize:9, color:"#34343a", marginTop:6 }}>no card · no signup · no expiry</div>
+              <div style={{ marginBottom:6 }}>
+                <span style={{ fontSize:48, fontWeight:800, letterSpacing:"-3px", color:"#f5f5f7" }}>Scout</span>
               </div>
-              <div style={{ height:1, background:"#18181c", marginBottom:22 }} />
-              <ul style={{ listStyle:"none", display:"flex", flexDirection:"column", gap:11, marginBottom:30, padding:0 }}>
-                {["Alpha Scanner — live detection","Live KOL Feed — whale tracking","Token Launch on Pump.fun","Score filtering & tier badges","SSE real-time stream","Telegram + X login"].map(f => (
-                  <li key={f} style={{ display:"flex", gap:10, fontSize:12, color:"#7a7a82", alignItems:"flex-start" }}>
-                    <span style={{ color:"#10b981", fontWeight:700, flexShrink:0 }}>▸</span>{f}
+              <div style={{ marginBottom:22 }}>
+                <span style={{ fontSize:28, fontWeight:700, color:"#f5f5f7" }}>0</span>
+                <span style={{ fontSize:14, color:"#5a5a63" }}> SOL / mo</span>
+                <div style={{ fontSize:9, color:"#34343a", marginTop:4 }}>no card · no signup · no expiry</div>
+              </div>
+              <div style={{ height:1, background:"#18181c", marginBottom:20 }} />
+              <ul style={{ listStyle:"none", padding:0, margin:0, display:"flex", flexDirection:"column", gap:9, flex:1 }}>
+                {["Home & trending tokens","KOL Feed (limited, view only)","Community","Watchlist (max 5 tokens)","Token Launch on Pump.fun","Marketplace (browse, buy & sell)","Basic profile","Telegram + X login"].map(f => (
+                  <li key={f} style={{ display:"flex", gap:9, fontSize:11, color:"#7a7a82", alignItems:"flex-start" }}>
+                    <span style={{ color:"#10b981", flexShrink:0, fontWeight:700 }}>▸</span>{f}
+                  </li>
+                ))}
+                {["Alpha Scanner","Auto-Snipe","Price Alerts","Portfolio Tracker"].map(f => (
+                  <li key={f} style={{ display:"flex", gap:9, fontSize:11, color:"#34343a", alignItems:"flex-start" }}>
+                    <span style={{ flexShrink:0 }}>✕</span>{f}
                   </li>
                 ))}
               </ul>
-              <button onClick={open} className="btn-ghost" style={{ width:"100%", padding:"13px", border:"1px solid #222226", background:"transparent", color:"#9a9aa2", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:MONO, letterSpacing:".5px" }}>
-                START_FREE ▸
+              <button onClick={open} className="btn-ghost" style={{ width:"100%", padding:"12px", border:"1px solid #222226", background:"transparent", color:"#9a9aa2", fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:MONO, letterSpacing:".5px", marginTop:24 }}>
+                START FREE ▸
               </button>
             </div>
 
-            {/* Pro */}
-            <div className="t-panel" style={{ background:"#070708", padding:"34px 30px", position:"relative", fontFamily:MONO }}>
-              <div style={{ position:"absolute", top:0, left:0, right:0, height:2, background:RED }} />
+            {/* ── MILLIONER ── */}
+            <div style={{ background:"#070708", padding:"34px 28px", fontFamily:MONO, display:"flex", flexDirection:"column", position:"relative", borderLeft:"1px solid #18181c", borderRight:"1px solid #18181c" }}>
+              <div style={{ position:"absolute", top:0, left:0, right:0, height:2, background:"#8b5cf6" }} />
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                  <IconCrown size={13} style={{ color:RED }} />
-                  <span style={{ fontSize:9, fontWeight:600, color:RED, letterSpacing:"2.5px" }}>GEASS_PRO</span>
-                </div>
-                <span style={{ fontSize:8, fontWeight:600, color:"#10b981", border:"1px solid #10b98135", padding:"2px 9px", letterSpacing:"1px" }}>LIVE</span>
+                <span style={{ fontSize:9, fontWeight:600, color:"#8b5cf6", letterSpacing:"2.5px" }}>MILLIONER</span>
+                <span style={{ fontSize:8, fontWeight:600, color:"#8b5cf6", border:"1px solid #8b5cf635", padding:"2px 8px", letterSpacing:"1px" }}>POPULAR</span>
               </div>
-              <div style={{ marginBottom:26 }}>
-                <span style={{ fontSize:54, fontWeight:800, letterSpacing:"-3px", color:"#f5f5f7" }}>3</span>
-                <span style={{ fontSize:18, color:"#5a5a63", fontWeight:400 }}> SOL</span>
-                <span style={{ fontSize:12, color:"#34343a" }}> /mo</span>
-                <div style={{ fontSize:9, color:"#34343a", marginTop:6 }}>on-chain via Phantom · cancel anytime</div>
+              <div style={{ marginBottom:6 }}>
+                <span style={{ fontSize:48, fontWeight:800, letterSpacing:"-3px", color:"#f5f5f7" }}>Millioner</span>
               </div>
-              <div style={{ height:1, background:"#18181c", marginBottom:22 }} />
-              <ul style={{ listStyle:"none", display:"flex", flexDirection:"column", gap:11, marginBottom:30, padding:0 }}>
-                {[
-                  ["Everything in Free","#7a7a82"],["Bundle Detector","#f59e0b"],["LP Lock Verifier","#8b5cf6"],
-                  ["TP / SL Alerts",RED],["PnL Tracker","#10b981"],["Insider & Rug Detector","#a78bfa"],
-                  ["Dedicated Helius RPC priority","#7a7a82"],["Custom AI Sniping Bots","#7a7a82"],
-                ].map(([f, c]) => (
-                  <li key={f} style={{ display:"flex", gap:10, fontSize:12, color:"#9a9aa2", alignItems:"flex-start" }}>
-                    <span style={{ color:c, fontWeight:700, flexShrink:0 }}>▸</span>{f}
+              <div style={{ marginBottom:22 }}>
+                <span style={{ fontSize:28, fontWeight:700, color:"#f5f5f7" }}>1</span>
+                <span style={{ fontSize:14, color:"#5a5a63" }}> SOL / mo</span>
+                <div style={{ fontSize:9, color:"#34343a", marginTop:4 }}>on-chain via Phantom · 30 days</div>
+              </div>
+              <div style={{ height:1, background:"#18181c", marginBottom:20 }} />
+              <ul style={{ listStyle:"none", padding:0, margin:0, display:"flex", flexDirection:"column", gap:9, flex:1 }}>
+                {["Everything in Scout","Alpha Scanner (unlimited)","KOL Feed (full)","Intel & Social Tracker","Predictions","Watchlist (unlimited)","Auto-Snipe (max 0.5 SOL/snipe)","Price Alerts","Portfolio Tracker","Wallet Tracker","Trade History Export","Token Deep Scan","Referral program"].map(f => (
+                  <li key={f} style={{ display:"flex", gap:9, fontSize:11, color:"#9a9aa2", alignItems:"flex-start" }}>
+                    <span style={{ color:"#8b5cf6", flexShrink:0, fontWeight:700 }}>▸</span>{f}
+                  </li>
+                ))}
+                {["AI Trading","Copy Trading","API Access"].map(f => (
+                  <li key={f} style={{ display:"flex", gap:9, fontSize:11, color:"#34343a", alignItems:"flex-start" }}>
+                    <span style={{ flexShrink:0 }}>✕</span>{f}
                   </li>
                 ))}
               </ul>
-              <button onClick={open} className="btn-cmd" style={{ width:"100%", padding:"13px", border:`1px solid ${RED}`, background:RED, color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:MONO, letterSpacing:".5px" }}>
-                ENTER_&_UPGRADE ▸
+              <button onClick={open} style={{ width:"100%", padding:"12px", border:"1px solid #8b5cf6", background:"#8b5cf6", color:"#fff", fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:MONO, letterSpacing:".5px", marginTop:24 }}>
+                UPGRADE TO MILLIONER ▸
+              </button>
+            </div>
+
+            {/* ── BILLIONAIRE ── */}
+            <div className="t-panel" style={{ background:"#070708", padding:"34px 28px", fontFamily:MONO, display:"flex", flexDirection:"column", position:"relative" }}>
+              <div style={{ position:"absolute", top:0, left:0, right:0, height:2, background:RED }} />
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <IconCrown size={12} />
+                  <span style={{ fontSize:9, fontWeight:600, color:RED, letterSpacing:"2.5px" }}>BILLIONAIRE</span>
+                </div>
+                <span style={{ fontSize:8, fontWeight:600, color:"#10b981", border:"1px solid #10b98135", padding:"2px 8px", letterSpacing:"1px" }}>FULL ACCESS</span>
+              </div>
+              <div style={{ marginBottom:6 }}>
+                <span style={{ fontSize:48, fontWeight:800, letterSpacing:"-3px", color:"#f5f5f7" }}>Billionaire</span>
+              </div>
+              <div style={{ marginBottom:22 }}>
+                <span style={{ fontSize:28, fontWeight:700, color:"#f5f5f7" }}>2.5</span>
+                <span style={{ fontSize:14, color:"#5a5a63" }}> SOL / mo</span>
+                <div style={{ fontSize:9, color:"#34343a", marginTop:4 }}>on-chain via Phantom · 30 days</div>
+              </div>
+              <div style={{ height:1, background:"#18181c", marginBottom:20 }} />
+              <ul style={{ listStyle:"none", padding:0, margin:0, display:"flex", flexDirection:"column", gap:9, flex:1 }}>
+                {["Everything in Millioner","AI Trading (live)","Auto-Snipe (unlimited)","Copy Trading","Custom Webhooks (Discord/Telegram)","Bundled Snipe","API Access","Advanced Alerts","Internal Wallet","Multi-Wallet Management","Priority Support","Early access to new features"].map(f => (
+                  <li key={f} style={{ display:"flex", gap:9, fontSize:11, color:"#9a9aa2", alignItems:"flex-start" }}>
+                    <span style={{ color:RED, flexShrink:0, fontWeight:700 }}>▸</span>{f}
+                  </li>
+                ))}
+              </ul>
+              <button onClick={open} className="btn-cmd" style={{ width:"100%", padding:"12px", border:`1px solid ${RED}`, background:RED, color:"#fff", fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:MONO, letterSpacing:".5px", marginTop:24 }}>
+                UPGRADE TO BILLIONAIRE ▸
               </button>
             </div>
 
           </div>
+
+          {/* Mobile responsive override */}
+          <style>{`@media(max-width:860px){#pricing-grid{grid-template-columns:1fr !important}}`}</style>
         </div>
       </section>
 

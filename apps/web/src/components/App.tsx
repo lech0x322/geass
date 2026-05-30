@@ -884,14 +884,17 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
       {/* Footer */}
       <div style={{ padding: sidebarCollapsed ? "8px 4px" : 8, borderTop: "1px solid #18181c", display: "flex", flexDirection: "column", gap: 6 }}>
-        {!sidebarCollapsed && pro.active && (
-          <div style={{ padding: "5px 10px", background: "#8b5cf612", border: "1px solid #8b5cf640", borderRadius: 0, fontSize: 9, color: "#8b5cf6", fontWeight: 700, letterSpacing: ".5px", display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: MONO }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-              <IconCrown size={11} /> PRO ACTIVE
-            </span>
-            {pro.expiresAt && <span style={{ fontWeight: 500, opacity: .7 }}>{Math.max(0, Math.ceil((pro.expiresAt - Date.now()) / 86_400_000))}d</span>}
-          </div>
-        )}
+        {!sidebarCollapsed && (pro.active || pro.isCreator) && (() => {
+          const isB = pro.tier === "billionaire";
+          const c = pro.isCreator ? "#ff2b4e" : isB ? "#ff2b4e" : "#8b5cf6";
+          const label = pro.isCreator ? "CREATOR" : isB ? "BILLIONAIRE" : "MILLIONER";
+          return (
+            <div style={{ padding: "5px 10px", background: `${c}12`, border: `1px solid ${c}40`, fontSize: 9, color: c, fontWeight: 700, letterSpacing: ".5px", display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: MONO }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><IconCrown size={11} /> {label}</span>
+              {pro.expiresAt && !pro.isCreator && <span style={{ fontWeight: 500, opacity: .7 }}>{Math.max(0, Math.ceil((pro.expiresAt - Date.now()) / 86_400_000))}d</span>}
+            </div>
+          );
+        })()}
         {!sidebarCollapsed && (
           <div style={{ padding: "6px 10px", background: "#10b98110", border: "1px solid #10b98130", borderRadius: 0, fontSize: 9, color: "#10b981", display: "flex", alignItems: "center", gap: 5, fontFamily: MONO }}>
             <IconCheck size={10} />
@@ -2202,39 +2205,123 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {/* PRO TAB */}
           {tab === "pro" && (
-            <div style={{ padding: isMobile ? "14px 14px 64px" : "18px 22px", maxWidth: 700 }}>
+            <div style={{ padding: isMobile ? "14px 14px 80px" : "24px 28px", maxWidth: 860 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
-                <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8 }}>
-                  <IconCrown size={isMobile ? 16 : 18} /> GEASS Pro
+                <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8, fontFamily: MONO }}>
+                  <IconCrown size={isMobile ? 16 : 18} /> GEASS PLANS
                 </h1>
-                {(pro.active || pro.isCreator)
-                  ? <span style={{ fontSize: 8, fontWeight: 700, color: "#10b981", background: "#10b98120", border: "1px solid #10b98140", padding: "2px 8px", borderRadius: 8 }}>● ACTIVE</span>
-                  : <span style={{ fontSize: 8, fontWeight: 700, color: "#a855f7", background: "#a855f720", border: "1px solid #a855f740", padding: "2px 8px", borderRadius: 8 }}>UPGRADE</span>}
+                {(pro.active || pro.isCreator) && (
+                  <span style={{ fontSize: 8, fontWeight: 700, color: "#10b981", background: "#10b98120", border: "1px solid #10b98140", padding: "2px 8px" }}>● {pro.isCreator ? "CREATOR" : pro.tier?.toUpperCase()}</span>
+                )}
               </div>
-              <p style={{ fontSize: 11, color: "#52525b", marginBottom: 24 }}>Intelligence + protection + automation for serious traders</p>
+              <p style={{ fontSize: 11, color: "#52525b", marginBottom: 28, fontFamily: MONO }}>Pay once on-chain · 30 days · no credit card · cancel anytime</p>
 
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2,1fr)", gap: 14, marginBottom: 28 }}>
-                {[
-                  { Icon: IconSearch, title: "Insider & Rug Detector",         desc: "Advanced on-chain analysis detects insider wallets, coordinated buys and rug patterns before they hit Twitter." },
-                  { Icon: IconZap,    title: "Dedicated RPC + Helius Priority", desc: "Skip the queue. Your requests go through dedicated Helius nodes — first to detect, first to snipe." },
-                  { Icon: IconTarget, title: "Custom AI Rules & Sniping Bots", desc: "Define your own entry conditions. Automate buys based on score, KOL activity, bonding curve progress." },
-                  { Icon: IconChart,  title: "Portfolio Analytics + Risk Tools", desc: "Real-time P&L, exposure by tier, drawdown alerts, and AI-generated risk scores per position." },
-                ].map(f => (
-                  <div key={f.title} style={{ background: "linear-gradient(135deg,#14101f,#111113)", border: "1px solid #7c3aed30", borderRadius: 14, padding: "18px 16px" }}>
-                    <div style={{ color: "#a855f7", marginBottom: 8 }}><f.Icon size={22} /></div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#e2d9f3", marginBottom: 5 }}>{f.title}</div>
-                    <div style={{ fontSize: 10, color: "#71717a", lineHeight: 1.6 }}>{f.desc}</div>
+              {/* Active subscription status */}
+              {(pro.active || pro.isCreator) && (
+                <div style={{ background: "#0a120a", border: "1px solid #10b98130", padding: "14px 18px", marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, fontFamily: MONO }}>
+                  <div>
+                    <div style={{ fontSize: 9, color: "#10b981", fontWeight: 700, letterSpacing: "1px", marginBottom: 4 }}>● {pro.isCreator ? "CREATOR ACCESS" : `${pro.tier?.toUpperCase()} ACTIVE`}</div>
+                    {pro.expiresAt && !pro.isCreator && (
+                      <div style={{ fontSize: 11, color: "#5a5a63" }}>
+                        Expires in {Math.max(0, Math.ceil((pro.expiresAt - Date.now()) / 86_400_000))} days · {new Date(pro.expiresAt).toLocaleDateString()}
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {pro.signature && (
+                      <a href={`https://solscan.io/tx/${pro.signature}`} target="_blank" rel="noopener noreferrer"
+                        style={{ fontSize: 9, color: "#5a5a63", border: "1px solid #18181c", padding: "4px 10px", textDecoration: "none", fontFamily: MONO }}>
+                        TX ↗
+                      </a>
+                    )}
+                    <button onClick={() => pro.refresh()} disabled={pro.loading}
+                      style={{ fontSize: 9, color: "#5a5a63", border: "1px solid #18181c", padding: "4px 10px", background: "transparent", cursor: "pointer", fontFamily: MONO }}>
+                      {pro.loading ? "..." : "↻ Refresh"}
+                    </button>
+                  </div>
+                </div>
+              )}
 
-              {/* Portfolio Analytics — Pro only */}
-              {pro.active && (
+              {/* Plan cards */}
+              {(() => {
+                const CARD_PLANS = [
+                  {
+                    id: "millioner" as const,
+                    name: "Millioner",
+                    sol: 1,
+                    color: "#8b5cf6",
+                    badge: "POPULAR",
+                    features: ["Alpha Scanner (unlimited)","KOL Feed (full)","Intel & Social Tracker","Predictions","Watchlist (unlimited)","Auto-Snipe (max 0.5 SOL)","Price Alerts","Portfolio Tracker","Wallet Tracker","Trade History Export","Token Deep Scan","Referral program"],
+                  },
+                  {
+                    id: "billionaire" as const,
+                    name: "Billionaire",
+                    sol: 2.5,
+                    color: "#ff2b4e",
+                    badge: "FULL ACCESS",
+                    features: ["Everything in Millioner","AI Trading (live)","Auto-Snipe (unlimited)","Copy Trading","Custom Webhooks","Bundled Snipe","API Access","Advanced Alerts","Internal Wallet","Priority Support"],
+                  },
+                ];
+                return (
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 1, background: "#18181c", border: "1px solid #18181c", marginBottom: 28 }}>
+                    {CARD_PLANS.map(plan => {
+                      const isCurrent = pro.tier === plan.id || (pro.isCreator);
+                      const paying = pro.loading;
+                      return (
+                        <div key={plan.id} style={{ background: "#070708", padding: "28px 24px", position: "relative", display: "flex", flexDirection: "column", fontFamily: MONO }}>
+                          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: plan.color }} />
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+                            <span style={{ fontSize: 9, color: plan.color, fontWeight: 700, letterSpacing: "2px" }}>{plan.name.toUpperCase()}</span>
+                            <span style={{ fontSize: 8, color: plan.color, border: `1px solid ${plan.color}35`, padding: "2px 8px" }}>{isCurrent ? "● ACTIVE" : plan.badge}</span>
+                          </div>
+                          <div style={{ marginBottom: 20 }}>
+                            <span style={{ fontSize: 36, fontWeight: 800, color: "#f5f5f7", letterSpacing: "-2px" }}>{plan.sol}</span>
+                            <span style={{ fontSize: 13, color: "#5a5a63" }}> SOL / mo</span>
+                            <div style={{ fontSize: 9, color: "#34343a", marginTop: 3 }}>30 days · on-chain · no card</div>
+                          </div>
+                          <div style={{ height: 1, background: "#18181c", marginBottom: 16 }} />
+                          <ul style={{ listStyle: "none", padding: 0, margin: "0 0 20px", display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
+                            {plan.features.map(f => (
+                              <li key={f} style={{ display: "flex", gap: 8, fontSize: 11, color: "#9a9aa2" }}>
+                                <span style={{ color: plan.color, flexShrink: 0 }}>▸</span>{f}
+                              </li>
+                            ))}
+                          </ul>
+                          {isCurrent ? (
+                            <div style={{ padding: "10px", border: `1px solid ${plan.color}40`, color: plan.color, fontSize: 11, fontWeight: 700, textAlign: "center" }}>
+                              ● CURRENT PLAN
+                            </div>
+                          ) : (
+                            <>
+                              {pro.error && (
+                                <div style={{ fontSize: 10, color: "#f59e0b", background: "#f59e0b10", border: "1px solid #f59e0b30", padding: "7px 10px", marginBottom: 10 }}>
+                                  {pro.error}
+                                </div>
+                              )}
+                              <button
+                                onClick={() => pro.pay(plan.id).catch(() => {})}
+                                disabled={paying}
+                                style={{ width: "100%", padding: "11px", border: `1px solid ${plan.color}`, background: plan.color, color: "#fff", fontSize: 11, fontWeight: 700, cursor: paying ? "wait" : "pointer", fontFamily: MONO, letterSpacing: ".5px" }}>
+                                {paying
+                                  ? "Confirming on-chain..."
+                                  : `Pay ${plan.sol} SOL — Activate ${plan.name}`}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              {/* Portfolio — Millioner+ */}
+              {pro.can("millioner") && (
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#a855f7", letterSpacing: "1px" }}>PORTFOLIO ANALYTICS</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontFamily: MONO }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: "#8b5cf6", letterSpacing: "1px" }}>PORTFOLIO ANALYTICS</span>
                     <button onClick={loadPortfolio} disabled={portfolioLoading}
-                      style={{ fontSize: 9, padding: "3px 8px", borderRadius: 5, border: "1px solid #27272a", background: "transparent", color: "#52525b", cursor: portfolioLoading ? "wait" : "pointer" }}>
+                      style={{ fontSize: 9, padding: "3px 8px", border: "1px solid #27272a", background: "transparent", color: "#52525b", cursor: portfolioLoading ? "wait" : "pointer", fontFamily: MONO }}>
                       {portfolioLoading ? "Loading..." : "↻ Refresh"}
                     </button>
                   </div>
@@ -2244,27 +2331,27 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                       <div className="app-g3" style={{ marginBottom: 10 }}>
                         {[
                           { l: "SOL Balance", v: `${portfolio.sol.toFixed(4)} SOL`, c: "#10b981" },
-                          { l: "Tokens", v: String(portfolio.holdings.length), c: "#a855f7" },
+                          { l: "Tokens", v: String(portfolio.holdings.length), c: "#8b5cf6" },
                           { l: "USD Value", v: portfolio.totalUsd !== null ? `$${portfolio.totalUsd.toFixed(2)}` : "—", c: "#eab308" },
                         ].map(s => (
-                          <div key={s.l} style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 8, padding: "10px 12px" }}>
-                            <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 3 }}>{s.l}</div>
+                          <div key={s.l} style={{ background: "#070708", border: "1px solid #18181c", padding: "10px 12px" }}>
+                            <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 3, fontFamily: MONO }}>{s.l}</div>
                             <div style={{ fontSize: 13, fontWeight: 800, color: s.c }}>{s.v}</div>
                           </div>
                         ))}
                       </div>
                       {portfolio.holdings.length > 0 && (
-                        <div style={{ background: "#111113", border: "1px solid #1e1e21", borderRadius: 10, overflow: "hidden" }}>
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "6px 12px", borderBottom: "1px solid #18181b" }}>
+                        <div style={{ background: "#070708", border: "1px solid #18181c", overflow: "hidden" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "6px 12px", borderBottom: "1px solid #18181c" }}>
                             {["TOKEN", "AMOUNT", "VALUE"].map(h => (
-                              <span key={h} style={{ fontSize: 8, color: "#3f3f46", letterSpacing: "1px", fontWeight: 700 }}>{h}</span>
+                              <span key={h} style={{ fontSize: 8, color: "#3f3f46", letterSpacing: "1px", fontWeight: 700, fontFamily: MONO }}>{h}</span>
                             ))}
                           </div>
                           {portfolio.holdings.slice(0, 15).map(h => (
                             <div key={h.mint} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "7px 12px", borderBottom: "1px solid #0f0f0f", alignItems: "center" }}>
                               <div>
                                 <div style={{ fontSize: 10, fontWeight: 700, color: "#f4f4f5" }}>{h.symbol}</div>
-                                <div style={{ fontSize: 8, color: "#3f3f46", fontFamily: "monospace" }}>{h.mint.slice(0, 8)}…</div>
+                                <div style={{ fontSize: 8, color: "#3f3f46", fontFamily: MONO }}>{h.mint.slice(0, 8)}…</div>
                               </div>
                               <span style={{ fontSize: 10, color: "#d4d4d8" }}>
                                 {h.amount >= 1e6 ? `${(h.amount / 1e6).toFixed(2)}M` : h.amount >= 1e3 ? `${(h.amount / 1e3).toFixed(1)}k` : h.amount.toFixed(2)}
@@ -2276,70 +2363,11 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                           ))}
                         </div>
                       )}
-                      {portfolio.holdings.length === 0 && (
-                        <div style={{ textAlign: "center", padding: "20px", color: "#3f3f46", fontSize: 11 }}>No token holdings found</div>
-                      )}
                     </>
                   )}
-                  {!portfolio && !portfolioLoading && !portfolioErr && (
-                    <div style={{ textAlign: "center", padding: "20px", color: "#3f3f46", fontSize: 11 }}>Loading portfolio...</div>
+                  {!portfolio && !portfolioLoading && (
+                    <div style={{ textAlign: "center", padding: "20px", color: "#3f3f46", fontSize: 11 }}>Click Refresh to load portfolio</div>
                   )}
-                </div>
-              )}
-
-              {pro.active ? (
-                <div style={{ background: "linear-gradient(135deg,#0f1f15,#0a1a12)", border: "1px solid #10b98150", borderRadius: 16, padding: "24px 20px", position: "relative", overflow: "hidden" }}>
-                  <div style={{ position: "absolute", top: 0, right: 0, left: 0, height: 2, background: "linear-gradient(90deg,#10b981,#7c3aed)" }} />
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#10b981", letterSpacing: "1px", marginBottom: 6 }}>● PRO SUBSCRIPTION ACTIVE</div>
-                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, marginTop: 16 }}>
-                    <div>
-                      <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 4 }}>EXPIRES IN</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: "#f4f4f5" }}>
-                        {pro.expiresAt ? `${Math.max(0, Math.ceil((pro.expiresAt - Date.now()) / 86_400_000))} days` : "—"}
-                      </div>
-                      {pro.expiresAt && <div style={{ fontSize: 10, color: "#71717a", marginTop: 2 }}>{new Date(pro.expiresAt).toLocaleDateString()}</div>}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "1px", marginBottom: 4 }}>PAYMENT TX</div>
-                      <a href={`https://solscan.io/tx/${pro.signature}`} target="_blank" rel="noopener noreferrer"
-                        style={{ fontSize: 11, fontFamily: "monospace", color: "#a855f7", textDecoration: "none", wordBreak: "break-all" }}>
-                        {pro.signature?.slice(0, 24)}...↗
-                      </a>
-                    </div>
-                  </div>
-                  <button onClick={() => pro.refresh()} disabled={pro.loading}
-                    style={{ marginTop: 18, padding: "7px 14px", borderRadius: 7, border: "1px solid #27272a", background: "transparent", color: "#71717a", fontSize: 10, fontWeight: 600, cursor: pro.loading ? "wait" : "pointer" }}>
-                    {pro.loading ? "Checking..." : "↻ Refresh status"}
-                  </button>
-                </div>
-              ) : (
-                <div style={{ background: "linear-gradient(135deg,#14101f,#0f0c1a)", border: "1px solid #7c3aed50", borderRadius: 16, padding: "24px 20px", position: "relative", overflow: "hidden" }}>
-                  <div style={{ position: "absolute", top: 0, right: 0, left: 0, height: 2, background: "linear-gradient(90deg,#dc2626,#7c3aed)" }} />
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#a855f7", letterSpacing: "1px", marginBottom: 6 }}>GEASS PRO — 3 SOL / month</div>
-                  <div style={{ fontSize: 11, color: "#71717a", marginBottom: 18, lineHeight: 1.6 }}>
-                    Paid on-chain in SOL. No subscription, no credit card. After Phantom confirms the transaction, your account activates automatically — no manual approval needed.
-                  </div>
-                  <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 7, marginBottom: 18 }}>
-                    {["Instant on-chain activation (≈30s)", "30 days of Pro access", "Cancel anytime — just don't renew"].map(l => (
-                      <li key={l} style={{ display: "flex", gap: 8, fontSize: 11, color: "#e2d9f3" }}>
-                        <span style={{ color: "#a855f7", display: "inline-flex" }}><IconCheck size={11} /></span>{l}
-                      </li>
-                    ))}
-                  </ul>
-                  {pro.error && (
-                    <div style={{ fontSize: 10, color: "#f59e0b", background: "#f59e0b15", border: "1px solid #f59e0b30", borderRadius: 6, padding: "8px 10px", marginBottom: 12, lineHeight: 1.5 }}>
-                      {pro.error}
-                    </div>
-                  )}
-                  <button onClick={() => pro.pay().catch(() => {/* error surfaced via pro.error */})} disabled={pro.loading}
-                    style={{ width: "100%", padding: 12, borderRadius: 8, border: "none", background: "linear-gradient(135deg,#dc2626,#7c3aed)", color: "#fff", fontSize: 13, fontWeight: 800, cursor: pro.loading ? "wait" : "pointer", letterSpacing: ".5px", boxShadow: "0 0 32px #7c3aed30" }}>
-                    {pro.loading
-                      ? <span className="pulse" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconRefresh size={12} /> Confirming on-chain...</span>
-                      : <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconSolana size={12} /> Pay 3 SOL — Activate Pro</span>}
-                  </button>
-                  <div style={{ marginTop: 10, fontSize: 9, color: "#3f3f46", textAlign: "center" }}>
-                    Phantom will ask you to approve a transfer of exactly 3 SOL.
-                  </div>
                 </div>
               )}
             </div>

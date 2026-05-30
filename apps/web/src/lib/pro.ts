@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { proCheckout, proVerify, type ProStatus } from "./api";
 import { signAndSendBytes } from "./wallet";
+import { type PlanId, PLAN_BY_ID, hasAccess } from "./plans";
 
 const STORAGE_PREFIX = "geass_pro_";
 const storeKey = (wallet: string) => `${STORAGE_PREFIX}${wallet}`;
@@ -12,6 +13,7 @@ interface StoredPro {
   signature: string;
   paidAt: number;
   expiresAt: number;
+  tier: PlanId;
 }
 
 function loadStored(wallet: string): StoredPro | null {
@@ -34,72 +36,72 @@ function clearStored(wallet: string) {
 
 export interface ProState {
   active: boolean;
+  tier: PlanId | "creator";
   isCreator: boolean;
   expiresAt: number | null;
   signature: string | null;
   loading: boolean;
   error: string;
-  pay: () => Promise<void>;
+  pay: (plan: PlanId) => Promise<void>;
   refresh: () => Promise<void>;
+  can: (required: PlanId) => boolean;
 }
 
 export function useProStatus(wallet: string | null): ProState {
   const [isCreator, setIsCreator] = useState(false);
   const [active, setActive] = useState(false);
+  const [tier, setTier] = useState<PlanId | "creator">("scout");
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Re-verify a stored signature with the backend (defends against stale localStorage).
   const refresh = useCallback(async () => {
     if (!wallet) return;
     const stored = loadStored(wallet);
     if (!stored) {
-      setActive(false); setExpiresAt(null); setSignature(null);
+      setActive(false); setExpiresAt(null); setSignature(null); setTier("scout");
       return;
     }
     setLoading(true);
     try {
       const r = await proVerify(stored.signature, wallet);
       if (r.active && r.expiresAt) {
-        setActive(true);
-        setExpiresAt(r.expiresAt);
+        const t = r.tier ?? stored.tier ?? "millioner";
+        setActive(true); setTier(t); setExpiresAt(r.expiresAt);
         setSignature(r.signature || stored.signature);
-        saveStored(wallet, { signature: r.signature || stored.signature, paidAt: r.paidAt ?? stored.paidAt, expiresAt: r.expiresAt });
+        saveStored(wallet, { signature: r.signature || stored.signature, paidAt: r.paidAt ?? stored.paidAt, expiresAt: r.expiresAt, tier: t });
       } else {
-        setActive(false);
-        setExpiresAt(stored.expiresAt);
-        setSignature(stored.signature);
+        setActive(false); setTier("scout");
+        setExpiresAt(stored.expiresAt); setSignature(stored.signature);
         if (r.error) setError(r.error);
         if (stored.expiresAt < Date.now()) clearStored(wallet);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, [wallet]);
 
-  // Check creator status via profile API
   useEffect(() => {
     if (!wallet) return;
     fetch(`/api/profile?wallet=${encodeURIComponent(wallet)}`)
       .then(r => r.json())
       .then((d: { profile: { isCreator: boolean } | null }) => {
-        if (d.profile?.isCreator) { setIsCreator(true); setActive(true); }
+        if (d.profile?.isCreator) { setIsCreator(true); setActive(true); setTier("creator"); }
       })
       .catch(() => {});
   }, [wallet]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const pay = useCallback(async () => {
+  const pay = useCallback(async (plan: PlanId) => {
     if (!wallet) throw new Error("No wallet");
+    const planDef = PLAN_BY_ID[plan];
+    if (!planDef || planDef.priceSol === 0) throw new Error("Invalid plan");
     setLoading(true); setError("");
     try {
       const storedRef = typeof window !== "undefined" ? (localStorage.getItem("geass_ref") ?? undefined) : undefined;
-      const checkout = await proCheckout(storedRef);
+      const checkout = await proCheckout(plan, storedRef);
       const tx = new Transaction({
         feePayer: new PublicKey(wallet),
         blockhash: checkout.blockhash,
@@ -113,38 +115,30 @@ export function useProStatus(wallet: string | null): ProState {
       const bytes = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
       const sig = await signAndSendBytes(bytes);
 
-      // Poll verify (Helius needs a moment to index)
       let verified: ProStatus | null = null;
       for (let i = 0; i < 12; i++) {
         await new Promise(r => setTimeout(r, 2_500));
         try {
           const v = await proVerify(sig, wallet);
           if (v.active && v.expiresAt) { verified = v; break; }
-          if (v.error && !v.error.includes("not found") && !v.error.includes("not yet")) {
-            throw new Error(v.error);
-          }
-        } catch (e) {
-          if (i === 11) throw e;
-        }
+          if (v.error && !v.error.includes("not found") && !v.error.includes("not yet")) throw new Error(v.error);
+        } catch (e) { if (i === 11) throw e; }
       }
-      if (!verified || !verified.expiresAt) {
-        throw new Error("Payment sent but not confirmed on-chain yet. Click 'Refresh status' in a moment.");
-      }
-      saveStored(wallet, {
-        signature: sig,
-        paidAt: verified.paidAt ?? Date.now(),
-        expiresAt: verified.expiresAt,
-      });
-      setActive(true);
-      setExpiresAt(verified.expiresAt);
-      setSignature(sig);
+      if (!verified || !verified.expiresAt) throw new Error("Payment sent but not confirmed on-chain yet. Click 'Refresh status' in a moment.");
+
+      const t = verified.tier ?? plan;
+      saveStored(wallet, { signature: sig, paidAt: verified.paidAt ?? Date.now(), expiresAt: verified.expiresAt, tier: t });
+      setActive(true); setTier(t); setExpiresAt(verified.expiresAt); setSignature(sig);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       throw e;
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, [wallet]);
 
-  return { active, isCreator, expiresAt, signature, loading, error, pay, refresh };
+  const can = useCallback((required: PlanId) => {
+    if (isCreator) return true;
+    return hasAccess(tier, required);
+  }, [tier, isCreator]);
+
+  return { active, tier, isCreator, expiresAt, signature, loading, error, pay, refresh, can };
 }

@@ -64,6 +64,7 @@ export interface ProCheckout {
 
 export interface ProStatus {
   active: boolean;
+  tier?: import("./plans").PlanId;
   signature?: string;
   wallet?: string;
   paidAt?: number;
@@ -72,9 +73,10 @@ export interface ProStatus {
   error?: string;
 }
 
-export async function proCheckout(ref?: string): Promise<ProCheckout> {
-  const qs = ref ? `?ref=${encodeURIComponent(ref)}` : "";
-  const r = await fetch(`/api/pro/checkout${qs}`, { cache: "no-store" });
+export async function proCheckout(plan: import("./plans").PlanId, ref?: string): Promise<ProCheckout> {
+  const params = new URLSearchParams({ plan });
+  if (ref) params.set("ref", ref);
+  const r = await fetch(`/api/pro/checkout?${params}`, { cache: "no-store" });
   if (!r.ok) {
     let msg = `checkout ${r.status}`;
     try { const j = await r.json(); if (j.error) msg = j.error; } catch {}
