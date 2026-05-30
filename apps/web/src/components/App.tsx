@@ -24,7 +24,7 @@ import {
   IconCog, IconCrown, IconChevronDown, IconSolana, IconSearch, IconX,
   IconMenu, IconRefresh, IconLock, IconSpeaker, IconWallet, IconPower,
   IconCheck, IconChart, IconArrowUpRight, IconCopy, IconUser, IconHome,
-  IconGlobe, IconBot,
+  IconGlobe, IconBot, IconTag,
 } from "./icons";
 import { ProfileTab } from "./ProfileTab";
 import { ProfilePanel } from "./ProfilePanel";
@@ -35,6 +35,7 @@ import { SocialTrackerTab } from "./SocialTrackerTab";
 import { AiTradingTab } from "./AiTradingTab";
 import { IntelTab } from "./IntelTab";
 import { WatchlistTab } from "./WatchlistTab";
+import { MarketplaceTab } from "./MarketplaceTab";
 import { LaunchTab } from "./LaunchTab";
 import { useWatchlist } from "@/lib/useWatchlist";
 import { NotificationsBell } from "./NotificationsBell";
@@ -56,6 +57,7 @@ const NAV_ICON: Record<NavIconId, React.FC<{ size?: number }>> = {
   chart:     IconChart,
   globe:     IconGlobe,
   bot:       IconBot,
+  tag:       IconTag,
 };
 
 const MONO = "'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace";
@@ -171,7 +173,7 @@ interface Props {
 }
 
 export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
-  const [tab, setTab]         = useState<"home" | "trades" | "launch" | "gems" | "autosnipe" | "referral" | "pro" | "settings" | "trending" | "profile" | "community" | "predictions" | "social" | "ai-trading" | "intel" | "watchlist">("home");
+  const [tab, setTab]         = useState<"home" | "trades" | "launch" | "gems" | "autosnipe" | "referral" | "pro" | "settings" | "trending" | "profile" | "community" | "predictions" | "social" | "ai-trading" | "intel" | "watchlist" | "marketplace">("home");
   const [gems, setGems]       = useState<Gem[]>([]);
   const [loading, setLoading] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
@@ -1137,7 +1139,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
         </div>
         )}
 
-        <main style={{ flex: 1, overflow: tab === "community" ? "hidden" : "auto", display: "flex", flexDirection: "column" }}>
+        <main style={{ flex: 1, overflow: (tab === "community" || tab === "marketplace") ? "hidden" : "auto", display: "flex", flexDirection: "column" }}>
           {snipeGem && <SnipeModal gem={snipeGem} wallet={wallet} onClose={() => setSnipeGem(null)} />}
           {jupModal && (
             <JupiterSwapModal
@@ -2376,6 +2378,10 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           {tab === "watchlist" && (
             <WatchlistTab isMobile={isMobile} />
+          )}
+
+          {tab === "marketplace" && (
+            <MarketplaceTab wallet={wallet} walletAlias={wallet ? wallet.slice(0,8) : ""} isMobile={isMobile} />
           )}
         </main>
 
