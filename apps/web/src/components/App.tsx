@@ -2207,7 +2207,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8 }}>
                   <IconCrown size={isMobile ? 16 : 18} /> GEASS Pro
                 </h1>
-                {pro.active
+                {(pro.active || pro.isCreator)
                   ? <span style={{ fontSize: 8, fontWeight: 700, color: "#10b981", background: "#10b98120", border: "1px solid #10b98140", padding: "2px 8px", borderRadius: 8 }}>● ACTIVE</span>
                   : <span style={{ fontSize: 8, fontWeight: 700, color: "#a855f7", background: "#a855f720", border: "1px solid #a855f740", padding: "2px 8px", borderRadius: 8 }}>UPGRADE</span>}
               </div>
@@ -2350,7 +2350,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
               wallet={wallet}
               solBalance={wBal}
               solPrice={solPrice}
-              isPro={pro.active}
+              isPro={pro.active || pro.isCreator}
               isMobile={isMobile}
               iw={iw}
             />
@@ -2495,7 +2495,8 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           wallet={wallet}
           solBalance={wBal}
           solPrice={solPrice}
-          isPro={pro.active}
+          isPro={pro.active || pro.isCreator}
+          isCreator={pro.isCreator}
           onClose={() => setProfilePanelOpen(false)}
         />
       )}

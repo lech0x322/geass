@@ -34,6 +34,7 @@ function clearStored(wallet: string) {
 
 export interface ProState {
   active: boolean;
+  isCreator: boolean;
   expiresAt: number | null;
   signature: string | null;
   loading: boolean;
@@ -43,6 +44,7 @@ export interface ProState {
 }
 
 export function useProStatus(wallet: string | null): ProState {
+  const [isCreator, setIsCreator] = useState(false);
   const [active, setActive] = useState(false);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
@@ -77,6 +79,17 @@ export function useProStatus(wallet: string | null): ProState {
     } finally {
       setLoading(false);
     }
+  }, [wallet]);
+
+  // Check creator status via profile API
+  useEffect(() => {
+    if (!wallet) return;
+    fetch(`/api/profile?wallet=${encodeURIComponent(wallet)}`)
+      .then(r => r.json())
+      .then((d: { profile: { isCreator: boolean } | null }) => {
+        if (d.profile?.isCreator) { setIsCreator(true); setActive(true); }
+      })
+      .catch(() => {});
   }, [wallet]);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -133,5 +146,5 @@ export function useProStatus(wallet: string | null): ProState {
     }
   }, [wallet]);
 
-  return { active, expiresAt, signature, loading, error, pay, refresh };
+  return { active, isCreator, expiresAt, signature, loading, error, pay, refresh };
 }

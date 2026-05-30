@@ -85,11 +85,7 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile, iw }
     reader.onload = () => {
       const b64 = reader.result as string;
       setAvatar(b64);
-      try {
-        const raw = localStorage.getItem("geass_profile");
-        const p = raw ? JSON.parse(raw) : {};
-        localStorage.setItem("geass_profile", JSON.stringify({ ...p, avatar: b64 }));
-      } catch {}
+      try { localStorage.setItem(`geass_avatar_${wallet}`, b64); } catch {}
     };
     reader.readAsDataURL(file);
   };
@@ -118,24 +114,46 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile, iw }
       .finally(() => setPumpLoading(false));
   }, [wallet]);
 
+  // Avatar stays local (base64 too large for Redis)
   useEffect(() => {
     try {
-      const raw = localStorage.getItem("geass_profile");
-      if (raw) {
-        const p = JSON.parse(raw) as { username?: string; emoji?: string; avatar?: string };
-        if (p.username) { setUsername(p.username); setDraftName(p.username); }
-        if (p.emoji)    { setEmoji(p.emoji); setDraftEmoji(p.emoji); }
-        if (p.avatar)   { setAvatar(p.avatar); }
-      }
+      const raw = localStorage.getItem(`geass_avatar_${wallet}`);
+      if (raw) setAvatar(raw);
     } catch {}
-  }, []);
+  }, [wallet]);
 
-  const saveProfile = () => {
+  // Load username+emoji from server — synced across devices
+  useEffect(() => {
+    if (!wallet) return;
+    fetch(`/api/profile?wallet=${encodeURIComponent(wallet)}`)
+      .then(r => r.json())
+      .then((d: { profile: { username: string; emoji: string } | null }) => {
+        if (d.profile) {
+          setUsername(d.profile.username); setDraftName(d.profile.username);
+          setEmoji(d.profile.emoji);       setDraftEmoji(d.profile.emoji);
+        }
+      })
+      .catch(() => {});
+  }, [wallet]);
+
+  const [saveError, setSaveError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const saveProfile = async () => {
     const n = draftName.trim() || "Anon Trader";
-    setUsername(n);
-    setEmoji(draftEmoji);
-    try { localStorage.setItem("geass_profile", JSON.stringify({ username: n, emoji: draftEmoji })); } catch {}
-    setEditing(false);
+    setSaving(true); setSaveError("");
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet, username: n, emoji: draftEmoji }),
+      });
+      const data = await res.json() as { profile?: { username: string; emoji: string }; error?: string };
+      if (!res.ok) { setSaveError(data.error ?? "Failed to save"); return; }
+      if (data.profile) { setUsername(data.profile.username); setEmoji(data.profile.emoji); }
+      setEditing(false);
+    } catch { setSaveError("Network error"); }
+    finally { setSaving(false); }
   };
 
   const copyWallet = () => {
@@ -246,9 +264,10 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile, iw }
                 ))}
               </div>
             </div>
-            <button onClick={saveProfile}
-              style={{ alignSelf: "flex-start", padding: "9px 22px", borderRadius: 0, border: `1px solid ${RED}`, background: RED, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: MONO, letterSpacing: ".5px" }}>
-              SAVE PROFILE ▸
+            {saveError && <div style={{ fontSize: 10, color: RED, fontFamily: MONO }}>{saveError}</div>}
+            <button onClick={saveProfile} disabled={saving}
+              style={{ alignSelf: "flex-start", padding: "9px 22px", borderRadius: 0, border: `1px solid ${saving ? "#27272a" : RED}`, background: saving ? "#27272a" : RED, color: saving ? "#52525b" : "#fff", fontSize: 12, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", fontFamily: MONO, letterSpacing: ".5px" }}>
+              {saving ? "SAVING…" : "SAVE PROFILE ▸"}
             </button>
           </div>
         )}
