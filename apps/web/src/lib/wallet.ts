@@ -48,6 +48,17 @@ async function waitForPhantom(ms = 1500): Promise<PhantomProvider | null> {
   });
 }
 
+function phantomErrMsg(e: unknown): string {
+  if (e instanceof Error) {
+    const code = (e as Error & { code?: number }).code;
+    if (code === 4001) return "Connection cancelled — please approve the request in Phantom and try again.";
+    if (code === -32002) return "Phantom has a pending request — open Phantom and approve or reject it first.";
+    if (code === -32603 || e.message === "Unexpected error") return "Phantom encountered an error. Try locking and unlocking your wallet, then reconnect.";
+    if (e.message) return e.message;
+  }
+  return "Could not connect to Phantom. Try refreshing the page.";
+}
+
 export async function connectPhantom(): Promise<string> {
   const p = await waitForPhantom(2000);
 
@@ -66,14 +77,18 @@ export async function connectPhantom(): Promise<string> {
   // If already connected, return immediately
   if (p.publicKey) return p.publicKey.toString();
 
-  // Wrap in a 30-second timeout so the UI never gets stuck forever
+  // Wrap in a 15-second timeout so the UI never gets stuck forever
   const connectPromise = p.connect();
   const timeoutPromise = new Promise<never>((_, reject) =>
     setTimeout(() => reject(new Error("No response from Phantom — click the Phantom icon in your browser toolbar, then try again")), 15_000),
   );
 
-  const r = await Promise.race([connectPromise, timeoutPromise]);
-  return r.publicKey.toString();
+  try {
+    const r = await Promise.race([connectPromise, timeoutPromise]);
+    return r.publicKey.toString();
+  } catch (e) {
+    throw new Error(phantomErrMsg(e));
+  }
 }
 
 export async function signAndSendBytes(bytes: Uint8Array): Promise<string> {
