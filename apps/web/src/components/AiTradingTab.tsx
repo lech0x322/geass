@@ -35,22 +35,15 @@ function ConfidenceBar({ value, size = "md" }: { value: number; size?: "sm" | "m
   );
 }
 
-function StatusBadge({ status, isPaper }: { status: string; isPaper: boolean }) {
+function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
     open: "#22c55e", closed: "#52525b", failed: "#ef4444",
   };
   const c = colors[status] ?? "#52525b";
   return (
-    <div style={{ display: "flex", gap: 4 }}>
-      <span style={{ fontSize: 9, padding: "1px 6px", fontWeight: 700, background: `${c}18`, color: c, border: `1px solid ${c}44` }}>
-        {status.toUpperCase()}
-      </span>
-      {isPaper && (
-        <span style={{ fontSize: 9, padding: "1px 6px", fontWeight: 700, background: "#3b82f618", color: "#3b82f6", border: "1px solid #3b82f644" }}>
-          PAPER
-        </span>
-      )}
-    </div>
+    <span style={{ fontSize: 9, padding: "1px 6px", fontWeight: 700, background: `${c}18`, color: c, border: `1px solid ${c}44` }}>
+      {status.toUpperCase()}
+    </span>
   );
 }
 
@@ -98,32 +91,25 @@ function Dashboard({ at, isMobile }: { at: ReturnType<typeof useAiTrading>; isMo
 
   return (
     <div>
-      {/* Mode banner */}
+      {/* Live mode banner */}
       <div style={{
-        background: config.mode === "paper" ? "#3b82f618" : "#ff2b4e18",
-        border: `1px solid ${config.mode === "paper" ? "#3b82f644" : "#ff2b4e44"}`,
+        background: "#ff2b4e18", border: "1px solid #ff2b4e44",
         padding: "10px 16px", marginBottom: 20, display: "flex", alignItems: "center", gap: 10,
       }}>
-        <div style={{ width: 8, height: 8, borderRadius: "50%", background: config.mode === "paper" ? "#3b82f6" : "#ff2b4e", flexShrink: 0 }} className="pulse" />
+        <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#ff2b4e", flexShrink: 0 }} className="pulse" />
         <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: config.mode === "paper" ? "#3b82f6" : "#ff2b4e" }}>
-            {config.mode === "paper" ? "📄 Paper Trading Mode" : "⚡ Live Trading Mode"}
-          </div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#ff2b4e" }}>⚡ Live Trading Mode</div>
           <div style={{ fontSize: 10, color: "#71717a", marginTop: 2 }}>
-            {config.mode === "paper"
-              ? "Simulated trades — no real SOL at risk. Switch to Live in Settings."
-              : "Real trades executing with GEASS internal wallet. Monitor carefully."}
+            Real trades executing with GEASS internal wallet. Monitor carefully.
           </div>
         </div>
-        {config.mode === "live" && (
-          <button onClick={emergencyStop} disabled={executing} style={{
-            marginLeft: "auto", background: "#ef4444", border: "none", color: "#fff",
-            padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: executing ? "not-allowed" : "pointer",
-            fontFamily: MONO, flexShrink: 0,
-          }}>
-            🛑 STOP ALL
-          </button>
-        )}
+        <button onClick={emergencyStop} disabled={executing} style={{
+          marginLeft: "auto", background: "#ef4444", border: "none", color: "#fff",
+          padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: executing ? "not-allowed" : "pointer",
+          fontFamily: MONO, flexShrink: 0,
+        }}>
+          🛑 STOP ALL
+        </button>
       </div>
 
       {/* Stats grid */}
@@ -329,7 +315,7 @@ function SignalsPanel({ at }: { at: ReturnType<typeof useAiTrading> }) {
                         padding: "5px 14px", fontSize: 10, fontWeight: 700, cursor: at.executing ? "not-allowed" : "pointer",
                         fontFamily: MONO,
                       }}>
-                        {at.executing ? "Executing…" : `⚡ ${at.config.mode === "paper" ? "Paper" : "Live"} Buy`}
+                        {at.executing ? "Executing…" : "⚡ Live Buy"}
                       </button>
                     )}
                   </>
@@ -360,7 +346,7 @@ function PositionRow({ p, onClose }: { p: Position; onClose: (id: string) => voi
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
           <span style={{ fontWeight: 700, color: "#f4f4f5" }}>${p.symbol}</span>
-          <StatusBadge status={p.status} isPaper={p.isPaper} />
+          <StatusBadge status={p.status} />
         </div>
         <div style={{ fontSize: 10, color: "#52525b" }}>
           {fmtSol(p.amountSol)} · Entry: {p.entryPriceSol?.toExponential(3)} SOL
@@ -432,9 +418,8 @@ function PositionsPanel({ at }: { at: ReturnType<typeof useAiTrading> }) {
 
 // ── Settings Panel ─────────────────────────────────────────────────────────────
 
-function SettingsPanel({ at, isElite }: { at: ReturnType<typeof useAiTrading>; isElite: boolean }) {
+function SettingsPanel({ at }: { at: ReturnType<typeof useAiTrading> }) {
   const { config, updateConfig, applyPreset } = at;
-  const [showLiveWarning, setShowLiveWarning] = useState(false);
 
   const inp: React.CSSProperties = {
     background: "#0a0a0c", border: "1px solid #1e1e21", color: "#f4f4f5",
@@ -522,54 +507,6 @@ function SettingsPanel({ at, isElite }: { at: ReturnType<typeof useAiTrading>; i
         </>
       ))}
 
-      {/* Mode switch */}
-      {section("Trading Mode", (
-        <>
-          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-            <button onClick={() => updateConfig({ mode: "paper" })} style={{
-              flex: 1, padding: "10px", fontSize: 11, fontWeight: config.mode === "paper" ? 700 : 400,
-              border: `1px solid ${config.mode === "paper" ? "#3b82f6" : "#27272a"}`,
-              background: config.mode === "paper" ? "#3b82f618" : "transparent",
-              color: config.mode === "paper" ? "#3b82f6" : "#52525b",
-              cursor: "pointer", fontFamily: MONO,
-            }}>📄 Paper</button>
-            <button onClick={() => { if (!isElite) return; setShowLiveWarning(true); }} style={{
-              flex: 1, padding: "10px", fontSize: 11, fontWeight: config.mode === "live" ? 700 : 400,
-              border: `1px solid ${config.mode === "live" ? "#ff2b4e" : isElite ? "#27272a" : "#1a1a1e"}`,
-              background: config.mode === "live" ? "#ff2b4e18" : "transparent",
-              color: config.mode === "live" ? "#ff2b4e" : isElite ? "#52525b" : "#2a2a30",
-              cursor: isElite ? "pointer" : "not-allowed", fontFamily: MONO,
-              opacity: isElite ? 1 : 0.5,
-            }}>
-              ⚡ Live {!isElite && "🔒"}
-            </button>
-          </div>
-          {!isElite && (
-            <div style={{ fontSize: 10, color: "#f59e0b", padding: "8px 10px", background: "#f59e0b18", border: "1px solid #f59e0b44" }}>
-              🔒 Live trading requires GEASS ELITE. Upgrade in the Pro section.
-            </div>
-          )}
-          {showLiveWarning && (
-            <div style={{ background: "#ef444418", border: "1px solid #ef444444", padding: "12px 14px", marginTop: 8 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#ef4444", marginBottom: 6 }}>⚠️ Enable Live Trading?</div>
-              <div style={{ fontSize: 10, color: "#a1a1aa", marginBottom: 10, lineHeight: 1.5 }}>
-                Real SOL will be traded using the GEASS internal wallet. You can lose money.
-                Ensure your wallet is funded and start with small positions.
-              </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={() => { updateConfig({ mode: "live" }); setShowLiveWarning(false); }} style={{
-                  background: "#ef4444", border: "none", color: "#fff",
-                  padding: "6px 14px", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: MONO,
-                }}>I understand, enable</button>
-                <button onClick={() => setShowLiveWarning(false)} style={{
-                  background: "transparent", border: "1px solid #27272a", color: "#71717a",
-                  padding: "6px 12px", fontSize: 10, cursor: "pointer", fontFamily: MONO,
-                }}>Cancel</button>
-              </div>
-            </div>
-          )}
-        </>
-      ))}
     </div>
   );
 }
@@ -579,10 +516,9 @@ function SettingsPanel({ at, isElite }: { at: ReturnType<typeof useAiTrading>; i
 interface AiTradingTabProps {
   wallet:   string;
   isMobile: boolean;
-  isElite?: boolean; // GEASS ELITE subscriber
 }
 
-export function AiTradingTab({ wallet, isMobile, isElite = false }: AiTradingTabProps) {
+export function AiTradingTab({ wallet, isMobile }: AiTradingTabProps) {
   const [subTab, setSubTab] = useState<SubTab>("dashboard");
   const at = useAiTrading(wallet);
 
@@ -600,8 +536,8 @@ export function AiTradingTab({ wallet, isMobile, isElite = false }: AiTradingTab
         }}>
           <span style={{ fontSize: isMobile ? 16 : 20 }}>🤖</span>
           AI Auto-Trading
-          <span style={{ fontSize: 9, padding: "2px 7px", background: "#a855f722", color: "#a855f7", border: "1px solid #a855f744", fontWeight: 700 }}>
-            {at.config.mode === "paper" ? "PAPER" : "LIVE"}
+          <span style={{ fontSize: 9, padding: "2px 7px", background: "#ff2b4e22", color: "#ff2b4e", border: "1px solid #ff2b4e44", fontWeight: 700 }}>
+            LIVE
           </span>
         </h1>
         <p style={{ fontSize: 11, color: "#3f3f46", margin: 0 }}>
@@ -619,7 +555,7 @@ export function AiTradingTab({ wallet, isMobile, isElite = false }: AiTradingTab
       {subTab === "dashboard"  && <Dashboard  at={at} isMobile={isMobile} />}
       {subTab === "signals"    && <SignalsPanel at={at} />}
       {subTab === "positions"  && <PositionsPanel at={at} />}
-      {subTab === "settings"   && <SettingsPanel at={at} isElite={isElite} />}
+      {subTab === "settings"   && <SettingsPanel at={at} />}
     </div>
   );
 }

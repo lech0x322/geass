@@ -10,7 +10,6 @@ export type { TradingSignal, TradeDecision, Position, TradingStats, RiskConfig }
 
 export interface AiTradingConfig {
   enabled:         boolean;
-  mode:            "paper" | "live";
   riskProfile:     "conservative" | "moderate" | "aggressive";
   maxPositionSol:  number;
   maxOpenPositions: number;
@@ -32,7 +31,6 @@ export { RISK_PRESETS };
 
 const DEFAULT_CONFIG: AiTradingConfig = {
   enabled:          false,
-  mode:             "paper",
   riskProfile:      "moderate",
   maxPositionSol:   0.3,
   maxOpenPositions: 5,
@@ -167,7 +165,7 @@ export function useAiTrading(wallet: string | null): AiTradingState {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           signal, decision, wallet,
-          isPaper: config.mode === "paper",
+          isPaper: false,
           risk: {
             maxPositionSol:   config.maxPositionSol,
             maxOpenPositions: config.maxOpenPositions,
@@ -197,14 +195,14 @@ export function useAiTrading(wallet: string | null): AiTradingState {
   const closePosition = useCallback(async (posId: string) => {
     if (!wallet) return;
     try {
-      await fetch(`/api/ai-trading/positions?wallet=${encodeURIComponent(wallet)}&id=${posId}&paper=${config.mode === "paper"}`, {
+      await fetch(`/api/ai-trading/positions?wallet=${encodeURIComponent(wallet)}&id=${posId}&paper=false`, {
         method: "DELETE",
       });
       await refreshPositions();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [wallet, config.mode, refreshPositions]);
+  }, [wallet, refreshPositions]);
 
   const emergencyStop = useCallback(async () => {
     if (!wallet) return;
@@ -213,14 +211,14 @@ export function useAiTrading(wallet: string | null): AiTradingState {
       await fetch("/api/ai-trading/stop", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet, isPaper: config.mode === "paper" }),
+        body: JSON.stringify({ wallet, isPaper: false }),
       });
       await refreshPositions();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
     setExecuting(false);
-  }, [wallet, config.mode, refreshPositions]);
+  }, [wallet, refreshPositions]);
 
   const monitorPositions = useCallback(async () => {
     if (!wallet) return;
@@ -228,11 +226,11 @@ export function useAiTrading(wallet: string | null): AiTradingState {
       await fetch("/api/ai-trading/monitor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet, isPaper: config.mode === "paper" }),
+        body: JSON.stringify({ wallet, isPaper: false }),
       });
       await refreshPositions();
     } catch {}
-  }, [wallet, config.mode, refreshPositions]);
+  }, [wallet, refreshPositions]);
 
   const clearHistory = useCallback(async () => {
     if (!wallet) return;

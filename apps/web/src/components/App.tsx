@@ -2369,7 +2369,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           )}
 
           {tab === "ai-trading" && (
-            <AiTradingTab wallet={wallet} isMobile={isMobile} isElite={pro.active} />
+            <AiTradingTab wallet={wallet} isMobile={isMobile} />
           )}
 
           {tab === "intel" && (
