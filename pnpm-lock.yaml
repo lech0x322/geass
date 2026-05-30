@@ -24,6 +24,9 @@ importers:
       '@geass/sdk':
         specifier: workspace:^
         version: link:../../packages/sdk
+      '@neondatabase/serverless':
+        specifier: ^1.1.0
+        version: 1.1.0
       '@solana/web3.js':
         specifier: ^1.98.4
         version: 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -223,6 +226,10 @@ packages:
   '@mendable/firecrawl-js@4.25.1':
     resolution: {integrity: sha512-Oo5tFCltCRMEJiaIsFOIBAzeRNq+OZ5qocrexvRcxXCnoEkqAoKunzbadSEEFZXYYayWj6yyYoGhRcGg5R14Dg==}
     engines: {node: '>=22.0.0'}
+
+  '@neondatabase/serverless@1.1.0':
+    resolution: {integrity: sha512-r3ZZhRjEcfEdKIZnoB1RusNgvHuaBRqfCzV4Gi+5A9yUX0S4HTws/ASWqt13wL4y4I+0rqsWGdA2w7EQXHi3+Q==}
+    engines: {node: '>=19.0.0'}
 
   '@next/env@15.5.18':
     resolution: {integrity: sha512-hAV85Ckd9QR6RvH04MEKwsfLTksvFpO47j9xwtoIuvuPnlwecpSi+uZTtm8HirVbtlI2Fnz//xpcSTjFdyJk+g==}
@@ -883,6 +890,8 @@ snapshots:
       zod-to-json-schema: 3.25.2(zod@3.25.76)
     transitivePeerDependencies:
       - debug
+
+  '@neondatabase/serverless@1.1.0': {}
 
   '@next/env@15.5.18': {}
 

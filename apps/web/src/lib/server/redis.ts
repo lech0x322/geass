@@ -1,78 +1,16 @@
 import "server-only";
 
 /**
- * Thin Redis abstraction.
+ * Backwards-compatibility shim.
  *
- * Priority:
- *  1. Upstash  — UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN
- *  2. Fallback — no-op (in-memory stays in smartWallets.ts)
+ * The app's persistence was migrated from Upstash Redis to Neon Postgres.
+ * The previous Redis wrapper exposed a `redis` object; every consumer still
+ * imports `{ redis }` from here, so we keep that name and route it to the
+ * Postgres-backed key/value store in `./kv`. The public surface
+ * (`get`, `set`, `hget`, `hset`, `hgetall`, `lpushTrim`, `lrange`,
+ * `available`) is identical, so no call site needed to change.
  *
- * A self-hosted redis:// URL can be added later by swapping this module
- * for ioredis.
+ * New code should import `{ kv }` from "./kv" directly.
  */
 
-import { Redis } from "@upstash/redis";
-
-let _client: Redis | null = null;
-
-function getClient(): Redis | null {
-  if (_client) return _client;
-  const url   = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
-  _client = new Redis({ url, token });
-  return _client;
-}
-
-export const redis = {
-  async get<T>(key: string): Promise<T | null> {
-    try { return (await getClient()?.get<T>(key)) ?? null; }
-    catch (e) { console.error("[redis] get:", e); return null; }
-  },
-  async set(key: string, value: unknown, exSeconds?: number): Promise<void> {
-    try {
-      if (exSeconds !== undefined) {
-        await getClient()?.set(key, JSON.stringify(value), { ex: exSeconds });
-      } else {
-        await getClient()?.set(key, JSON.stringify(value));
-      }
-    } catch (e) { console.error("[redis] set:", e); }
-  },
-  async hget<T>(key: string, field: string): Promise<T | null> {
-    try { return (await getClient()?.hget<T>(key, field)) ?? null; }
-    catch (e) { console.error("[redis] hget:", e); return null; }
-  },
-  async hset(key: string, field: string, value: unknown): Promise<void> {
-    try { await getClient()?.hset(key, { [field]: JSON.stringify(value) }); }
-    catch (e) { console.error("[redis] hset:", e); }
-  },
-  async hgetall<T>(key: string): Promise<Record<string, T> | null> {
-    try { return (await getClient()?.hgetall<Record<string, T>>(key)) ?? null; }
-    catch (e) { console.error("[redis] hgetall:", e); return null; }
-  },
-  /** Push to head of a list, then trim to keep only the newest `keep` items. */
-  async lpushTrim(key: string, value: unknown, keep: number, exSeconds?: number): Promise<void> {
-    try {
-      const c = getClient();
-      if (!c) return;
-      await c.lpush(key, JSON.stringify(value));
-      await c.ltrim(key, 0, keep - 1);
-      if (exSeconds !== undefined) await c.expire(key, exSeconds);
-    } catch (e) { console.error("[redis] lpushTrim:", e); }
-  },
-  /** Read a range of a list (default: entire list), newest first. */
-  async lrange<T>(key: string, start = 0, stop = -1): Promise<T[]> {
-    try {
-      const raw = await getClient()?.lrange(key, start, stop);
-      if (!raw) return [];
-      return raw.map(v => {
-        // Upstash may return already-parsed objects or JSON strings.
-        if (typeof v === "string") { try { return JSON.parse(v) as T; } catch { return v as unknown as T; } }
-        return v as T;
-      });
-    } catch (e) { console.error("[redis] lrange:", e); return []; }
-  },
-  available(): boolean {
-    return getClient() !== null;
-  },
-};
+export { kv as redis } from "./kv";
