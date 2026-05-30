@@ -44,6 +44,16 @@ const CONTACT_METHODS: { id: "telegram" | "discord" | "dm"; label: string }[] = 
 ];
 const EMOJI_OPTIONS = ["🚀","📣","🎨","⚙️","💡","🔒","📦","💎","🔥","⚡","🎯","🛡️","🤖","📊","💰","🌐"];
 
+const RECOMMENDED_TAGS: Record<ListingCategory, string[]> = {
+  launch:    ["pump.fun", "raydium", "LP", "jito", "bundle", "meteora", "metadata", "stealth"],
+  promotion: ["kol", "call", "twitter", "spaces", "shill", "influencer", "trending", "raid"],
+  design:    ["logo", "memes", "banner", "branding", "art", "animation", "pfp", "gif"],
+  technical: ["sniper", "mev", "bot", "bundle", "smart-contract", "telegram-bot", "api", "dashboard"],
+  alpha:     ["signals", "calls", "subscription", "whale-alerts", "presale", "private", "vip"],
+  audit:     ["security", "honeypot", "rug-check", "verified", "report", "mint-check", "lp-lock"],
+  other:     ["consulting", "management", "support", "custom", "service"],
+};
+
 const MONO: React.CSSProperties = { fontFamily: "'JetBrains Mono','Fira Mono',monospace" };
 const RED = "#ff2b4e";
 
@@ -177,7 +187,8 @@ function CreateForm({ wallet, walletAlias, onCreated, onCancel, isMobile }: {
   const [contactMethod, setContactMethod] = useState<"telegram"|"discord"|"dm">("telegram");
   const [contactHandle, setContactHandle] = useState("");
   const [emoji, setEmoji]               = useState("🚀");
-  const [tags, setTags]                 = useState("");
+  const [tags, setTags]                 = useState<string[]>([]);
+  const [tagInput, setTagInput]         = useState("");
   const [showEmoji, setShowEmoji]       = useState(false);
   const [error, setError]               = useState("");
   const [loading, setLoading]           = useState(false);
@@ -198,7 +209,7 @@ function CreateForm({ wallet, walletAlias, onCreated, onCancel, isMobile }: {
           category, price: parseFloat(price) || 0,
           priceNegotiable: priceNeg, deliveryTime: delivery,
           contactMethod, contactHandle: contactHandle.trim() || undefined,
-          emoji, tags: tags.split(",").map(t => t.trim()).filter(Boolean),
+          emoji, tags: tags.slice(0, 8),
         }),
       });
       const data = await res.json();
@@ -206,6 +217,16 @@ function CreateForm({ wallet, walletAlias, onCreated, onCancel, isMobile }: {
       onCreated(data.listing);
     } catch { setError("Network error"); }
     finally { setLoading(false); }
+  }
+
+  function addTag(raw: string) {
+    const t = raw.trim().toLowerCase().replace(/^#/, "").slice(0, 20);
+    if (!t) return;
+    setTags(prev => (prev.includes(t) || prev.length >= 8) ? prev : [...prev, t]);
+    setTagInput("");
+  }
+  function removeTag(t: string) {
+    setTags(prev => prev.filter(x => x !== t));
   }
 
   const inputStyle: React.CSSProperties = {
@@ -332,8 +353,54 @@ function CreateForm({ wallet, walletAlias, onCreated, onCancel, isMobile }: {
 
         {/* Tags */}
         <div>
-          <label style={labelStyle}>Tags (comma-separated, max 8)</label>
-          <input value={tags} onChange={e => setTags(e.target.value)} placeholder="launch, pump.fun, raydium" style={inputStyle} />
+          <label style={labelStyle}>Tags ({tags.length}/8)</label>
+
+          {/* Selected tags as chips */}
+          {tags.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+              {tags.map(t => (
+                <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: RED, background: `${RED}15`, border: `1px solid ${RED}40`, padding: "3px 8px", borderRadius: 10, ...MONO }}>
+                  #{t}
+                  <button onClick={() => removeTag(t)} style={{ background: "none", border: "none", color: RED, cursor: "pointer", fontSize: 13, lineHeight: 1, padding: 0 }}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Input — Enter to add */}
+          <input
+            value={tagInput}
+            onChange={e => setTagInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTag(tagInput); }
+              else if (e.key === "Backspace" && !tagInput && tags.length) { removeTag(tags[tags.length - 1]); }
+            }}
+            onBlur={() => { if (tagInput.trim()) addTag(tagInput); }}
+            placeholder={tags.length >= 8 ? "Max 8 tags" : "Type a tag, press Enter…"}
+            disabled={tags.length >= 8}
+            style={inputStyle}
+            maxLength={20}
+          />
+
+          {/* Recommended tags */}
+          {(() => {
+            const suggestions = RECOMMENDED_TAGS[category].filter(t => !tags.includes(t));
+            if (!suggestions.length || tags.length >= 8) return null;
+            return (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 9, color: "#3f3f46", marginBottom: 5, ...MONO }}>RECOMMENDED</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {suggestions.map(t => (
+                    <button key={t} onClick={() => addTag(t)}
+                      style={{ fontSize: 11, color: "#71717a", background: "transparent", border: "1px solid #27272a", padding: "3px 9px", borderRadius: 10, cursor: "pointer", ...MONO, transition: "all .15s" }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = `${RED}60`; e.currentTarget.style.color = RED; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = "#27272a"; e.currentTarget.style.color = "#71717a"; }}
+                    >+ {t}</button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {error && (
