@@ -411,7 +411,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
 
       {/* ─── NAV ─── */}
       <nav style={{ position:"sticky", top:0, zIndex:100, background:"#000000ee", backdropFilter:"blur(20px)", borderBottom:"1px solid #18181c" }}>
-        <div style={{ display:"flex", alignItems:"center", padding:"0 clamp(16px,4vw,56px)", height:58, gap:12, maxWidth:1200, margin:"0 auto" }}>
+        <div style={{ display:"flex", alignItems:"center", padding:"0 clamp(16px,4vw,56px)", height:58, gap:12, maxWidth:1440, margin:"0 auto" }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, flex:1, minWidth:0 }}>
             <GeassLogo size={26} />
             <span style={{ fontWeight:800, fontSize:14, letterSpacing:"3px", whiteSpace:"nowrap", color:"#f5f5f7" }}>GEASS</span>
@@ -456,7 +456,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
         <div style={{ position:"absolute", inset:0, backgroundImage:"linear-gradient(#ffffff05 1px,transparent 1px),linear-gradient(90deg,#ffffff05 1px,transparent 1px)", backgroundSize:"56px 56px", maskImage:"radial-gradient(ellipse 80% 70% at 50% 30%,black,transparent)", pointerEvents:"none" }} />
         <div style={{ position:"absolute", top:-120, left:"50%", transform:"translateX(-50%)", width:600, height:600, background:`radial-gradient(circle,${RED}0c 0%,transparent 60%)`, filter:"blur(70px)", pointerEvents:"none" }} />
 
-        <div className="g-hero" style={{ maxWidth:1160, margin:"0 auto", position:"relative" }}>
+        <div className="g-hero" style={{ maxWidth:1400, margin:"0 auto", position:"relative" }}>
           <div className="g-rise">
             <div style={{ display:"inline-flex", alignItems:"center", gap:8, border:"1px solid #18181c", padding:"6px 14px", fontSize:9, color:"#10b981", fontWeight:600, marginBottom:30, letterSpacing:"2px", fontFamily:MONO }}>
               <span style={{ position:"relative", display:"inline-flex", width:7, height:7 }}>
@@ -504,7 +504,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
 
       {/* ─── STATS BAR ─── */}
       <section style={{ padding:"0 clamp(16px,5vw,64px) clamp(24px,4vw,48px)" }}>
-        <div style={{ maxWidth:1160, margin:"0 auto" }}>
+        <div style={{ maxWidth:1400, margin:"0 auto" }}>
           <div className="g-4col">
             {[
               { v:"48ms",  l:"detection latency",     s:"p99 ws push",         c:RED },
@@ -524,7 +524,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
 
       {/* ─── FEATURE BENTO ─── */}
       <section id="features" style={{ padding:"clamp(48px,7vw,96px) clamp(16px,5vw,64px)" }}>
-        <div style={{ maxWidth:1160, margin:"0 auto" }}>
+        <div style={{ maxWidth:1400, margin:"0 auto" }}>
           <div style={{ textAlign:"center", marginBottom:56 }}>
             <Label>ALL_FEATURES</Label>
             <H2 sub="Eight intelligence layers — from first mint to final exit. Detection, safety, automation, and execution in one terminal.">
@@ -616,7 +616,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
 
       {/* ─── SECURITY ─── */}
       <section id="security" style={{ padding:"clamp(48px,7vw,96px) clamp(16px,5vw,64px)", position:"relative" }}>
-        <div style={{ maxWidth:1160, margin:"0 auto" }}>
+        <div style={{ maxWidth:1400, margin:"0 auto" }}>
           <div style={{ textAlign:"center", marginBottom:56 }}>
             <Label>SAFETY_TOOLS</Label>
             <H2 sub="GEASS runs security checks automatically on every token — so you know before you ape.">
@@ -640,7 +640,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
 
       {/* ─── AUTOMATION ─── */}
       <section style={{ padding:"clamp(48px,7vw,96px) clamp(16px,5vw,64px)", position:"relative" }}>
-        <div style={{ maxWidth:1160, margin:"0 auto" }}>
+        <div style={{ maxWidth:1400, margin:"0 auto" }}>
           <div style={{ textAlign:"center", marginBottom:56 }}>
             <Label>AUTOMATION</Label>
             <H2 sub="Set your rules once. GEASS monitors the chain 24/7 and notifies you the moment it matters.">
@@ -691,7 +691,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
 
       {/* ─── SOCIAL PROOF ─── */}
       <section style={{ padding:"clamp(48px,7vw,96px) clamp(16px,5vw,64px)", position:"relative" }}>
-        <div style={{ maxWidth:1160, margin:"0 auto" }}>
+        <div style={{ maxWidth:1400, margin:"0 auto" }}>
           <div style={{ textAlign:"center", marginBottom:56 }}>
             <Label>FIELD_REPORTS</Label>
             <H2 sub="Traders across Solana are already using GEASS to get the edge.">
@@ -832,7 +832,7 @@ export function LandingPage({ onConnect, connecting }: Props) {
 
       {/* ─── FOOTER ─── */}
       <footer style={{ borderTop:"1px solid #18181c", padding:"clamp(24px,4vw,40px) clamp(16px,5vw,64px)" }}>
-        <div style={{ maxWidth:1160, margin:"0 auto" }}>
+        <div style={{ maxWidth:1400, margin:"0 auto" }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:16, marginBottom:18 }}>
             <div style={{ display:"flex", alignItems:"center", gap:10 }}>
               <GeassLogo size={18} />
