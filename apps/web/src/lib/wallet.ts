@@ -59,11 +59,22 @@ function phantomErrMsg(e: unknown): string {
   return "Could not connect to Phantom. Try refreshing the page.";
 }
 
+function errCode(e: unknown): number | undefined {
+  return (e as { code?: number })?.code;
+}
+
+async function doConnect(p: PhantomProvider): Promise<string> {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("No response from Phantom — click the Phantom icon in your browser toolbar, then try again")), 15_000),
+  );
+  const r = await Promise.race([p.connect(), timeout]);
+  return r.publicKey.toString();
+}
+
 export async function connectPhantom(): Promise<string> {
   const p = await waitForPhantom(2000);
 
   if (!p) {
-    // On mobile, redirect to Phantom's in-app browser
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     if (isMobile) {
       const url = encodeURIComponent(window.location.href);
@@ -74,19 +85,33 @@ export async function connectPhantom(): Promise<string> {
     throw new Error("Phantom not found. Install the Phantom extension and refresh the page.");
   }
 
-  // If already connected, return immediately
+  // 1. Already connected — return immediately.
   if (p.publicKey) return p.publicKey.toString();
 
-  // Wrap in a 15-second timeout so the UI never gets stuck forever
-  const connectPromise = p.connect();
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("No response from Phantom — click the Phantom icon in your browser toolbar, then try again")), 15_000),
-  );
-
+  // 2. Try a silent reconnect first (no popup, works if the site is already trusted).
+  //    This avoids many -32603 stale-state errors.
   try {
-    const r = await Promise.race([connectPromise, timeoutPromise]);
-    return r.publicKey.toString();
+    const r = await p.connect({ onlyIfTrusted: true });
+    if (r.publicKey) return r.publicKey.toString();
+  } catch {
+    // Not trusted yet, or Phantom not ready — fall through to full connect.
+  }
+
+  // 3. Full connect with popup.
+  try {
+    return await doConnect(p);
   } catch (e) {
+    // -32603 = Phantom internal error, usually stale connection state.
+    // Reset by disconnecting, wait a tick, then retry once.
+    if (errCode(e) === -32603) {
+      try { await p.disconnect(); } catch { /* ignore */ }
+      await new Promise(r => setTimeout(r, 400));
+      try {
+        return await doConnect(p);
+      } catch (e2) {
+        throw new Error(phantomErrMsg(e2));
+      }
+    }
     throw new Error(phantomErrMsg(e));
   }
 }
