@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCommunity } from "@/lib/server/community";
+import { getCommunity, updateCommunity } from "@/lib/server/community";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,4 +23,25 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     isOwner:  c.owner === wallet,
     inviteCode: c.owner === wallet ? c.inviteCode : undefined,
   });
+}
+
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  let body: Record<string, unknown>;
+  try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
+
+  const wallet = String(body.wallet ?? "").trim();
+  if (!wallet) return NextResponse.json({ error: "Wallet required" }, { status: 400 });
+
+  const result = await updateCommunity(id, wallet, {
+    name:        body.name        !== undefined ? String(body.name)        : undefined,
+    description: body.description !== undefined ? String(body.description) : undefined,
+    type:        body.type === "public" || body.type === "private" ? body.type : undefined,
+    emoji:       body.emoji       !== undefined ? String(body.emoji)       : undefined,
+    color:       body.color       !== undefined ? String(body.color)       : undefined,
+    tags:        Array.isArray(body.tags) ? (body.tags as unknown[]).map(String) : undefined,
+  });
+
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.error === "Not found" ? 404 : 403 });
+  return NextResponse.json({ ok: true });
 }

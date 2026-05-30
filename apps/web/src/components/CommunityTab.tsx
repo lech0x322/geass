@@ -1,1258 +1,913 @@
 "use client";
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { IconLock, IconPlus, IconSearch, IconCheck, IconArrowUpRight, IconCopy } from "./icons";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
-const MONO = "'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace";
-const RED  = "#ff2b4e";
-const COLORS = ["#ef4444","#f97316","#eab308","#10b981","#3b82f6","#a855f7","#ec4899","#14b8a6"];
-const ATTACH_ICON: Record<Attachment["type"], string> = { link: "🔗", image: "🖼", file: "📎", document: "📄" };
+const MONO    = "JetBrains Mono, monospace";
+const RED     = "#ff2b4e";
+const BG      = "#060607";
+const SURFACE = "#0a0a0c";
+const BORDER  = "#18181c";
+const BORDER2 = "#28282e";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-type SortKey = "popular" | "active" | "newest" | "paid" | "free";
+const EMOJIS = ["🎰","⚡","👁️","🧪","🔥","💎","🚀","🌊","🐉","🎯","🦁","🐺","⚔️","🛡️","🌑","💡"];
+// Must match allowed colors in /api/community POST route
+const COLORS  = ["#ef4444","#f97316","#eab308","#10b981","#3b82f6","#a855f7","#ec4899","#14b8a6"];
 
-interface Attachment {
-  type: "link" | "image" | "file" | "document";
-  url:  string; name?: string; size?: string;
-}
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-interface ChannelMedia {
-  id: string; type: "image" | "video"; url: string; title?: string; addedAt: number;
-}
-
-interface CommunityPost {
-  id: string; author: string; authorAlias: string; text: string;
-  tokenMint?: string; createdAt: number;
+interface Post {
+  id: string;
+  author: string;
+  authorAlias: string;
+  text: string;
+  tokenMint?: string;
+  createdAt: number;
   reactions: { fire: number; gem: number; rug: number };
-  attachments?: Attachment[];
 }
 
-interface Community {
-  id: string; name: string; description: string; type: "public" | "private";
-  owner: string; color: string; tags: string[];
-  createdAt: number; memberCount: number; postCount: number; isMember: boolean;
-  price?: number; bannerUrl?: string; avatarUrl?: string; media?: ChannelMedia[];
-  emoji?: string; // legacy
+interface Channel {
+  id: string;
+  name: string;
+  description: string;
+  type: "public" | "private";
+  inviteCode?: string;
+  owner: string;
+  members?: string[];
+  posts?: Post[];
+  createdAt: number;
+  emoji: string;
+  color: string;
+  tags: string[];
+  price?: number;
+  isMember?: boolean;
+  isOwner?: boolean;
+  memberCount?: number;
+  postCount?: number;
 }
 
-interface CommunityDetail extends Omit<Community, "memberCount" | "postCount"> {
-  members: string[]; posts: CommunityPost[];
-  isOwner: boolean; inviteCode?: string;
-  media: ChannelMedia[];
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function ago(ts: number): string {
+  const d = Date.now() - ts;
+  if (d < 60_000)     return "just now";
+  if (d < 3_600_000)  return `${Math.floor(d / 60_000)}m ago`;
+  if (d < 86_400_000) return `${Math.floor(d / 3_600_000)}h ago`;
+  return `${Math.floor(d / 86_400_000)}d ago`;
 }
 
-interface LiveStream {
-  id: string; hostAlias: string; hostWallet: string;
-  title: string; token?: string; viewerCount: number;
-  startedAt: number; tags: string[];
-  streamType: "screen" | "cam" | "voice";
-}
+// ── Shared styles ─────────────────────────────────────────────────────────────
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function timeAgo(ts: number) {
-  const m = Math.round((Date.now() - ts) / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
-  if (m < 1440) return `${Math.round(m / 60)}h ago`;
-  return `${Math.round(m / 1440)}d ago`;
-}
-function liveTime(ts: number) {
-  const s = Math.round((Date.now() - ts) / 1000);
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
-function fmtViewers(n: number) { return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n); }
+const inputCss: React.CSSProperties = {
+  background: SURFACE,
+  border: `1px solid ${BORDER2}`,
+  color: "#e4e4e7",
+  fontSize: 11,
+  fontFamily: MONO,
+  outline: "none",
+  padding: "8px 11px",
+};
 
-const inputCss = (extra?: React.CSSProperties): React.CSSProperties => ({
-  width: "100%", background: "#0a0a0c", border: "1px solid #28282e",
-  color: "#e4e4e7", fontSize: 11, fontFamily: MONO, padding: "8px 10px",
-  outline: "none", boxSizing: "border-box", ...extra,
-});
+// ── Sub-components ─────────────────────────────────────────────────────────────
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Sub-components
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// ── Channel Avatar ────────────────────────────────────────────────────────────
-function ChannelAvatar({ c, size = 40 }: { c: Pick<Community, "name" | "color" | "avatarUrl">; size?: number }) {
-  if (c.avatarUrl) return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={c.avatarUrl} alt={c.name} style={{ width: size, height: size, objectFit: "cover", display: "block", border: `1px solid ${c.color}40`, flexShrink: 0 }} />
-  );
+function Avatar({ ch, size }: { ch: Pick<Channel, "emoji" | "color">; size: number }) {
   return (
-    <div style={{ width: size, height: size, background: c.color + "20", border: `1px solid ${c.color}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: Math.round(size * 0.34), fontWeight: 800, color: c.color, fontFamily: MONO, flexShrink: 0, letterSpacing: "-1px" }}>
-      {c.name.slice(0, 2).toUpperCase()}
+    <div style={{
+      width: size, height: size, flexShrink: 0,
+      background: ch.color + "18",
+      border: `1.5px solid ${ch.color}45`,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: Math.round(size * 0.44),
+      boxShadow: `0 0 ${Math.round(size / 3)}px ${ch.color}1a`,
+    }}>
+      {ch.emoji}
     </div>
   );
 }
 
-// ── Attachment chip ───────────────────────────────────────────────────────────
-function AttachmentChip({ a, onRemove }: { a: Attachment; onRemove?: () => void }) {
-  const base: React.CSSProperties = {
-    display: "inline-flex", alignItems: "center", gap: 5,
-    fontSize: 10, fontFamily: MONO, background: "#0d0d10", border: "1px solid #28282e",
-    padding: "3px 8px", cursor: a.url && a.type === "link" ? "pointer" : "default",
-  };
-  if (a.type === "image" && a.url.startsWith("data:")) return (
-    <div style={{ marginTop: 6 }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={a.url} alt={a.name ?? "img"} style={{ maxWidth: "100%", maxHeight: 200, border: "1px solid #28282e", display: "block" }} />
-      {onRemove && (
-        <button onClick={onRemove} style={{ ...base as React.CSSProperties, marginTop: 3 }}>
-          <span>🖼</span><span style={{ color: "#a1a1aa" }}>{a.name}</span>
-          <span style={{ color: "#52525b", cursor: "pointer" }}>×</span>
-        </button>
-      )}
-    </div>
-  );
+function TagPill({ text, color }: { text: string; color: string }) {
   return (
-    <span style={base} onClick={() => { if (a.url && a.type === "link") window.open(a.url, "_blank"); }}>
-      <span>{ATTACH_ICON[a.type]}</span>
-      <span style={{ color: "#a1a1aa", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name ?? a.url}</span>
-      {a.size && <span style={{ color: "#52525b" }}>{a.size}</span>}
-      {onRemove && <span style={{ color: "#52525b", cursor: "pointer" }} onClick={e => { e.stopPropagation(); onRemove(); }}>×</span>}
+    <span style={{ fontSize: 8, color, background: color + "12", border: `1px solid ${color}28`, padding: "1px 6px", fontFamily: MONO }}>
+      #{text}
     </span>
   );
 }
 
-// ── Add attachment modal ──────────────────────────────────────────────────────
-function AddAttachModal({ type, onAdd, onClose }: { type: Attachment["type"]; onAdd: (a: Attachment) => void; onClose: () => void }) {
-  const [url, setUrl] = useState("");
-  const [name, setName] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; if (!f) return;
-    const reader = new FileReader();
-    reader.onload = ev => { onAdd({ type, url: ev.target?.result as string, name: f.name, size: `${(f.size / 1024).toFixed(0)}KB` }); onClose(); };
-    reader.readAsDataURL(f);
-  };
-
+function EmojiPicker({ value, onChange }: { value: string; onChange: (e: string) => void }) {
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: "#070708", border: "1px solid #28282e", width: "min(380px,94vw)", padding: "18px 20px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div style={{ fontSize: 9, color: RED, fontFamily: MONO, letterSpacing: "2px", fontWeight: 700 }}>[ ■ ADD {type.toUpperCase()} ]</div>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#52525b", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
-        </div>
-        {type === "link" ? (
-          <>
-            <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1.5px", marginBottom: 5 }}>URL</div>
-            <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" style={inputCss({ marginBottom: 10 })} />
-            <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1.5px", marginBottom: 5 }}>LABEL</div>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Link title (optional)" style={inputCss({ marginBottom: 14 })} />
-            <button onClick={() => { if (url.trim()) { onAdd({ type: "link", url: url.trim(), name: name.trim() || undefined }); onClose(); } }}
-              disabled={!url.trim()}
-              style={{ width: "100%", padding: "9px", border: "none", background: url.trim() ? RED : "#1a1a1e", color: url.trim() ? "#fff" : "#3f3f46", fontSize: 11, fontFamily: MONO, fontWeight: 700, cursor: url.trim() ? "pointer" : "default" }}>
-              ADD LINK
-            </button>
-          </>
-        ) : (
-          <>
-            <input ref={fileRef} type="file"
-              accept={type === "image" ? "image/*" : type === "document" ? ".pdf,.doc,.docx,.txt,.md" : "*"}
-              onChange={handleFile} style={{ display: "none" }} />
-            <div onClick={() => fileRef.current?.click()}
-              style={{ border: "1px dashed #28282e", padding: "30px 20px", textAlign: "center", cursor: "pointer", marginBottom: 14 }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>{ATTACH_ICON[type]}</div>
-              <div style={{ fontSize: 10, color: "#71717a", fontFamily: MONO }}>Click to select {type}</div>
-              <div style={{ fontSize: 8, color: "#3f3f46", fontFamily: MONO, marginTop: 4 }}>
-                {type === "image" ? "PNG, JPG, GIF, WEBP" : type === "document" ? "PDF, DOC, TXT, MD" : "Any file"}
-              </div>
-            </div>
-            <button onClick={() => fileRef.current?.click()}
-              style={{ width: "100%", padding: "9px", border: `1px solid ${RED}40`, background: RED + "10", color: RED, fontSize: 11, fontFamily: MONO, fontWeight: 700, cursor: "pointer" }}>
-              BROWSE FILES
-            </button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Go Live modal ─────────────────────────────────────────────────────────────
-function GoLiveModal({ alias, wallet, onStart, onClose }: { alias: string; wallet: string; onStart: (s: LiveStream) => void; onClose: () => void }) {
-  const [title, setTitle] = useState("");
-  const [token, setToken] = useState("");
-  const [streamType, setStreamType] = useState<"screen" | "cam" | "voice">("screen");
-  const [tags, setTags] = useState("");
-  const [starting, setStarting] = useState(false);
-  const [keyVisible, setKeyVisible] = useState(false);
-  const streamKey = `GEASS-${wallet.slice(0, 6).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-
-  const start = () => {
-    if (!title.trim()) return;
-    setStarting(true);
-    setTimeout(() => {
-      onStart({ id: Math.random().toString(36).slice(2), hostAlias: alias, hostWallet: wallet, title: title.trim(), token: token.trim() || undefined, viewerCount: 0, startedAt: Date.now(), tags: tags.split(",").map(t => t.trim()).filter(Boolean), streamType });
-      setStarting(false);
-    }, 800);
-  };
-
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: "#070708", border: `1px solid ${RED}40`, width: "min(460px,94vw)", padding: "20px 22px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-          <div style={{ fontSize: 9, color: RED, fontFamily: MONO, letterSpacing: "2px", fontWeight: 700 }}>[ ■ GO LIVE ]</div>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#52525b", cursor: "pointer", fontSize: 18 }}>×</button>
-        </div>
-        <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1.5px", marginBottom: 8 }}>STREAM TYPE</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6, marginBottom: 14 }}>
-          {([["screen", "🖥", "Screen"], ["cam", "📹", "Webcam"], ["voice", "🎙", "Voice"]] as const).map(([id, ico, lbl]) => (
-            <button key={id} onClick={() => setStreamType(id)}
-              style={{ padding: "10px 6px", border: `1px solid ${streamType === id ? RED : "#28282e"}`, background: streamType === id ? RED + "10" : "transparent", color: streamType === id ? RED : "#52525b", cursor: "pointer", fontFamily: MONO, textAlign: "center" }}>
-              <div style={{ fontSize: 18, marginBottom: 4 }}>{ico}</div>
-              <div style={{ fontSize: 9, fontWeight: 700 }}>{lbl}</div>
-            </button>
-          ))}
-        </div>
-        <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1.5px", marginBottom: 5 }}>STREAM TITLE *</div>
-        <input value={title} onChange={e => setTitle(e.target.value)} maxLength={80} placeholder="e.g. Analyzing BONK breakout…" style={inputCss({ marginBottom: 12 })} />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-          <div>
-            <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1.5px", marginBottom: 5 }}>FEATURED TOKEN</div>
-            <input value={token} onChange={e => setToken(e.target.value.toUpperCase())} maxLength={10} placeholder="BONK, WIF, SOL…" style={inputCss()} />
-          </div>
-          <div>
-            <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1.5px", marginBottom: 5 }}>TAGS</div>
-            <input value={tags} onChange={e => setTags(e.target.value)} maxLength={60} placeholder="alpha, meme, defi" style={inputCss()} />
-          </div>
-        </div>
-        <div style={{ background: "#0a0a0c", border: "1px solid #28282e", padding: "10px 12px", marginBottom: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-            <span style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1.5px" }}>STREAM KEY (OBS / RTMP)</span>
-            <button onClick={() => setKeyVisible(v => !v)} style={{ fontSize: 8, color: "#71717a", background: "transparent", border: "none", cursor: "pointer", fontFamily: MONO }}>{keyVisible ? "HIDE" : "SHOW"}</button>
-          </div>
-          <div style={{ fontSize: 10, color: keyVisible ? "#a1a1aa" : "#3f3f46", fontFamily: MONO, letterSpacing: ".5px", userSelect: keyVisible ? "text" : "none" }}>
-            {keyVisible ? streamKey : "●●●●●●●●●●●●●●●●●●●●"}
-          </div>
-        </div>
-        <button onClick={start} disabled={starting || !title.trim()}
-          style={{ width: "100%", padding: "11px 0", border: "none", background: starting || !title.trim() ? "#1a1a1e" : RED, color: starting || !title.trim() ? "#3f3f46" : "#fff", fontSize: 11, fontWeight: 800, fontFamily: MONO, letterSpacing: "1px", cursor: starting || !title.trim() ? "default" : "pointer" }}>
-          {starting ? "INITIALIZING STREAM…" : "● START STREAM"}
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+      {EMOJIS.map(e => (
+        <button key={e} type="button" onClick={() => onChange(e)}
+          style={{ fontSize: 15, padding: "3px 5px", border: `1px solid ${value === e ? "#a855f760" : BORDER}`, background: value === e ? "#a855f715" : "transparent", cursor: "pointer" }}>
+          {e}
         </button>
-      </div>
+      ))}
     </div>
   );
 }
 
-// ── Payment modal ─────────────────────────────────────────────────────────────
-function PayModal({ channel, onPaid, onClose }: { channel: Community | CommunityDetail; onPaid: () => void; onClose: () => void }) {
-  const [paying, setPaying] = useState(false);
-  const [done, setDone] = useState(false);
-
-  const pay = () => {
-    setPaying(true);
-    setTimeout(() => { setDone(true); setPaying(false); setTimeout(onPaid, 900); }, 1200);
-  };
-
-  const memberCount = "memberCount" in channel ? channel.memberCount : channel.members.length;
-
+function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: "#070708", border: `1px solid ${RED}40`, width: "min(380px,94vw)", padding: "22px 24px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <div style={{ fontSize: 9, color: RED, fontFamily: MONO, letterSpacing: "2px", fontWeight: 700 }}>[ ■ SUBSCRIBE ]</div>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#52525b", cursor: "pointer", fontSize: 18 }}>×</button>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, background: "#0a0a0c", border: "1px solid #28282e", padding: "14px" }}>
-          <ChannelAvatar c={channel} size={44} />
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: "#e4e4e7", fontFamily: MONO }}>{channel.name}</div>
-            <div style={{ fontSize: 9, color: "#52525b", fontFamily: MONO, marginTop: 2 }}>{memberCount} members</div>
-          </div>
-        </div>
-        <div style={{ background: "#0a0a0c", border: "1px solid #28282e", padding: "14px 16px", marginBottom: 16, textAlign: "center" }}>
-          <div style={{ fontSize: 26, fontWeight: 900, color: RED, fontFamily: MONO }}>{channel.price?.toFixed(3)} SOL</div>
-          <div style={{ fontSize: 9, color: "#52525b", fontFamily: MONO, marginTop: 3 }}>per month · cancel anytime</div>
-        </div>
-        <div style={{ fontSize: 9, color: "#52525b", fontFamily: MONO, marginBottom: 16, lineHeight: 1.6 }}>
-          By subscribing you gain full access to all posts, media, and live streams in this channel.
-          Payment is processed via Solana (Phantom / connected wallet).
-        </div>
-        {done ? (
-          <div style={{ textAlign: "center", padding: "12px 0", color: "#10b981", fontFamily: MONO, fontSize: 12, fontWeight: 700 }}>✓ SUBSCRIBED — welcome!</div>
-        ) : (
-          <button onClick={pay} disabled={paying}
-            style={{ width: "100%", padding: "12px 0", border: "none", background: paying ? "#1a1a1e" : RED, color: paying ? "#3f3f46" : "#fff", fontSize: 11, fontWeight: 800, fontFamily: MONO, letterSpacing: "1px", cursor: paying ? "wait" : "pointer" }}>
-            {paying ? "PROCESSING…" : `PAY ${channel.price?.toFixed(3)} SOL / MONTH`}
-          </button>
-        )}
-      </div>
+    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+      {COLORS.map(c => (
+        <button key={c} type="button" onClick={() => onChange(c)}
+          style={{ width: 22, height: 22, background: c, border: value === c ? "2.5px solid #fff" : "2px solid transparent", cursor: "pointer", flexShrink: 0, boxShadow: value === c ? `0 0 6px ${c}80` : "none" }} />
+      ))}
     </div>
   );
 }
 
-// ── Stream card ───────────────────────────────────────────────────────────────
-function StreamCard({ stream, onWatch }: { stream: LiveStream; onWatch: () => void }) {
-  const typeIcon = stream.streamType === "screen" ? "🖥" : stream.streamType === "cam" ? "📹" : "🎙";
-  return (
-    <div onClick={onWatch} style={{ background: "#070708", border: `1px solid ${RED}28`, cursor: "pointer", overflow: "hidden" }}>
-      <div style={{ height: 100, background: "#0a0a0c", position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ fontSize: 28 }}>{typeIcon}</div>
-        <div style={{ position: "absolute", top: 5, left: 5, background: RED, color: "#fff", fontSize: 7, fontWeight: 800, fontFamily: MONO, letterSpacing: "1px", padding: "2px 5px" }}>● LIVE</div>
-        <div style={{ position: "absolute", top: 5, right: 5, background: "#00000088", color: "#d4d4d8", fontSize: 8, fontFamily: MONO, padding: "2px 6px", border: "1px solid #28282e" }}>
-          {fmtViewers(stream.viewerCount)} viewers
-        </div>
-        <div style={{ position: "absolute", bottom: 5, right: 5, background: "#00000088", color: "#71717a", fontSize: 7, fontFamily: MONO, padding: "2px 5px" }}>
-          {liveTime(stream.startedAt)}
-        </div>
-      </div>
-      <div style={{ padding: "8px 10px" }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: "#e4e4e7", fontFamily: MONO, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 3 }}>{stream.title}</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          <span style={{ fontSize: 8, color: "#71717a", fontFamily: MONO }}>{stream.hostAlias}</span>
-          {stream.token && <span style={{ fontSize: 7, color: RED, background: RED + "12", border: `1px solid ${RED}28`, padding: "1px 4px", fontFamily: MONO }}>${stream.token}</span>}
-        </div>
-        <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
-          {stream.tags.slice(0, 3).map(t => <span key={t} style={{ fontSize: 7, color: "#52525b", border: "1px solid #28282e", padding: "1px 4px", fontFamily: MONO }}>#{t}</span>)}
-        </div>
-      </div>
-    </div>
-  );
-}
+// ── Main Component ─────────────────────────────────────────────────────────────
 
-// ── Edit Channel modal ────────────────────────────────────────────────────────
-function EditChannelModal({ detail, onSave, onClose }: { detail: CommunityDetail; onSave: (u: Partial<CommunityDetail>) => void; onClose: () => void }) {
-  const [name, setName] = useState(detail.name);
-  const [description, setDescription] = useState(detail.description);
-  const [tags, setTags] = useState(detail.tags.join(", "));
-  const [price, setPrice] = useState(String(detail.price ?? 0));
-  const [type, setType] = useState(detail.type);
-  const [color, setColor] = useState(detail.color);
-  const [avatarUrl, setAvatarUrl] = useState(detail.avatarUrl ?? "");
-  const [bannerUrl, setBannerUrl] = useState(detail.bannerUrl ?? "");
-  const [saving, setSaving] = useState(false);
-  const avatarRef = useRef<HTMLInputElement>(null);
-  const bannerRef = useRef<HTMLInputElement>(null);
+export function CommunityTab({ wallet, isMobile }: { wallet: string; isMobile: boolean }) {
+  // List state
+  const [channels, setChannels]     = useState<Channel[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [search, setSearch]         = useState("");
+  const [filterMine, setFilterMine] = useState(false);
+  const [sortKey, setSortKey]       = useState<"popular" | "newest" | "active">("popular");
 
-  const readFile = (f: File, cb: (url: string) => void) => {
-    const r = new FileReader(); r.onload = e => cb(e.target?.result as string); r.readAsDataURL(f);
-  };
+  // View state
+  const [view, setView]             = useState<"list" | "channel" | "create">("list");
+  const [activeId, setActiveId]     = useState<string | null>(null);
+  const [detail, setDetail]         = useState<Channel | null>(null);
+  const [detailTab, setDetailTab]   = useState<"posts" | "about">("posts");
+  const [detailLoading, setDetailLoading] = useState(false);
 
-  const save = () => {
-    if (!name.trim()) return;
-    setSaving(true);
-    const updated: Partial<CommunityDetail> = {
-      name: name.trim(), description: description.trim(),
-      tags: tags.split(",").map(t => t.trim()).filter(Boolean),
-      price: parseFloat(price) || 0,
-      type, color,
-      avatarUrl: avatarUrl || undefined,
-      bannerUrl: bannerUrl || undefined,
-    };
-    fetch(`/api/community/${detail.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) }).catch(() => {});
-    onSave(updated);
-    setSaving(false);
-  };
+  // Post state
+  const [postText, setPostText]     = useState("");
+  const [tokenMint, setTokenMint]   = useState("");
+  const [posting, setPosting]       = useState(false);
+  const [editPost, setEditPost]     = useState<Post | null>(null);
+  const [editText, setEditText]     = useState("");
 
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", overflowY: "auto" }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: "#070708", border: `1px solid ${RED}40`, width: "min(480px,94vw)", padding: "20px 22px", margin: "20px auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-          <div style={{ fontSize: 9, color: RED, fontFamily: MONO, letterSpacing: "2px", fontWeight: 700 }}>[ ■ EDIT CHANNEL ]</div>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#52525b", cursor: "pointer", fontSize: 18 }}>×</button>
-        </div>
+  // Join state
+  const [joinCode, setJoinCode]     = useState("");
+  const [joinErr, setJoinErr]       = useState("");
 
-        {/* Avatar + color */}
-        <div style={{ display: "flex", gap: 14, alignItems: "flex-start", marginBottom: 16 }}>
-          <div style={{ flexShrink: 0, textAlign: "center" }}>
-            <ChannelAvatar c={{ name: name || detail.name, color, avatarUrl: avatarUrl || undefined }} size={56} />
-            <input ref={avatarRef} type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) readFile(f, setAvatarUrl); }} style={{ display: "none" }} />
-            <button onClick={() => avatarRef.current?.click()} style={{ marginTop: 5, fontSize: 8, color: "#52525b", background: "transparent", border: "1px solid #28282e", padding: "3px 8px", cursor: "pointer", fontFamily: MONO }}>PHOTO</button>
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 8, color: "#52525b", letterSpacing: "1.5px", marginBottom: 8, fontFamily: MONO }}>ACCENT COLOR</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {COLORS.map(c => <button key={c} onClick={() => setColor(c)} style={{ width: 22, height: 22, background: c, border: `2px solid ${color === c ? "#fff" : "transparent"}`, cursor: "pointer" }} />)}
-            </div>
-          </div>
-        </div>
+  // Edit channel state
+  const [editingCh, setEditingCh]   = useState(false);
+  const [editForm, setEditForm]     = useState({
+    name: "", description: "", emoji: "🎯", color: "#a855f7", tags: "",
+    type: "public" as "public" | "private",
+  });
 
-        {/* Banner */}
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 8, color: "#52525b", letterSpacing: "1.5px", marginBottom: 6, fontFamily: MONO }}>BANNER IMAGE</div>
-          <input ref={bannerRef} type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) readFile(f, setBannerUrl); }} style={{ display: "none" }} />
-          {bannerUrl ? (
-            <div style={{ position: "relative" }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={bannerUrl} alt="banner" style={{ width: "100%", height: 70, objectFit: "cover", display: "block", border: "1px solid #28282e" }} />
-              <button onClick={() => setBannerUrl("")} style={{ position: "absolute", top: 4, right: 4, background: "#000000aa", border: "none", color: "#fff", fontSize: 12, width: 22, height: 22, cursor: "pointer" }}>×</button>
-            </div>
-          ) : (
-            <button onClick={() => bannerRef.current?.click()} style={{ width: "100%", padding: "8px 12px", background: "#0a0a0c", border: "1px solid #28282e", color: "#52525b", fontSize: 10, fontFamily: MONO, cursor: "pointer", textAlign: "left" }}>
-              📸 Upload banner image
-            </button>
-          )}
-        </div>
-
-        {/* Fields */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
-          <div>
-            <div style={{ fontSize: 8, color: "#52525b", letterSpacing: "1.5px", marginBottom: 5, fontFamily: MONO }}>CHANNEL NAME *</div>
-            <input value={name} onChange={e => setName(e.target.value)} maxLength={40} style={inputCss()} />
-          </div>
-          <div>
-            <div style={{ fontSize: 8, color: "#52525b", letterSpacing: "1.5px", marginBottom: 5, fontFamily: MONO }}>DESCRIPTION</div>
-            <input value={description} onChange={e => setDescription(e.target.value)} maxLength={300} style={inputCss()} />
-          </div>
-          <div>
-            <div style={{ fontSize: 8, color: "#52525b", letterSpacing: "1.5px", marginBottom: 5, fontFamily: MONO }}>TAGS (comma-separated)</div>
-            <input value={tags} onChange={e => setTags(e.target.value)} maxLength={100} style={inputCss()} />
-          </div>
-        </div>
-
-        {/* Privacy + price */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
-          {(["public", "private"] as const).map(t => (
-            <button key={t} onClick={() => setType(t)}
-              style={{ padding: "8px", border: `1px solid ${type === t ? (t === "private" ? "#f97316" : "#10b981") : "#28282e"}`, background: type === t ? (t === "private" ? "#f9731610" : "#10b98110") : "transparent", color: type === t ? (t === "private" ? "#f97316" : "#10b981") : "#52525b", cursor: "pointer", textAlign: "left", fontFamily: MONO }}>
-              <div style={{ fontSize: 9, fontWeight: 700 }}>{t === "public" ? "🌐 PUBLIC" : "🔒 PRIVATE"}</div>
-            </button>
-          ))}
-        </div>
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 8, color: "#52525b", letterSpacing: "1.5px", marginBottom: 5, fontFamily: MONO }}>SUBSCRIPTION PRICE (SOL/month — 0 = free)</div>
-          <input type="number" min="0" step="0.001" value={price} onChange={e => setPrice(e.target.value)} placeholder="0 = free" style={inputCss()} />
-        </div>
-
-        <button onClick={save} disabled={saving || !name.trim()}
-          style={{ width: "100%", padding: "11px 0", border: "none", background: saving || !name.trim() ? "#1a1a1e" : RED, color: saving || !name.trim() ? "#3f3f46" : "#fff", fontSize: 11, fontWeight: 800, fontFamily: MONO, letterSpacing: "1px", cursor: saving || !name.trim() ? "default" : "pointer" }}>
-          {saving ? "SAVING…" : "SAVE CHANGES"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Main Component
-// ═══════════════════════════════════════════════════════════════════════════════
-interface Props { wallet: string; isMobile: boolean; onNewPost?: () => void; }
-
-export function CommunityTab({ wallet, isMobile, onNewPost }: Props) {
-  const [view,           setView]           = useState<"list" | "channel" | "create">("list");
-  const [communities,    setCommunities]    = useState<Community[]>([]);
-  const [detail,         setDetail]         = useState<CommunityDetail | null>(null);
-  const [loading,        setLoading]        = useState(false);
-  const [detailLoad,     setDetailLoad]     = useState(false);
-  const [search,         setSearch]         = useState("");
-  const [filterMine,     setFilterMine]     = useState(false);
-  const [sortKey,        setSortKey]        = useState<SortKey>("popular");
-  const [postText,       setPostText]       = useState("");
-  const [posting,        setPosting]        = useState(false);
-  const [joinCode,       setJoinCode]       = useState("");
-  const [joinError,      setJoinError]      = useState("");
-  const [codeCopied,     setCodeCopied]     = useState(false);
-
-  // Attachments
-  const [attachments,    setAttachments]    = useState<Attachment[]>([]);
-  const [attachModal,    setAttachModal]    = useState<Attachment["type"] | null>(null);
-
-  // Live streaming
-  const [detailTab,      setDetailTab]      = useState<"about" | "posts" | "media" | "live">("about");
-  const [liveStreams,    setLiveStreams]    = useState<LiveStream[]>([]);
-  const [goLiveOpen,     setGoLiveOpen]     = useState(false);
-  const [watchStream,    setWatchStream]    = useState<LiveStream | null>(null);
-
-  // Payment
-  const [payModal,       setPayModal]       = useState(false);
-
-  // Post editing
-  const [editingPost,    setEditingPost]    = useState<{ id: string; text: string } | null>(null);
-  const [editText,       setEditText]       = useState("");
-
-  // Channel editing
-  const [editChannelOpen, setEditChannelOpen] = useState(false);
-
-  // Creator media upload
-  const [uploadingMedia,  setUploadingMedia]  = useState(false);
-  const mediaFileRef  = useRef<HTMLInputElement>(null);
-  const bannerFileRef = useRef<HTMLInputElement>(null);
-  const [localBanner,  setLocalBanner]  = useState<string | null>(null);
-  const [localMedia,   setLocalMedia]   = useState<ChannelMedia[]>([]);
-
-  // Create form
+  // Create state
   const [form, setForm] = useState({
     name: "", description: "", type: "public" as "public" | "private",
-    color: "#a855f7", tags: "", price: "0", avatarUrl: "",
+    emoji: "🎯", color: "#a855f7", tags: "",
   });
-  const avatarCreateRef = useRef<HTMLInputElement>(null);
-  const [creating,    setCreating]    = useState(false);
-  const [createError, setCreateError] = useState("");
+  const [creating, setCreating]     = useState(false);
+  const [createErr, setCreateErr]   = useState("");
 
-  const alias = (() => {
-    try {
-      const raw = localStorage.getItem("geass_profile");
-      if (raw) { const p = JSON.parse(raw) as { username?: string }; if (p.username) return p.username; }
-    } catch {}
-    return wallet.slice(0, 8);
-  })();
+  const postsRef = useRef<HTMLDivElement>(null);
 
-  const loadList = useCallback(() => {
+  // Load channels
+  const loadList = useCallback(async () => {
     setLoading(true);
-    fetch(`/api/community?wallet=${wallet}`)
-      .then(r => r.json())
-      .then((d: { communities: Community[] }) => setCommunities(d.communities ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    try {
+      const r = await fetch(`/api/community${wallet ? `?wallet=${wallet}` : ""}`);
+      if (r.ok) {
+        const data = await r.json() as { communities: Channel[] };
+        setChannels((data.communities ?? []).map(c => ({ ...c, isOwner: c.owner === wallet })));
+      }
+    } finally {
+      setLoading(false);
+    }
   }, [wallet]);
 
-  useEffect(() => { loadList(); }, [loadList]);
+  useEffect(() => { void loadList(); }, [loadList]);
 
-  useEffect(() => {
-    setLiveStreams([
-      { id: "1", hostAlias: "alpha_whale",    hostWallet: "abc", title: "Live TA: BONK breakout setup",       token: "BONK", viewerCount: 312, startedAt: Date.now() - 2700000, tags: ["ta", "meme", "solana"], streamType: "screen" },
-      { id: "2", hostAlias: "degen_trader",   hostWallet: "def", title: "Sniping new launches on Pump.fun",  token: "PUMP", viewerCount: 87,  startedAt: Date.now() - 900000,  tags: ["launch", "snipe"],     streamType: "cam"   },
-      { id: "3", hostAlias: "geass_sentinel", hostWallet: "ghi", title: "On-chain intel & wallet watching",              viewerCount: 54,  startedAt: Date.now() - 480000,  tags: ["onchain", "alpha"],    streamType: "voice" },
-    ]);
-  }, []);
-
-  const openChannel = (id: string) => {
-    setDetailLoad(true); setDetail(null); setView("channel");
-    setPostText(""); setJoinCode(""); setJoinError(""); setEditingPost(null);
-    setAttachments([]); setDetailTab("about"); setLocalMedia([]);
-    fetch(`/api/community/${id}?wallet=${wallet}`)
-      .then(r => r.json())
-      .then((d: CommunityDetail & { error?: string }) => {
-        if (d.error) { setView("list"); return; }
-        setDetail({ ...d, media: d.media ?? [] });
-      })
-      .catch(() => setView("list"))
-      .finally(() => setDetailLoad(false));
-  };
-
-  const joinChannel = async (id: string, code?: string) => {
-    const res = await fetch(`/api/community/${id}/join`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet, inviteCode: code }),
-    }).then(r => r.json()) as { ok?: boolean; error?: string };
-    if (!res.ok) { setJoinError(res.error ?? "Failed to join"); return; }
-    setJoinError(""); setJoinCode("");
-    openChannel(id); loadList();
-  };
-
-  const leaveChannel = async () => {
-    if (!detail) return;
-    await fetch(`/api/community/${detail.id}/leave`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ wallet }) });
-    openChannel(detail.id); loadList();
-  };
-
-  const submitPost = async () => {
-    if (!detail || !postText.trim()) return;
-    setPosting(true);
-    const res = await fetch(`/api/community/${detail.id}/post`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet, alias, text: postText.trim(), attachments }),
-    }).then(r => r.json()) as { post?: CommunityPost; error?: string };
-    if (res.post) {
-      setDetail(prev => prev ? { ...prev, posts: [{ ...res.post!, attachments }, ...prev.posts] } : prev);
-      setPostText(""); setAttachments([]);
-      onNewPost?.();
+  // Open channel
+  const openChannel = useCallback(async (id: string) => {
+    setActiveId(id);
+    setView("channel");
+    setDetailTab("posts");
+    setDetail(null);
+    setDetailLoading(true);
+    setJoinErr("");
+    setEditingCh(false);
+    try {
+      const r = await fetch(`/api/community/${id}${wallet ? `?wallet=${wallet}` : ""}`);
+      if (r.ok) setDetail(await r.json() as Channel);
+    } finally {
+      setDetailLoading(false);
     }
-    setPosting(false);
+  }, [wallet]);
+
+  // Post actions
+  const submitPost = async () => {
+    if (!detail || !postText.trim() || posting) return;
+    setPosting(true);
+    try {
+      const r = await fetch(`/api/community/${detail.id}/post`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet, alias: wallet.slice(0, 8), text: postText.trim(), tokenMint: tokenMint.trim() || undefined }),
+      });
+      if (r.ok) {
+        const data = await r.json() as { post: Post };
+        setDetail(prev => prev ? { ...prev, posts: [data.post, ...(prev.posts ?? [])] } : prev);
+        setPostText("");
+        setTokenMint("");
+      }
+    } finally {
+      setPosting(false);
+    }
   };
 
-  const deletePost = (postId: string) => {
-    setDetail(prev => prev ? { ...prev, posts: prev.posts.filter(p => p.id !== postId) } : prev);
-    fetch(`/api/community/${detail?.id}/post`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ postId, wallet }) }).catch(() => {});
+  const deletePost = async (postId: string) => {
+    if (!detail) return;
+    const r = await fetch(`/api/community/${detail.id}/post`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ postId, wallet }),
+    });
+    if (r.ok) setDetail(prev => prev ? { ...prev, posts: (prev.posts ?? []).filter(p => p.id !== postId) } : prev);
   };
 
-  const startEditPost = (post: CommunityPost) => {
-    setEditingPost({ id: post.id, text: post.text });
-    setEditText(post.text);
-  };
-
-  const saveEditPost = (postId: string) => {
-    if (!editText.trim()) return;
-    setDetail(prev => prev ? { ...prev, posts: prev.posts.map(p => p.id === postId ? { ...p, text: editText.trim() } : p) } : prev);
-    setEditingPost(null);
-    fetch(`/api/community/${detail?.id}/post`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ postId, text: editText.trim(), wallet }) }).catch(() => {});
+  const saveEditPost = async () => {
+    if (!detail || !editPost) return;
+    const r = await fetch(`/api/community/${detail.id}/post`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ postId: editPost.id, wallet, text: editText }),
+    });
+    if (r.ok) {
+      setDetail(prev => prev ? { ...prev, posts: (prev.posts ?? []).map(p => p.id === editPost.id ? { ...p, text: editText } : p) } : prev);
+      setEditPost(null);
+    }
   };
 
   const react = async (postId: string, reaction: "fire" | "gem" | "rug") => {
     if (!detail) return;
-    await fetch(`/api/community/${detail.id}/react`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ postId, reaction }) });
-    setDetail(prev => prev ? { ...prev, posts: prev.posts.map(p => p.id === postId ? { ...p, reactions: { ...p.reactions, [reaction]: p.reactions[reaction] + 1 } } : p) } : prev);
+    const r = await fetch(`/api/community/${detail.id}/react`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ postId, reaction }),
+    });
+    if (r.ok) {
+      setDetail(prev => prev ? {
+        ...prev,
+        posts: (prev.posts ?? []).map(p => p.id === postId
+          ? { ...p, reactions: { ...p.reactions, [reaction]: p.reactions[reaction] + 1 } }
+          : p),
+      } : prev);
+    }
   };
 
-  const createCommunity = async () => {
-    if (!form.name.trim()) { setCreateError("Name is required"); return; }
-    setCreating(true); setCreateError("");
-    const price = parseFloat(form.price) || 0;
-    const tags = form.tags.split(",").map(t => t.trim()).filter(Boolean);
-    const res = await fetch("/api/community", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, price, tags, owner: wallet, ownerAlias: alias, bannerUrl: localBanner }),
-    }).then(r => r.json()) as { community?: { id: string }; error?: string };
-    setCreating(false);
-    if (res.error) { setCreateError(res.error); return; }
-    loadList();
-    if (res.community) openChannel(res.community.id);
+  // Join / Leave
+  const joinChannel = async () => {
+    if (!detail) return;
+    setJoinErr("");
+    const r = await fetch(`/api/community/${detail.id}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet, inviteCode: joinCode || undefined }),
+    });
+    if (r.ok) {
+      setJoinCode("");
+      await openChannel(detail.id);
+      void loadList();
+    } else {
+      const d = await r.json() as { error?: string };
+      setJoinErr(d.error ?? "Failed to join");
+    }
   };
 
-  const handleBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; if (!f) return;
-    const r = new FileReader(); r.onload = ev => setLocalBanner(ev.target?.result as string); r.readAsDataURL(f);
+  const leaveChannel = async () => {
+    if (!detail) return;
+    const r = await fetch(`/api/community/${detail.id}/leave`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet }),
+    });
+    if (r.ok) {
+      await openChannel(detail.id);
+      void loadList();
+    }
   };
 
-  const handleMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; if (!f) return;
-    setUploadingMedia(true);
-    const r = new FileReader();
-    r.onload = ev => {
-      const isVideo = f.type.startsWith("video/");
-      setLocalMedia(prev => [...prev, { id: Math.random().toString(36).slice(2), type: isVideo ? "video" : "image", url: ev.target?.result as string, title: f.name, addedAt: Date.now() }]);
-      setUploadingMedia(false);
-    };
-    r.readAsDataURL(f);
+  // Edit channel
+  const openEditChannel = () => {
+    if (!detail) return;
+    setEditForm({
+      name: detail.name,
+      description: detail.description,
+      emoji: detail.emoji,
+      color: COLORS.includes(detail.color) ? detail.color : "#a855f7",
+      tags: detail.tags.join(", "),
+      type: detail.type,
+    });
+    setEditingCh(true);
   };
 
-  // ── Sort + filter ────────────────────────────────────────────────────────────
-  const filtered = communities
+  const saveChannel = async () => {
+    if (!detail) return;
+    const r = await fetch(`/api/community/${detail.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        wallet,
+        name:        editForm.name,
+        description: editForm.description,
+        emoji:       editForm.emoji,
+        color:       editForm.color,
+        tags:        editForm.tags.split(",").map(t => t.trim()).filter(Boolean),
+        type:        editForm.type,
+      }),
+    });
+    if (r.ok) {
+      setEditingCh(false);
+      await openChannel(detail.id);
+      void loadList();
+    }
+  };
+
+  // Create channel
+  const createChannel = async () => {
+    if (!form.name.trim() || !wallet || creating) return;
+    setCreating(true);
+    setCreateErr("");
+    try {
+      const r = await fetch("/api/community", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          wallet, ownerAlias: wallet.slice(0, 8),
+          name: form.name, description: form.description,
+          type: form.type, emoji: form.emoji, color: form.color,
+          tags: form.tags.split(",").map(t => t.trim()).filter(Boolean),
+        }),
+      });
+      if (r.ok) {
+        const data = await r.json() as { community: { id: string } };
+        await loadList();
+        await openChannel(data.community.id);
+      } else {
+        const d = await r.json() as { error?: string };
+        setCreateErr(d.error ?? "Failed to create");
+      }
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // Filtered + sorted list
+  const filtered = channels
     .filter(c => {
-      if (filterMine && !c.isMember) return false;
-      if (sortKey === "paid" && !(c.price && c.price > 0)) return false;
-      if (sortKey === "free" && (c.price && c.price > 0)) return false;
       if (search && !c.name.toLowerCase().includes(search.toLowerCase()) &&
-        !c.description.toLowerCase().includes(search.toLowerCase()) &&
-        !c.tags.some(t => t.toLowerCase().includes(search.toLowerCase()))) return false;
+          !c.description.toLowerCase().includes(search.toLowerCase())) return false;
+      if (filterMine && !c.isMember && !c.isOwner) return false;
       return true;
     })
     .sort((a, b) => {
-      if (sortKey === "active") return b.postCount - a.postCount;
-      if (sortKey === "newest") return b.createdAt - a.createdAt;
-      return b.memberCount - a.memberCount;
+      if (sortKey === "popular") return (b.memberCount ?? 0) - (a.memberCount ?? 0);
+      if (sortKey === "newest")  return b.createdAt - a.createdAt;
+      if (sortKey === "active")  return (b.postCount ?? 0) - (a.postCount ?? 0);
+      return 0;
     });
 
-  const isPaid   = !!(detail?.price && detail.price > 0);
   const isMember = detail?.isMember ?? false;
-  const isOwner  = detail?.isOwner ?? false;
-  const canAccess = isMember || !isPaid;
-  const allMedia = [...(detail?.media ?? []), ...localMedia];
+  const isOwner  = detail?.isOwner  ?? false;
 
-  const P: React.CSSProperties = { background: "#070708", border: "1px solid #18181c" };
-
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════════════════════
   // CREATE VIEW
-  // ═══════════════════════════════════════════════════════════════════════════
-  if (view === "create") return (
-    <div style={{ padding: isMobile ? "14px 14px 80px" : "20px 24px", maxWidth: 560 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-        <button onClick={() => { setView("list"); setCreateError(""); }}
-          style={{ background: "transparent", border: "1px solid #28282e", color: "#71717a", padding: "5px 12px", fontSize: 9, cursor: "pointer", fontFamily: MONO }}>
-          ← BACK
-        </button>
-        <div style={{ fontSize: 9, color: RED, fontFamily: MONO, letterSpacing: "2px", fontWeight: 700 }}>[ ■ NEW CHANNEL ]</div>
-      </div>
-
-      {/* Avatar */}
-      <div style={{ ...P, padding: "16px 18px", marginBottom: 12 }}>
-        <div style={{ fontSize: 8, color: "#52525b", letterSpacing: "1.5px", marginBottom: 10, fontFamily: MONO }}>CHANNEL AVATAR</div>
-        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-          <ChannelAvatar c={{ name: form.name || "CH", color: form.color, avatarUrl: form.avatarUrl || undefined }} size={52} />
-          <div style={{ flex: 1 }}>
-            <input ref={avatarCreateRef} type="file" accept="image/*"
-              onChange={e => { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = ev => setForm(prev => ({ ...prev, avatarUrl: ev.target?.result as string })); r.readAsDataURL(f); }}
-              style={{ display: "none" }} />
-            <button onClick={() => avatarCreateRef.current?.click()}
-              style={{ padding: "7px 14px", border: "1px solid #28282e", background: "transparent", color: "#71717a", fontSize: 9, cursor: "pointer", fontFamily: MONO, marginBottom: 10 }}>
-              📸 UPLOAD PHOTO
-            </button>
-            {form.avatarUrl && <button onClick={() => setForm(p => ({ ...p, avatarUrl: "" }))} style={{ marginLeft: 8, fontSize: 9, color: "#52525b", background: "transparent", border: "none", cursor: "pointer", fontFamily: MONO }}>REMOVE</button>}
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {COLORS.map(c => <button key={c} onClick={() => setForm(f => ({ ...f, color: c }))} style={{ width: 20, height: 20, background: c, border: `2px solid ${form.color === c ? "#fff" : "transparent"}`, cursor: "pointer" }} />)}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Banner upload */}
-      <div style={{ ...P, padding: "14px 18px", marginBottom: 12 }}>
-        <div style={{ fontSize: 8, color: "#52525b", letterSpacing: "1.5px", marginBottom: 10, fontFamily: MONO }}>CHANNEL BANNER</div>
-        <input ref={bannerFileRef} type="file" accept="image/*" onChange={handleBannerUpload} style={{ display: "none" }} />
-        {localBanner ? (
-          <div style={{ position: "relative" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={localBanner} alt="banner" style={{ width: "100%", height: 90, objectFit: "cover", display: "block", border: "1px solid #28282e" }} />
-            <button onClick={() => setLocalBanner(null)} style={{ position: "absolute", top: 4, right: 4, background: "#000000aa", border: "none", color: "#fff", fontSize: 12, width: 22, height: 22, cursor: "pointer" }}>×</button>
-          </div>
-        ) : (
-          <div onClick={() => bannerFileRef.current?.click()} style={{ border: "1px dashed #28282e", height: 70, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexDirection: "column", gap: 4 }}>
-            <div style={{ fontSize: 18 }}>🖼</div>
-            <div style={{ fontSize: 9, color: "#52525b", fontFamily: MONO }}>Upload banner image</div>
-          </div>
-        )}
-      </div>
-
-      {/* Fields */}
-      <div style={{ ...P, padding: "16px 18px", marginBottom: 12, display: "flex", flexDirection: "column", gap: 12 }}>
-        {[
-          { label: "CHANNEL NAME *",         key: "name",        placeholder: "e.g. Degen Lounge",           max: 40  },
-          { label: "DESCRIPTION",            key: "description", placeholder: "What is this channel about?", max: 300 },
-          { label: "TAGS (comma-separated)", key: "tags",        placeholder: "meme, solana, alpha",          max: 100 },
-        ].map(f => (
-          <div key={f.key}>
-            <div style={{ fontSize: 8, color: "#52525b", letterSpacing: "1.5px", marginBottom: 5, fontFamily: MONO }}>{f.label}</div>
-            <input value={form[f.key as keyof typeof form] as string}
-              onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
-              placeholder={f.placeholder} maxLength={f.max}
-              style={inputCss()} />
-          </div>
-        ))}
-      </div>
-
-      {/* Privacy + price */}
-      <div style={{ ...P, padding: "14px 18px", marginBottom: 12 }}>
-        <div style={{ fontSize: 8, color: "#52525b", letterSpacing: "1.5px", marginBottom: 10, fontFamily: MONO }}>PRIVACY & ACCESS</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
-          {(["public", "private"] as const).map(t => (
-            <button key={t} onClick={() => setForm(f => ({ ...f, type: t }))}
-              style={{ padding: "10px", border: `1px solid ${form.type === t ? (t === "private" ? "#f97316" : "#10b981") : "#28282e"}`, background: form.type === t ? (t === "private" ? "#f9731610" : "#10b98110") : "transparent", color: form.type === t ? (t === "private" ? "#f97316" : "#10b981") : "#52525b", cursor: "pointer", textAlign: "left", fontFamily: MONO }}>
-              <div style={{ fontSize: 16, marginBottom: 3 }}>{t === "public" ? "🌐" : "🔒"}</div>
-              <div style={{ fontSize: 10, fontWeight: 700 }}>{t === "public" ? "Public" : "Private"}</div>
-              <div style={{ fontSize: 8, opacity: .7, marginTop: 2 }}>{t === "public" ? "Anyone can join" : "Invite code required"}</div>
-            </button>
-          ))}
-        </div>
-        <div style={{ fontSize: 8, color: "#52525b", letterSpacing: "1.5px", marginBottom: 5, fontFamily: MONO }}>SUBSCRIPTION PRICE (SOL/month)</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <input type="number" min="0" step="0.001" value={form.price}
-            onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
-            placeholder="0 = free"
-            style={inputCss({ flex: 1 })} />
-          <span style={{ fontSize: 9, color: "#52525b", fontFamily: MONO, whiteSpace: "nowrap" }}>
-            {parseFloat(form.price) > 0 ? "💰 PAID" : "FREE"}
-          </span>
-        </div>
-        <div style={{ fontSize: 8, color: "#3f3f46", fontFamily: MONO, marginTop: 5 }}>Set 0 to keep the channel free. Subscribers pay via Solana wallet.</div>
-      </div>
-
-      {createError && <div style={{ fontSize: 10, color: "#ef4444", background: "#ef444410", border: "1px solid #ef444428", padding: "8px 12px", marginBottom: 12, fontFamily: MONO }}>{createError}</div>}
-      <button onClick={createCommunity} disabled={creating}
-        style={{ width: "100%", padding: 12, border: "none", background: creating ? "#1a1a1e" : RED, color: creating ? "#3f3f46" : "#fff", fontSize: 11, fontWeight: 800, cursor: creating ? "wait" : "pointer", fontFamily: MONO, letterSpacing: "1px" }}>
-        {creating ? "CREATING…" : "CREATE CHANNEL"}
-      </button>
-    </div>
-  );
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // CHANNEL DETAIL VIEW
-  // ═══════════════════════════════════════════════════════════════════════════
-  if (view === "channel") {
+  // ══════════════════════════════════════════════════════════════════════════════
+  if (view === "create") {
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-        {/* Modals */}
-        {attachModal   && <AddAttachModal type={attachModal} onAdd={a => { setAttachments(prev => [...prev, a]); setAttachModal(null); }} onClose={() => setAttachModal(null)} />}
-        {goLiveOpen    && <GoLiveModal alias={alias} wallet={wallet} onStart={s => { setLiveStreams(p => [s, ...p]); setGoLiveOpen(false); setWatchStream(s); }} onClose={() => setGoLiveOpen(false)} />}
-        {payModal      && detail && <PayModal channel={detail} onPaid={() => { setDetail(prev => prev ? { ...prev, isMember: true } : prev); setPayModal(false); }} onClose={() => setPayModal(false)} />}
-        {editChannelOpen && detail && (
-          <EditChannelModal detail={detail} onSave={updated => { setDetail(prev => prev ? { ...prev, ...updated } : prev); setEditChannelOpen(false); loadList(); }} onClose={() => setEditChannelOpen(false)} />
-        )}
-
-        {/* Back bar */}
-        <div style={{ padding: "8px 14px", borderBottom: "1px solid #18181c", background: "#050506", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
-          <button onClick={() => { setView("list"); setDetail(null); setWatchStream(null); }}
-            style={{ background: "transparent", border: "1px solid #28282e", color: "#71717a", padding: "4px 10px", fontSize: 9, cursor: "pointer", fontFamily: MONO }}>
-            ← CHANNELS
-          </button>
-          {detail && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
-              <ChannelAvatar c={detail} size={22} />
-              <span style={{ fontSize: 12, fontWeight: 800, color: "#e4e4e7", fontFamily: MONO, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{detail.name}</span>
-              {isPaid && <span style={{ fontSize: 7, color: "#f97316", background: "#f9731612", border: "1px solid #f9731628", padding: "1px 5px", fontFamily: MONO, flexShrink: 0 }}>PAID</span>}
-              {detail.type === "private" && <IconLock size={9} />}
-            </div>
-          )}
-          {detail && isOwner && (
-            <button onClick={() => setEditChannelOpen(true)}
-              style={{ fontSize: 8, padding: "4px 8px", border: "1px solid #28282e", background: "transparent", color: "#71717a", cursor: "pointer", fontFamily: MONO, flexShrink: 0 }}>
-              ✏ EDIT
+      <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? "14px 14px 80px" : "20px 28px" }}>
+        <div style={{ maxWidth: 560 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+            <button onClick={() => setView("list")}
+              style={{ background: "transparent", border: `1px solid ${BORDER}`, color: "#71717a", padding: "5px 12px", fontSize: 9, cursor: "pointer", fontFamily: MONO }}>
+              ← BACK
             </button>
-          )}
-          {detail && isMember && !isOwner && (
-            <button onClick={leaveChannel} style={{ fontSize: 8, padding: "4px 8px", border: "1px solid #ef444428", background: "#ef444408", color: "#ef4444", cursor: "pointer", fontFamily: MONO, flexShrink: 0 }}>LEAVE</button>
-          )}
-          {detail && isOwner && detail.inviteCode && (
-            <button onClick={() => { navigator.clipboard.writeText(detail.inviteCode!).catch(() => {}); setCodeCopied(true); setTimeout(() => setCodeCopied(false), 2000); }}
-              style={{ fontSize: 8, padding: "4px 8px", border: "1px solid #f9731628", background: "#f9731610", color: "#f97316", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontFamily: MONO, flexShrink: 0 }}>
-              <IconCopy size={8} />{codeCopied ? "COPIED" : `INVITE: ${detail.inviteCode}`}
-            </button>
-          )}
-        </div>
-
-        {detailLoad ? (
-          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ fontSize: 11, color: "#3f3f46", fontFamily: MONO }} className="pulse">LOADING CHANNEL…</span>
+            <span style={{ fontSize: 9, color: RED, fontFamily: MONO, letterSpacing: "2px", fontWeight: 700 }}>[ CREATE CHANNEL ]</span>
           </div>
-        ) : detail ? (
-          <>
-            {/* Banner */}
-            {(localBanner ?? detail.bannerUrl) && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={localBanner ?? detail.bannerUrl} alt="banner" style={{ width: "100%", height: isMobile ? 80 : 120, objectFit: "cover", flexShrink: 0, borderBottom: "1px solid #18181c" }} />
-            )}
 
-            {/* Channel header */}
-            <div style={{ padding: "12px 16px", borderBottom: "1px solid #18181c", background: "#050506", flexShrink: 0 }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                <ChannelAvatar c={detail} size={52} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
-                    <span style={{ fontSize: 15, fontWeight: 900, color: "#f4f4f5", fontFamily: MONO }}>{detail.name}</span>
-                    {isPaid && <span style={{ fontSize: 8, color: "#f97316", background: "#f9731612", border: "1px solid #f9731628", padding: "2px 6px", fontFamily: MONO }}>💰 {detail.price?.toFixed(3)} SOL/mo</span>}
-                    {detail.type === "private" && <span style={{ fontSize: 8, color: "#71717a", background: "#1a1a1e", border: "1px solid #28282e", padding: "2px 6px", fontFamily: MONO }}>PRIVATE</span>}
-                    {isMember && <span style={{ fontSize: 8, color: "#10b981", background: "#10b98110", border: "1px solid #10b98128", padding: "2px 6px", fontFamily: MONO }}>✓ MEMBER</span>}
-                  </div>
-                  <div style={{ fontSize: 10, color: "#71717a", fontFamily: MONO, marginBottom: 6, lineHeight: 1.5 }}>{detail.description}</div>
-                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 9, color: "#52525b", fontFamily: MONO }}><span style={{ color: "#a1a1aa", fontWeight: 700 }}>{detail.members.length}</span> members</span>
-                    <span style={{ fontSize: 9, color: "#52525b", fontFamily: MONO }}><span style={{ color: "#a1a1aa", fontWeight: 700 }}>{detail.posts.length}</span> posts</span>
-                    <span style={{ fontSize: 9, color: "#52525b", fontFamily: MONO }}><span style={{ color: RED, fontWeight: 700 }}>{liveStreams.length}</span> live</span>
-                  </div>
-                  <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
-                    {detail.tags.map(t => <span key={t} style={{ fontSize: 7, color: detail.color, background: detail.color + "12", border: `1px solid ${detail.color}28`, padding: "1px 5px", fontFamily: MONO }}>#{t}</span>)}
-                  </div>
-                </div>
+          {/* Live preview */}
+          <div style={{
+            background: SURFACE,
+            border: `1px solid ${form.color}40`,
+            padding: "16px 18px",
+            marginBottom: 24,
+            display: "flex", alignItems: "center", gap: 14,
+            boxShadow: `0 0 30px ${form.color}0a`,
+          }}>
+            <Avatar ch={form} size={52} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 900, color: "#f4f4f5", fontFamily: MONO, marginBottom: 4 }}>
+                {form.name || "Channel Name"}
               </div>
-
-              {/* Join / Subscribe CTA */}
-              {!isMember && (
-                <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  {detail.type === "private" && (
-                    <input value={joinCode} onChange={e => setJoinCode(e.target.value)} placeholder="Invite code"
-                      style={inputCss({ flex: 1, minWidth: 120, padding: "6px 10px" })} />
-                  )}
-                  {isPaid ? (
-                    <button onClick={() => setPayModal(true)}
-                      style={{ padding: "8px 18px", border: "none", background: "#f97316", color: "#fff", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: MONO }}>
-                      💰 SUBSCRIBE — {detail.price?.toFixed(3)} SOL/mo
-                    </button>
-                  ) : (
-                    <button onClick={() => joinChannel(detail.id, joinCode || undefined)}
-                      style={{ padding: "8px 18px", border: "none", background: detail.color, color: "#fff", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: MONO }}>
-                      JOIN CHANNEL
-                    </button>
-                  )}
-                  {joinError && <span style={{ fontSize: 9, color: "#ef4444", fontFamily: MONO }}>{joinError}</span>}
-                </div>
-              )}
+              <div style={{ fontSize: 10, color: "#71717a", fontFamily: MONO, lineHeight: 1.5, marginBottom: 6 }}>
+                {form.description || "Channel description…"}
+              </div>
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {form.tags.split(",").map(t => t.trim()).filter(Boolean).slice(0, 5).map(t => (
+                  <TagPill key={t} text={t} color={form.color} />
+                ))}
+              </div>
             </div>
+          </div>
 
-            {/* Tabs */}
-            <div style={{ display: "flex", borderBottom: "1px solid #18181c", background: "#050506", flexShrink: 0, overflowX: "auto" }}>
-              {([["about", "ABOUT"], ["posts", "POSTS"], ["media", "MEDIA"], ["live", "LIVE"]] as const).map(([id, lbl]) => (
-                <button key={id} onClick={() => { setDetailTab(id); setWatchStream(null); }}
-                  style={{ padding: "8px 16px", border: "none", borderBottom: detailTab === id ? `2px solid ${RED}` : "2px solid transparent", background: "transparent", color: detailTab === id ? RED : "#52525b", fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: MONO, letterSpacing: "1px", whiteSpace: "nowrap", position: "relative" }}>
-                  {lbl}
-                  {id === "live" && liveStreams.length > 0 && <span style={{ marginLeft: 4, background: RED, color: "#fff", fontSize: 7, fontWeight: 800, padding: "1px 4px" }}>{liveStreams.length}</span>}
-                </button>
-              ))}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1px", marginBottom: 6 }}>CHANNEL NAME *</div>
+              <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} maxLength={40} placeholder="e.g. Alpha Hunters"
+                style={{ ...inputCss, width: "100%", boxSizing: "border-box" }} />
             </div>
-
-            {/* Paywall */}
-            {isPaid && !isMember && detailTab !== "about" && (
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: 24 }}>
-                <div style={{ fontSize: 28 }}>🔒</div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: "#e4e4e7", fontFamily: MONO }}>Premium Content</div>
-                <div style={{ fontSize: 10, color: "#71717a", fontFamily: MONO, textAlign: "center", maxWidth: 280, lineHeight: 1.5 }}>
-                  Subscribe to access posts, media, and live streams in this channel.
-                </div>
-                <button onClick={() => setPayModal(true)}
-                  style={{ padding: "10px 24px", border: "none", background: "#f97316", color: "#fff", fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: MONO }}>
-                  💰 SUBSCRIBE — {detail.price?.toFixed(3)} SOL/mo
-                </button>
+            <div>
+              <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1px", marginBottom: 6 }}>DESCRIPTION</div>
+              <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} maxLength={200} rows={3}
+                style={{ ...inputCss, width: "100%", resize: "none", boxSizing: "border-box" }} />
+            </div>
+            <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 180 }}>
+                <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1px", marginBottom: 8 }}>EMOJI</div>
+                <EmojiPicker value={form.emoji} onChange={e => setForm(f => ({ ...f, emoji: e }))} />
               </div>
-            )}
-
-            {/* ── ABOUT TAB ──────────────────────────────────────────────────── */}
-            {detailTab === "about" && (
-              <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? "12px" : "16px 20px" }}>
-                {isOwner && (
-                  <div style={{ background: "#0a0a0c", border: `1px solid ${RED}28`, padding: "12px 14px", marginBottom: 14 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                      <div style={{ fontSize: 8, color: RED, fontFamily: MONO, letterSpacing: "1.5px" }}>[ ■ CHANNEL MANAGEMENT ]</div>
-                      <button onClick={() => setEditChannelOpen(true)}
-                        style={{ padding: "5px 12px", border: `1px solid ${RED}40`, background: RED + "10", color: RED, fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: MONO }}>
-                        ✏ EDIT CHANNEL
-                      </button>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <div>
-                        <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, marginBottom: 5 }}>BANNER IMAGE</div>
-                        <input ref={bannerFileRef} type="file" accept="image/*" onChange={handleBannerUpload} style={{ display: "none" }} />
-                        <button onClick={() => bannerFileRef.current?.click()}
-                          style={{ padding: "6px 12px", border: "1px solid #28282e", background: "transparent", color: "#71717a", fontSize: 9, cursor: "pointer", fontFamily: MONO }}>
-                          🖼 UPLOAD BANNER
-                        </button>
-                        {localBanner && <span style={{ fontSize: 9, color: "#10b981", fontFamily: MONO, marginLeft: 8 }}>✓</span>}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, marginBottom: 5 }}>ADD MEDIA</div>
-                        <input ref={mediaFileRef} type="file" accept="image/*,video/*" onChange={handleMediaUpload} style={{ display: "none" }} />
-                        <button onClick={() => mediaFileRef.current?.click()} disabled={uploadingMedia}
-                          style={{ padding: "6px 12px", border: "1px solid #28282e", background: "transparent", color: "#71717a", fontSize: 9, cursor: "pointer", fontFamily: MONO }}>
-                          {uploadingMedia ? "UPLOADING…" : "📸 ADD PHOTO/VIDEO"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ ...P, padding: "14px 16px", marginBottom: 12 }}>
-                  <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1.5px", marginBottom: 10 }}>CHANNEL INFO</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 16px", alignItems: "start" }}>
-                    {[
-                      ["OWNER",   detail.owner.slice(0, 8) + "…"],
-                      ["TYPE",    detail.type.toUpperCase()],
-                      ["MEMBERS", String(detail.members.length)],
-                      ["POSTS",   String(detail.posts.length)],
-                      ["ACCESS",  isPaid ? `${detail.price?.toFixed(3)} SOL/mo` : "FREE"],
-                      ["CREATED", new Date(detail.createdAt).toLocaleDateString()],
-                    ].map(([k, v]) => (
-                      <React.Fragment key={k}>
-                        <span style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1px", whiteSpace: "nowrap" }}>{k}</span>
-                        <span style={{ fontSize: 10, color: "#a1a1aa", fontFamily: MONO }}>{v}</span>
-                      </React.Fragment>
-                    ))}
-                  </div>
-                </div>
-                {detail.description && (
-                  <div style={{ ...P, padding: "14px 16px" }}>
-                    <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1.5px", marginBottom: 8 }}>DESCRIPTION</div>
-                    <div style={{ fontSize: 11, color: "#d4d4d8", fontFamily: MONO, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{detail.description}</div>
-                  </div>
-                )}
+              <div>
+                <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1px", marginBottom: 8 }}>COLOR</div>
+                <ColorPicker value={form.color} onChange={c => setForm(f => ({ ...f, color: c }))} />
               </div>
-            )}
-
-            {/* ── MEDIA TAB ──────────────────────────────────────────────────── */}
-            {detailTab === "media" && canAccess && (
-              <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? "10px" : "14px 18px" }}>
-                {isOwner && (
-                  <div style={{ marginBottom: 14, display: "flex", gap: 8, alignItems: "center" }}>
-                    <input ref={mediaFileRef} type="file" accept="image/*,video/*" onChange={handleMediaUpload} style={{ display: "none" }} />
-                    <button onClick={() => mediaFileRef.current?.click()} disabled={uploadingMedia}
-                      style={{ padding: "7px 14px", border: `1px solid ${RED}30`, background: RED + "0c", color: RED, fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: MONO }}>
-                      {uploadingMedia ? "UPLOADING…" : "+ ADD PHOTO / VIDEO"}
-                    </button>
-                  </div>
-                )}
-                {allMedia.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "40px 20px", color: "#3f3f46" }}>
-                    <div style={{ fontSize: 24, marginBottom: 8 }}>🖼</div>
-                    <div style={{ fontSize: 11, fontFamily: MONO }}>No media yet</div>
-                  </div>
-                ) : (
-                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(3,1fr)", gap: 6 }}>
-                    {allMedia.map(m => (
-                      <div key={m.id} style={{ background: "#0a0a0c", border: "1px solid #28282e", overflow: "hidden" }}>
-                        {m.type === "image" ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={m.url} alt={m.title} style={{ width: "100%", height: 110, objectFit: "cover", display: "block" }} />
-                        ) : (
-                          <video src={m.url} controls style={{ width: "100%", height: 110, background: "#000", display: "block" }} />
-                        )}
-                        {m.title && <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, padding: "4px 6px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.title}</div>}
-                      </div>
-                    ))}
-                  </div>
-                )}
+            </div>
+            <div>
+              <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1px", marginBottom: 6 }}>TAGS (comma separated)</div>
+              <input value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))} placeholder="alpha, degen, solana"
+                style={{ ...inputCss, width: "100%", boxSizing: "border-box" }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1px", marginBottom: 8 }}>VISIBILITY</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {(["public", "private"] as const).map(t => (
+                  <button key={t} type="button" onClick={() => setForm(f => ({ ...f, type: t }))}
+                    style={{ flex: 1, padding: "10px", border: `1px solid ${form.type === t ? form.color + "60" : BORDER}`, background: form.type === t ? form.color + "14" : "transparent", color: form.type === t ? form.color : "#71717a", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: MONO }}>
+                    {t === "public" ? "🌐 PUBLIC" : "🔒 PRIVATE"}
+                  </button>
+                ))}
               </div>
-            )}
-
-            {/* ── LIVE TAB ───────────────────────────────────────────────────── */}
-            {detailTab === "live" && canAccess && (
-              <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? "10px" : "14px 18px" }}>
-                {watchStream ? (
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                      <button onClick={() => setWatchStream(null)} style={{ background: "transparent", border: "1px solid #28282e", color: "#71717a", padding: "4px 10px", fontSize: 9, cursor: "pointer", fontFamily: MONO }}>← BACK</button>
-                      <div style={{ fontSize: 9, color: RED, fontFamily: MONO, letterSpacing: "1px" }}>● LIVE — {fmtViewers(watchStream.viewerCount)} VIEWERS</div>
-                    </div>
-                    <div style={{ background: "#0a0a0c", border: "1px solid #28282e", height: isMobile ? 180 : 300, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8, marginBottom: 12, position: "relative" }}>
-                      <div style={{ fontSize: 40 }}>{watchStream.streamType === "screen" ? "🖥" : watchStream.streamType === "cam" ? "📹" : "🎙"}</div>
-                      <div style={{ fontSize: 10, color: "#71717a", fontFamily: MONO }}>CONNECTING TO STREAM…</div>
-                      <div style={{ position: "absolute", top: 8, left: 8, background: RED, color: "#fff", fontSize: 8, fontFamily: MONO, fontWeight: 800, padding: "2px 6px", letterSpacing: "1px" }}>● LIVE</div>
-                      <div style={{ position: "absolute", top: 8, right: 8, background: "#00000099", color: "#a1a1aa", fontSize: 9, fontFamily: MONO, padding: "2px 8px", border: "1px solid #28282e" }}>{fmtViewers(watchStream.viewerCount)} viewers</div>
-                    </div>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: "#e4e4e7", fontFamily: MONO, marginBottom: 4 }}>{watchStream.title}</div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                      <span style={{ fontSize: 10, color: "#71717a", fontFamily: MONO }}>{watchStream.hostAlias}</span>
-                      {watchStream.token && <span style={{ fontSize: 9, color: RED, background: RED + "12", border: `1px solid ${RED}28`, padding: "1px 6px", fontFamily: MONO }}>${watchStream.token}</span>}
-                      <span style={{ fontSize: 8, color: "#3f3f46", fontFamily: MONO }}>{liveTime(watchStream.startedAt)} live</span>
-                    </div>
-                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                      {watchStream.tags.map(t => <span key={t} style={{ fontSize: 8, color: "#52525b", border: "1px solid #28282e", padding: "1px 5px", fontFamily: MONO }}>#{t}</span>)}
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {isMember && (
-                      <div style={{ background: RED + "08", border: `1px solid ${RED}22`, padding: "12px 14px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ fontSize: 22 }}>📡</div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 11, fontWeight: 800, color: "#e4e4e7", fontFamily: MONO }}>Start a Live Stream</div>
-                          <div style={{ fontSize: 9, color: "#71717a", fontFamily: MONO, marginTop: 2 }}>Share your screen, TA, or wallet watching — live with OBS / RTMP.</div>
-                        </div>
-                        <button onClick={() => setGoLiveOpen(true)}
-                          style={{ padding: "8px 16px", border: "none", background: RED, color: "#fff", fontSize: 10, fontWeight: 800, fontFamily: MONO, letterSpacing: "1px", cursor: "pointer", flexShrink: 0 }}>
-                          ● GO LIVE
-                        </button>
-                      </div>
-                    )}
-                    <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1.5px", marginBottom: 10 }}>LIVE NOW — {liveStreams.length} STREAM{liveStreams.length !== 1 ? "S" : ""}</div>
-                    {liveStreams.length === 0 ? (
-                      <div style={{ textAlign: "center", padding: "40px 20px" }}>
-                        <div style={{ fontSize: 24, marginBottom: 8 }}>📡</div>
-                        <div style={{ fontSize: 11, color: "#3f3f46", fontFamily: MONO }}>No active streams — be the first!</div>
-                      </div>
-                    ) : (
-                      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2,1fr)", gap: 10 }}>
-                        {liveStreams.map(s => <StreamCard key={s.id} stream={s} onWatch={() => setWatchStream(s)} />)}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* ── POSTS TAB ──────────────────────────────────────────────────── */}
-            {detailTab === "posts" && canAccess && (
-              <>
-                <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? "10px 12px" : "12px 18px", display: "flex", flexDirection: "column", gap: 7 }}>
-                  {detail.posts.length === 0 && (
-                    <div style={{ textAlign: "center", padding: "40px 20px", color: "#3f3f46" }}>
-                      <div style={{ fontSize: 22, marginBottom: 8 }}>💬</div>
-                      <div style={{ fontSize: 11, fontFamily: MONO }}>No posts yet — be the first!</div>
-                    </div>
-                  )}
-                  {detail.posts.map(post => {
-                    const isMyPost = post.author === wallet;
-                    const isEditing = editingPost?.id === post.id;
-                    return (
-                      <div key={post.id} style={{ background: "#070708", border: "1px solid #18181c", padding: "10px 12px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
-                          <div style={{ width: 26, height: 26, background: detail.color + "20", border: `1px solid ${detail.color}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: detail.color, flexShrink: 0, fontFamily: MONO }}>
-                            {post.authorAlias[0]?.toUpperCase() ?? "?"}
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, color: "#e4e4e7", display: "flex", alignItems: "center", gap: 5, fontFamily: MONO }}>
-                              {post.authorAlias}
-                              {isMyPost && <span style={{ fontSize: 7, color: "#3f3f46", background: "#18181c", padding: "1px 4px" }}>YOU</span>}
-                            </div>
-                            <div style={{ fontSize: 8, color: "#3f3f46", fontFamily: MONO }}>{timeAgo(post.createdAt)}</div>
-                          </div>
-                          {isMyPost && !isEditing && (
-                            <div style={{ display: "flex", gap: 4 }}>
-                              <button onClick={() => startEditPost(post)}
-                                style={{ fontSize: 8, padding: "2px 7px", border: "1px solid #28282e", background: "transparent", color: "#71717a", cursor: "pointer", fontFamily: MONO }}>
-                                ✏
-                              </button>
-                              <button onClick={() => deletePost(post.id)}
-                                style={{ fontSize: 8, padding: "2px 7px", border: "1px solid #ef444428", background: "#ef444408", color: "#ef4444", cursor: "pointer", fontFamily: MONO }}>
-                                ×
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                        {isEditing ? (
-                          <div style={{ marginBottom: 6 }}>
-                            <textarea value={editText} onChange={e => setEditText(e.target.value)}
-                              rows={3} maxLength={500}
-                              style={{ width: "100%", background: "#0a0a0c", border: `1px solid ${RED}40`, padding: "7px 10px", color: "#e4e4e7", fontSize: 11, outline: "none", resize: "none", fontFamily: MONO, boxSizing: "border-box" }} />
-                            <div style={{ display: "flex", gap: 6, marginTop: 5 }}>
-                              <button onClick={() => saveEditPost(post.id)}
-                                style={{ padding: "4px 12px", border: "none", background: RED, color: "#fff", fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: MONO }}>
-                                SAVE
-                              </button>
-                              <button onClick={() => setEditingPost(null)}
-                                style={{ padding: "4px 12px", border: "1px solid #28282e", background: "transparent", color: "#71717a", fontSize: 9, cursor: "pointer", fontFamily: MONO }}>
-                                CANCEL
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: 11, color: "#d4d4d8", lineHeight: 1.6, marginBottom: 6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{post.text}</div>
-                        )}
-                        {post.attachments && post.attachments.length > 0 && (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
-                            {post.attachments.map((a, i) => <AttachmentChip key={i} a={a} />)}
-                          </div>
-                        )}
-                        {post.tokenMint && (
-                          <a href={`https://pump.fun/${post.tokenMint}`} target="_blank" rel="noopener noreferrer"
-                            style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 8, color: "#a855f7", background: "#a855f710", border: "1px solid #a855f726", padding: "2px 7px", textDecoration: "none", marginBottom: 8, fontFamily: MONO }}>
-                            <IconArrowUpRight size={8} /> TOKEN: {post.tokenMint.slice(0, 8)}…
-                          </a>
-                        )}
-                        {!isEditing && (
-                          <div style={{ display: "flex", gap: 5 }}>
-                            {(["fire", "gem", "rug"] as const).map(r => (
-                              <button key={r} onClick={() => react(post.id, r)} style={{ fontSize: 10, padding: "2px 7px", border: "1px solid #28282e", background: "transparent", cursor: "pointer", color: "#71717a", fontFamily: MONO }}>
-                                {r === "fire" ? "🔥" : r === "gem" ? "💎" : "🚩"} {post.reactions[r] || ""}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Compose */}
-                {isMember && (
-                  <div style={{ padding: isMobile ? "8px 12px 72px" : "10px 18px", borderTop: "1px solid #18181c", background: "#050506", flexShrink: 0 }}>
-                    {attachments.length > 0 && (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
-                        {attachments.map((a, i) => <AttachmentChip key={i} a={a} onRemove={() => setAttachments(prev => prev.filter((_, j) => j !== i))} />)}
-                      </div>
-                    )}
-                    <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
-                      <textarea value={postText} onChange={e => setPostText(e.target.value)}
-                        onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitPost(); } }}
-                        placeholder="Share alpha, calls, or ideas… (Enter to post)"
-                        rows={2} maxLength={500}
-                        style={{ flex: 1, background: "#0a0a0c", border: "1px solid #28282e", padding: "8px 10px", color: "#e4e4e7", fontSize: 11, outline: "none", resize: "none", fontFamily: MONO }} />
-                      <button onClick={submitPost} disabled={posting || !postText.trim()}
-                        style={{ padding: "0 14px", height: 54, border: "none", background: posting || !postText.trim() ? "#1a1a1e" : RED, color: posting || !postText.trim() ? "#3f3f46" : "#fff", fontSize: 10, fontWeight: 800, cursor: posting || !postText.trim() ? "default" : "pointer", flexShrink: 0, fontFamily: MONO }}>
-                        {posting ? "…" : "POST"}
-                      </button>
-                    </div>
-                    <div style={{ display: "flex", gap: 4, marginTop: 5, alignItems: "center" }}>
-                      <span style={{ fontSize: 7, color: "#3f3f46", fontFamily: MONO, letterSpacing: "1px", marginRight: 4 }}>ATTACH:</span>
-                      {([["link", "🔗", "Link"], ["image", "🖼", "Image"], ["file", "📎", "File"], ["document", "📄", "Doc"]] as const).map(([type, ico, lbl]) => (
-                        <button key={type} onClick={() => setAttachModal(type)}
-                          style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 7px", border: "1px solid #28282e", background: "transparent", color: "#71717a", fontSize: 9, cursor: "pointer", fontFamily: MONO }}>
-                          {ico} {lbl}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </>
-        ) : null}
+            </div>
+            {createErr && <div style={{ fontSize: 10, color: "#ef4444", fontFamily: MONO }}>{createErr}</div>}
+            <button onClick={createChannel} disabled={creating || !form.name.trim() || !wallet}
+              style={{ padding: "13px", border: "none", background: creating || !form.name.trim() ? "#18181c" : RED, color: creating || !form.name.trim() ? "#3f3f46" : "#fff", fontSize: 11, fontWeight: 800, cursor: creating || !form.name.trim() ? "default" : "pointer", fontFamily: MONO, letterSpacing: "1.5px" }}>
+              {creating ? "CREATING…" : "CREATE CHANNEL"}
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // LIST VIEW
-  // ═══════════════════════════════════════════════════════════════════════════
-  return (
-    <div style={{ padding: isMobile ? "12px 12px 80px" : "18px 22px" }}>
+  // ══════════════════════════════════════════════════════════════════════════════
+  // LIST PANEL
+  // ══════════════════════════════════════════════════════════════════════════════
+  const listPanel = (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-        <div style={{ fontSize: 9, color: RED, fontFamily: MONO, letterSpacing: "2px", fontWeight: 700 }}>[ ■ CHANNELS ]</div>
-        <button onClick={() => { setView("create"); setForm({ name: "", description: "", type: "public", color: "#a855f7", tags: "", price: "0", avatarUrl: "" }); setCreateError(""); setLocalBanner(null); }}
-          style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", border: `1px solid ${RED}30`, background: RED + "0c", color: RED, fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: MONO }}>
-          <IconPlus size={10} /> NEW CHANNEL
+      <div style={{ padding: "10px 12px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        <span style={{ fontSize: 9, color: RED, fontFamily: MONO, letterSpacing: "2px", fontWeight: 700, flex: 1 }}>[ ■ CHANNELS ]</span>
+        <button
+          onClick={() => { setView("create"); setCreateErr(""); setForm({ name: "", description: "", type: "public", emoji: "🎯", color: "#a855f7", tags: "" }); }}
+          style={{ fontSize: 9, padding: "5px 11px", border: `1px solid ${RED}40`, background: RED + "0c", color: RED, cursor: "pointer", fontFamily: MONO, fontWeight: 700 }}>
+          + NEW
         </button>
-      </div>
-
-      {/* Search + filter */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
-        <div style={{ flex: 1, minWidth: 160, display: "flex", alignItems: "center", gap: 7, background: "#070708", border: "1px solid #18181c", padding: "7px 10px" }}>
-          <IconSearch size={11} style={{ color: "#3f3f46", flexShrink: 0 }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search channels…"
-            style={{ background: "transparent", border: "none", color: "#e4e4e7", fontSize: 11, outline: "none", flex: 1, minWidth: 0, fontFamily: MONO }} />
-        </div>
-        <button onClick={() => setFilterMine(v => !v)}
-          style={{ padding: "7px 12px", border: `1px solid ${filterMine ? RED + "40" : "#28282e"}`, background: filterMine ? RED + "0c" : "transparent", color: filterMine ? RED : "#52525b", fontSize: 9, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5, fontFamily: MONO }}>
-          {filterMine && <IconCheck size={9} />} MY CHANNELS
-        </button>
-      </div>
-
-      {/* Sort bar */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 14, overflowX: "auto", paddingBottom: 2, alignItems: "center" }}>
-        <span style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1px", whiteSpace: "nowrap", flexShrink: 0 }}>SORT:</span>
-        {([["popular", "POPULAR"], ["active", "MOST ACTIVE"], ["newest", "NEWEST"], ["paid", "PAID"], ["free", "FREE"]] as const).map(([k, lbl]) => (
-          <button key={k} onClick={() => setSortKey(k)}
-            style={{ padding: "4px 10px", border: `1px solid ${sortKey === k ? RED + "50" : "#28282e"}`, background: sortKey === k ? RED + "0c" : "transparent", color: sortKey === k ? RED : "#52525b", fontSize: 8, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", fontFamily: MONO, letterSpacing: ".5px" }}>
-            {lbl}
-          </button>
-        ))}
       </div>
 
       {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", background: BORDER, gap: "1px", borderBottom: `1px solid ${BORDER}`, flexShrink: 0 }}>
         {[
-          { l: "TOTAL",  v: communities.length,                                c: "#3b82f6" },
-          { l: "JOINED", v: communities.filter(c => c.isMember).length,        c: "#10b981" },
-          { l: "PAID",   v: communities.filter(c => c.price && c.price > 0).length, c: "#f97316" },
+          { l: "TOTAL",  v: channels.length,                         c: "#3b82f6" },
+          { l: "JOINED", v: channels.filter(c => c.isMember).length, c: "#10b981" },
+          { l: "OWNED",  v: channels.filter(c => c.isOwner).length,  c: RED },
         ].map(s => (
-          <div key={s.l} style={{ background: "#070708", border: "1px solid #18181c", padding: "8px 10px", textAlign: "center" }}>
+          <div key={s.l} style={{ background: BG, padding: "8px 10px", textAlign: "center" }}>
             <div style={{ fontSize: 18, fontWeight: 900, color: s.c, fontFamily: MONO }}>{s.v}</div>
-            <div style={{ fontSize: 7, color: "#52525b", letterSpacing: "1.5px", fontFamily: MONO }}>{s.l}</div>
+            <div style={{ fontSize: 7, color: "#52525b", fontFamily: MONO, letterSpacing: "1.5px" }}>{s.l}</div>
           </div>
         ))}
       </div>
 
-      {/* Live bar */}
-      {liveStreams.length > 0 && (
-        <div style={{ background: RED + "08", border: `1px solid ${RED}20`, padding: "8px 12px", marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ background: RED, color: "#fff", fontSize: 7, fontWeight: 800, fontFamily: MONO, padding: "2px 5px", letterSpacing: "1px", flexShrink: 0 }}>● LIVE</span>
-          <span style={{ fontSize: 9, color: "#a1a1aa", fontFamily: MONO }}>{liveStreams.length} active stream{liveStreams.length !== 1 ? "s" : ""} — enter any channel to watch</span>
+      {/* Search + filters */}
+      <div style={{ padding: "8px 10px", borderBottom: `1px solid ${BORDER}`, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, background: SURFACE, border: `1px solid ${BORDER2}`, padding: "6px 10px", marginBottom: 6 }}>
+          <span style={{ fontSize: 13, color: "#3f3f46", lineHeight: 1 }}>⌕</span>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search channels…"
+            style={{ background: "transparent", border: "none", color: "#e4e4e7", fontSize: 11, fontFamily: MONO, outline: "none", flex: 1 }} />
+        </div>
+        <div style={{ display: "flex", gap: 4 }}>
+          <button onClick={() => setFilterMine(v => !v)}
+            style={{ fontSize: 8, padding: "3px 9px", border: `1px solid ${filterMine ? RED + "40" : BORDER}`, background: filterMine ? RED + "0c" : "transparent", color: filterMine ? RED : "#52525b", cursor: "pointer", fontFamily: MONO, fontWeight: 700 }}>
+            {filterMine ? "✓ MINE" : "MINE"}
+          </button>
+          {(["popular", "newest", "active"] as const).map(k => (
+            <button key={k} onClick={() => setSortKey(k)}
+              style={{ flex: 1, fontSize: 7, padding: "3px 5px", border: `1px solid ${sortKey === k ? "#3b82f640" : BORDER}`, background: sortKey === k ? "#3b82f610" : "transparent", color: sortKey === k ? "#3b82f6" : "#52525b", cursor: "pointer", fontFamily: MONO }}>
+              {k.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Channel list */}
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        {loading && (
+          <div style={{ padding: "30px", textAlign: "center", fontSize: 11, color: "#3f3f46", fontFamily: MONO }} className="pulse">LOADING…</div>
+        )}
+        {!loading && filtered.length === 0 && (
+          <div style={{ padding: "40px 20px", textAlign: "center" }}>
+            <div style={{ fontSize: 26, marginBottom: 8 }}>📡</div>
+            <div style={{ fontSize: 11, color: "#3f3f46", fontFamily: MONO }}>
+              {search || filterMine ? "No channels found" : "No channels yet"}
+            </div>
+          </div>
+        )}
+        {filtered.map(ch => {
+          const active = activeId === ch.id;
+          return (
+            <div key={ch.id} onClick={() => openChannel(ch.id)}
+              style={{ cursor: "pointer", padding: "11px 13px", background: active ? "#0e0e12" : "transparent", borderLeft: `3px solid ${active ? ch.color : "transparent"}`, borderBottom: `1px solid ${BORDER}80`, display: "flex", alignItems: "center", gap: 10 }}>
+              <Avatar ch={ch} size={38} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 3 }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? "#f4f4f5" : "#a1a1aa", fontFamily: MONO, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {ch.name}
+                  </span>
+                  {ch.isMember && <span style={{ fontSize: 6, fontWeight: 700, color: "#10b981", background: "#10b98110", border: "1px solid #10b98120", padding: "1px 4px", fontFamily: MONO, flexShrink: 0 }}>✓</span>}
+                  {ch.type === "private" && <span style={{ fontSize: 9, color: "#71717a", flexShrink: 0 }}>🔒</span>}
+                </div>
+                <div style={{ fontSize: 9, color: "#52525b", fontFamily: MONO, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {ch.description}
+                </div>
+              </div>
+              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: active ? ch.color : "#71717a", fontFamily: MONO }}>{ch.memberCount ?? 0}</div>
+                <div style={{ fontSize: 7, color: "#3f3f46", fontFamily: MONO }}>mbrs</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  // CHANNEL PANEL
+  // ══════════════════════════════════════════════════════════════════════════════
+  const channelPanel = (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      {/* Top bar */}
+      <div style={{ padding: "8px 12px", borderBottom: `1px solid ${BORDER}`, background: BG, display: "flex", alignItems: "center", gap: 8, flexShrink: 0, minHeight: 40 }}>
+        {isMobile && (
+          <button onClick={() => { setView("list"); setDetail(null); setActiveId(null); }}
+            style={{ background: "transparent", border: `1px solid ${BORDER}`, color: "#71717a", padding: "4px 10px", fontSize: 9, cursor: "pointer", fontFamily: MONO, flexShrink: 0 }}>
+            ←
+          </button>
+        )}
+        {detail ? (
+          <>
+            <Avatar ch={detail} size={22} />
+            <span style={{ fontSize: 12, fontWeight: 800, color: "#e4e4e7", fontFamily: MONO, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {detail.name}
+            </span>
+            {isOwner && (
+              <button onClick={openEditChannel}
+                style={{ fontSize: 8, padding: "4px 10px", border: `1px solid ${BORDER}`, background: "transparent", color: "#71717a", cursor: "pointer", fontFamily: MONO, flexShrink: 0 }}>
+                ✏ EDIT
+              </button>
+            )}
+            {isMember && !isOwner && (
+              <button onClick={leaveChannel}
+                style={{ fontSize: 8, padding: "4px 10px", border: "1px solid #ef444428", background: "#ef444408", color: "#ef4444", cursor: "pointer", fontFamily: MONO, flexShrink: 0 }}>
+                LEAVE
+              </button>
+            )}
+            {isOwner && detail.inviteCode && (
+              <button onClick={() => navigator.clipboard.writeText(detail.inviteCode!).catch(() => {})}
+                style={{ fontSize: 8, padding: "4px 10px", border: "1px solid #f9731628", background: "#f9731610", color: "#f97316", cursor: "pointer", fontFamily: MONO, flexShrink: 0 }}>
+                📋 {detail.inviteCode}
+              </button>
+            )}
+          </>
+        ) : (!detailLoading && !isMobile && (
+          <span style={{ fontSize: 10, color: "#3f3f46", fontFamily: MONO }}>← Select a channel to begin</span>
+        ))}
+      </div>
+
+      {detailLoading && (
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ fontSize: 11, color: "#3f3f46", fontFamily: MONO }} className="pulse">LOADING CHANNEL…</span>
         </div>
       )}
 
-      {loading && <div style={{ textAlign: "center", padding: "40px 20px", color: "#3f3f46", fontFamily: MONO, fontSize: 11 }} className="pulse">LOADING…</div>}
-
-      {!loading && filtered.length === 0 && (
-        <div style={{ textAlign: "center", padding: "40px 20px" }}>
-          <div style={{ fontSize: 26, marginBottom: 8 }}>📡</div>
-          <div style={{ fontSize: 11, color: "#3f3f46", fontFamily: MONO, marginBottom: 12 }}>{search || filterMine ? "No channels match" : "No channels yet"}</div>
-          <button onClick={() => { setView("create"); setCreateError(""); }}
-            style={{ padding: "7px 16px", border: `1px solid ${RED}30`, background: RED + "0c", color: RED, fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: MONO }}>
-            + CREATE ONE
+      {!detailLoading && !detail && !isMobile && (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
+          <div style={{ fontSize: 42 }}>📡</div>
+          <div style={{ fontSize: 13, color: "#3f3f46", fontFamily: MONO }}>Select a channel to view</div>
+          <button
+            onClick={() => { setView("create"); setCreateErr(""); setForm({ name: "", description: "", type: "public", emoji: "🎯", color: "#a855f7", tags: "" }); }}
+            style={{ marginTop: 4, padding: "9px 20px", border: `1px solid ${RED}30`, background: RED + "0c", color: RED, fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: MONO, letterSpacing: "1px" }}>
+            + CREATE CHANNEL
           </button>
         </div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {filtered.map(c => (
-          <div key={c.id} onClick={() => openChannel(c.id)}
-            style={{ background: "#070708", border: `1px solid ${c.isMember ? c.color + "30" : "#18181c"}`, cursor: "pointer", overflow: "hidden" }}>
-            {c.bannerUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={c.bannerUrl} alt="" style={{ width: "100%", height: 44, objectFit: "cover", display: "block", borderBottom: "1px solid #18181c" }} />
-            )}
-            <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ position: "relative", flexShrink: 0 }}>
-                <ChannelAvatar c={c} size={40} />
-                {c.type === "private" && (
-                  <div style={{ position: "absolute", bottom: -3, right: -3, background: "#f97316", width: 12, height: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <IconLock size={7} />
-                  </div>
-                )}
-              </div>
+      {detail && !detailLoading && (
+        <>
+          {/* Channel header with gradient */}
+          <div style={{
+            padding: "14px 16px",
+            borderBottom: `1px solid ${BORDER}`,
+            flexShrink: 0,
+            background: `linear-gradient(135deg, ${detail.color}0e 0%, #000 80%)`,
+          }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+              <Avatar ch={detail} size={52} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 3, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: "#e4e4e7", fontFamily: MONO }}>{c.name}</span>
-                  {c.isMember && <span style={{ fontSize: 7, fontWeight: 700, color: "#10b981", background: "#10b98110", border: "1px solid #10b98126", padding: "1px 5px", fontFamily: MONO }}>MEMBER</span>}
-                  {c.type === "private" && <span style={{ fontSize: 7, fontWeight: 700, color: "#f97316", background: "#f9731610", border: "1px solid #f9731626", padding: "1px 5px", fontFamily: MONO }}>PRIVATE</span>}
-                  {c.price && c.price > 0 && <span style={{ fontSize: 7, fontWeight: 700, color: "#f97316", background: "#f9731610", border: "1px solid #f9731626", padding: "1px 5px", fontFamily: MONO }}>💰 {c.price.toFixed(3)} SOL</span>}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
+                  <span style={{ fontSize: 16, fontWeight: 900, color: "#f4f4f5", fontFamily: MONO }}>{detail.name}</span>
+                  {detail.type === "private" && (
+                    <span style={{ fontSize: 8, color: "#71717a", background: "#1a1a1e", border: `1px solid ${BORDER}`, padding: "1px 5px", fontFamily: MONO }}>🔒 PRIVATE</span>
+                  )}
+                  {isMember && !isOwner && (
+                    <span style={{ fontSize: 8, color: "#10b981", background: "#10b98110", border: "1px solid #10b98128", padding: "1px 5px", fontFamily: MONO }}>✓ MEMBER</span>
+                  )}
+                  {isOwner && (
+                    <span style={{ fontSize: 8, color: RED, background: RED + "10", border: `1px solid ${RED}28`, padding: "1px 5px", fontFamily: MONO }}>OWNER</span>
+                  )}
                 </div>
-                <div style={{ fontSize: 9, color: "#52525b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 4, fontFamily: MONO }}>{c.description}</div>
+                <div style={{ fontSize: 10, color: "#71717a", fontFamily: MONO, marginBottom: 6, lineHeight: 1.5 }}>{detail.description}</div>
+                <div style={{ display: "flex", gap: 14, marginBottom: 6, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 9, fontFamily: MONO }}>
+                    <span style={{ color: detail.color, fontWeight: 700 }}>{detail.members?.length ?? 0}</span>
+                    <span style={{ color: "#52525b" }}> members</span>
+                  </span>
+                  <span style={{ fontSize: 9, fontFamily: MONO }}>
+                    <span style={{ color: "#a1a1aa", fontWeight: 700 }}>{detail.posts?.length ?? 0}</span>
+                    <span style={{ color: "#52525b" }}> posts</span>
+                  </span>
+                </div>
                 <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                  {c.tags.slice(0, 3).map(t => <span key={t} style={{ fontSize: 7, color: c.color, background: c.color + "10", border: `1px solid ${c.color}26`, padding: "1px 5px", fontFamily: MONO }}>#{t}</span>)}
+                  {detail.tags.map(t => <TagPill key={t} text={t} color={detail.color} />)}
                 </div>
-              </div>
-              <div style={{ textAlign: "right", flexShrink: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#a1a1aa", fontFamily: MONO }}>{c.memberCount}</div>
-                <div style={{ fontSize: 8, color: "#3f3f46", fontFamily: MONO }}>members</div>
-                <div style={{ fontSize: 8, color: "#3f3f46", marginTop: 2, fontFamily: MONO }}>{c.postCount} posts</div>
               </div>
             </div>
+
+            {!isMember && (
+              <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                {detail.type === "private" && (
+                  <input value={joinCode} onChange={e => setJoinCode(e.target.value)} placeholder="Enter invite code"
+                    style={{ ...inputCss, flex: 1, minWidth: 120, padding: "6px 10px" }} />
+                )}
+                <button onClick={joinChannel}
+                  style={{ padding: "9px 22px", border: "none", background: detail.color, color: "#fff", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: MONO }}>
+                  JOIN CHANNEL
+                </button>
+                {joinErr && <span style={{ fontSize: 9, color: "#ef4444", fontFamily: MONO }}>{joinErr}</span>}
+              </div>
+            )}
           </div>
-        ))}
+
+          {/* Tab bar */}
+          <div style={{ display: "flex", borderBottom: `1px solid ${BORDER}`, background: BG, flexShrink: 0 }}>
+            {(["posts", "about"] as const).map(tab => (
+              <button key={tab} onClick={() => { setDetailTab(tab); setEditingCh(false); }}
+                style={{ padding: "9px 20px", border: "none", borderBottom: detailTab === tab ? `2px solid ${detail.color}` : "2px solid transparent", background: "transparent", color: detailTab === tab ? detail.color : "#52525b", fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: MONO, letterSpacing: "1.5px" }}>
+                {tab.toUpperCase()}
+              </button>
+            ))}
+          </div>
+
+          {/* ── POSTS TAB ──────────────────────────────────────────────── */}
+          {detailTab === "posts" && (
+            <>
+              <div ref={postsRef} style={{ flex: 1, overflowY: "auto", padding: isMobile ? "10px 12px" : "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+                {(detail.posts ?? []).length === 0 && (
+                  <div style={{ textAlign: "center", padding: "40px 20px", color: "#3f3f46" }}>
+                    <div style={{ fontSize: 26, marginBottom: 8 }}>💬</div>
+                    <div style={{ fontSize: 11, fontFamily: MONO }}>
+                      {isMember ? "No posts yet — be the first!" : "Join to see and post in this channel."}
+                    </div>
+                  </div>
+                )}
+                {(detail.posts ?? []).map(post => {
+                  const mine = post.author === wallet;
+                  const isEditing = editPost?.id === post.id;
+                  return (
+                    <div key={post.id} style={{
+                      background: "#080809",
+                      border: `1px solid ${mine ? detail.color + "22" : BORDER}`,
+                      padding: "10px 12px",
+                      borderLeft: `3px solid ${mine ? detail.color + "70" : "transparent"}`,
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7 }}>
+                        <div style={{
+                          width: 26, height: 26, flexShrink: 0,
+                          background: mine ? detail.color + "18" : "#111113",
+                          border: `1px solid ${mine ? detail.color + "40" : BORDER2}`,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 10, fontWeight: 800, color: mine ? detail.color : "#52525b", fontFamily: MONO,
+                        }}>
+                          {post.authorAlias[0]?.toUpperCase() ?? "?"}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: mine ? detail.color : "#a1a1aa", fontFamily: MONO }}>{post.authorAlias}</span>
+                          {mine && <span style={{ fontSize: 7, color: "#3f3f46", background: "#111113", padding: "1px 4px", marginLeft: 5, fontFamily: MONO }}>YOU</span>}
+                          <span style={{ fontSize: 8, color: "#3f3f46", fontFamily: MONO, marginLeft: 8 }}>{ago(post.createdAt)}</span>
+                        </div>
+                        {mine && !isEditing && (
+                          <div style={{ display: "flex", gap: 3 }}>
+                            <button onClick={() => { setEditPost(post); setEditText(post.text); }}
+                              style={{ fontSize: 8, padding: "2px 7px", border: `1px solid ${BORDER}`, background: "transparent", color: "#52525b", cursor: "pointer", fontFamily: MONO }}>✏</button>
+                            <button onClick={() => deletePost(post.id)}
+                              style={{ fontSize: 8, padding: "2px 7px", border: "1px solid #ef444428", background: "#ef444408", color: "#ef4444", cursor: "pointer", fontFamily: MONO }}>×</button>
+                          </div>
+                        )}
+                      </div>
+                      {isEditing ? (
+                        <div>
+                          <textarea value={editText} onChange={e => setEditText(e.target.value)} rows={3} maxLength={500}
+                            style={{ ...inputCss, width: "100%", resize: "none", boxSizing: "border-box", border: `1px solid ${RED}40` }} />
+                          <div style={{ display: "flex", gap: 6, marginTop: 5 }}>
+                            <button onClick={saveEditPost}
+                              style={{ padding: "4px 14px", border: "none", background: RED, color: "#fff", fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: MONO }}>SAVE</button>
+                            <button onClick={() => setEditPost(null)}
+                              style={{ padding: "4px 14px", border: `1px solid ${BORDER}`, background: "transparent", color: "#71717a", fontSize: 9, cursor: "pointer", fontFamily: MONO }}>CANCEL</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 12, color: "#d4d4d8", lineHeight: 1.65, marginBottom: 8, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                            {post.text}
+                          </div>
+                          {post.tokenMint && (
+                            <a href={`https://pump.fun/${post.tokenMint}`} target="_blank" rel="noopener noreferrer"
+                              style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 8, color: "#a855f7", background: "#a855f710", border: "1px solid #a855f726", padding: "2px 8px", textDecoration: "none", marginBottom: 8, fontFamily: MONO }}>
+                              ↗ TOKEN: {post.tokenMint.slice(0, 12)}…
+                            </a>
+                          )}
+                          <div style={{ display: "flex", gap: 4 }}>
+                            {(["fire", "gem", "rug"] as const).map(r => (
+                              <button key={r} onClick={() => react(post.id, r)}
+                                style={{ padding: "2px 9px", border: "1px solid #1e1e22", background: "#060607", cursor: "pointer", fontSize: 10, fontFamily: MONO, display: "flex", alignItems: "center", gap: 4, color: "#71717a" }}>
+                                {r === "fire" ? "🔥" : r === "gem" ? "💎" : "🚩"}
+                                {post.reactions[r] > 0 && <span style={{ fontSize: 9, color: "#a1a1aa" }}>{post.reactions[r]}</span>}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {isMember && (
+                <div style={{ padding: isMobile ? "8px 12px 72px" : "10px 16px", borderTop: `1px solid ${BORDER}`, background: BG, flexShrink: 0 }}>
+                  <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
+                    <textarea
+                      value={postText}
+                      onChange={e => setPostText(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void submitPost(); } }}
+                      placeholder="Share alpha, a call, or a thought… (Enter to post)"
+                      rows={2} maxLength={500}
+                      style={{ ...inputCss, flex: 1, resize: "none", border: `1px solid ${postText.trim() ? detail.color + "45" : BORDER2}` }}
+                    />
+                    <button onClick={submitPost} disabled={posting || !postText.trim()}
+                      style={{ padding: "0 16px", height: 55, border: "none", background: posting || !postText.trim() ? "#18181c" : RED, color: posting || !postText.trim() ? "#3f3f46" : "#fff", fontSize: 10, fontWeight: 800, cursor: posting || !postText.trim() ? "default" : "pointer", flexShrink: 0, fontFamily: MONO, letterSpacing: "1px" }}>
+                      {posting ? "…" : "POST"}
+                    </button>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}>
+                    <span style={{ fontSize: 8, color: "#3f3f46", fontFamily: MONO, flexShrink: 0 }}>TOKEN MINT:</span>
+                    <input value={tokenMint} onChange={e => setTokenMint(e.target.value)} placeholder="optional — links to pump.fun"
+                      style={{ ...inputCss, flex: 1, padding: "4px 8px", fontSize: 9 }} />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── ABOUT TAB ──────────────────────────────────────────────── */}
+          {detailTab === "about" && (
+            <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? "12px" : "16px 20px" }}>
+              {isOwner && !editingCh && (
+                <button onClick={openEditChannel}
+                  style={{ width: "100%", padding: "10px", border: `1px solid ${RED}30`, background: RED + "08", color: RED, fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: MONO, marginBottom: 16 }}>
+                  ✏ EDIT CHANNEL SETTINGS
+                </button>
+              )}
+
+              {isOwner && editingCh && (
+                <div style={{ background: SURFACE, border: `1px solid ${RED}30`, padding: "16px", marginBottom: 16 }}>
+                  <div style={{ fontSize: 8, color: RED, fontFamily: MONO, letterSpacing: "1.5px", marginBottom: 14 }}>[ EDIT CHANNEL ]</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, marginBottom: 5 }}>NAME</div>
+                      <input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} maxLength={40}
+                        style={{ ...inputCss, width: "100%", boxSizing: "border-box" }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, marginBottom: 5 }}>DESCRIPTION</div>
+                      <textarea value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} rows={3} maxLength={200}
+                        style={{ ...inputCss, width: "100%", resize: "none", boxSizing: "border-box" }} />
+                    </div>
+                    <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                      <div style={{ flex: 1, minWidth: 150 }}>
+                        <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, marginBottom: 6 }}>EMOJI</div>
+                        <EmojiPicker value={editForm.emoji} onChange={e => setEditForm(f => ({ ...f, emoji: e }))} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, marginBottom: 6 }}>COLOR</div>
+                        <ColorPicker value={editForm.color} onChange={c => setEditForm(f => ({ ...f, color: c }))} />
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, marginBottom: 5 }}>TAGS</div>
+                      <input value={editForm.tags} onChange={e => setEditForm(f => ({ ...f, tags: e.target.value }))}
+                        style={{ ...inputCss, width: "100%", boxSizing: "border-box" }} />
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {(["public", "private"] as const).map(t => (
+                        <button key={t} type="button" onClick={() => setEditForm(f => ({ ...f, type: t }))}
+                          style={{ flex: 1, padding: "8px", border: `1px solid ${editForm.type === t ? editForm.color + "55" : BORDER}`, background: editForm.type === t ? editForm.color + "12" : "transparent", color: editForm.type === t ? editForm.color : "#71717a", fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: MONO }}>
+                          {t === "public" ? "🌐 PUBLIC" : "🔒 PRIVATE"}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={saveChannel}
+                        style={{ flex: 1, padding: "10px", border: "none", background: RED, color: "#fff", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: MONO }}>
+                        SAVE CHANGES
+                      </button>
+                      <button onClick={() => setEditingCh(false)}
+                        style={{ padding: "10px 16px", border: `1px solid ${BORDER}`, background: "transparent", color: "#71717a", fontSize: 9, cursor: "pointer", fontFamily: MONO }}>
+                        CANCEL
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, padding: "14px 16px", marginBottom: 12 }}>
+                <div style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1.5px", marginBottom: 12 }}>CHANNEL INFO</div>
+                <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 20px", alignItems: "start" }}>
+                  {[
+                    ["OWNER",   `${detail.owner.slice(0, 8)}…`],
+                    ["TYPE",    detail.type.toUpperCase()],
+                    ["MEMBERS", String(detail.members?.length ?? 0)],
+                    ["POSTS",   String(detail.posts?.length ?? 0)],
+                    ["CREATED", new Date(detail.createdAt).toLocaleDateString()],
+                  ].map(([k, v]) => (
+                    <React.Fragment key={k}>
+                      <span style={{ fontSize: 8, color: "#52525b", fontFamily: MONO, letterSpacing: "1px", whiteSpace: "nowrap" }}>{k}</span>
+                      <span style={{ fontSize: 10, color: "#a1a1aa", fontFamily: MONO }}>{v}</span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+
+              {isOwner && detail.inviteCode && (
+                <div style={{ background: "#f9731608", border: "1px solid #f9731628", padding: "12px 14px", marginBottom: 12 }}>
+                  <div style={{ fontSize: 8, color: "#f97316", fontFamily: MONO, letterSpacing: "1.5px", marginBottom: 8 }}>INVITE CODE — share with members</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 18, fontWeight: 900, color: "#f97316", fontFamily: MONO, letterSpacing: "4px" }}>{detail.inviteCode}</span>
+                    <button onClick={() => navigator.clipboard.writeText(detail.inviteCode!).catch(() => {})}
+                      style={{ fontSize: 8, padding: "4px 10px", border: "1px solid #f9731630", background: "#f9731612", color: "#f97316", cursor: "pointer", fontFamily: MONO }}>
+                      COPY
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {detail.tags.length > 0 && (
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  {detail.tags.map(t => <TagPill key={t} text={t} color={detail.color} />)}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  // LAYOUT
+  // ══════════════════════════════════════════════════════════════════════════════
+
+  if (isMobile) {
+    if (view === "channel") {
+      return <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>{channelPanel}</div>;
+    }
+    return <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>{listPanel}</div>;
+  }
+
+  return (
+    <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+      <div style={{ width: 300, minWidth: 260, borderRight: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        {listPanel}
+      </div>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        {channelPanel}
       </div>
     </div>
   );

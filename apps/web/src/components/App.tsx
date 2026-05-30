@@ -1137,7 +1137,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
         </div>
         )}
 
-        <main style={{ flex: 1, overflow: "auto" }}>
+        <main style={{ flex: 1, overflow: tab === "community" ? "hidden" : "auto", display: "flex", flexDirection: "column" }}>
           {snipeGem && <SnipeModal gem={snipeGem} wallet={wallet} onClose={() => setSnipeGem(null)} />}
           {jupModal && (
             <JupiterSwapModal

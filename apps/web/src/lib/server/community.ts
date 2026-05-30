@@ -205,3 +205,31 @@ export async function reactToPost(communityId: string, postId: string, reaction:
   await persist(c);
   return { ok: true };
 }
+
+export interface UpdateInput {
+  name?: string;
+  description?: string;
+  type?: "public" | "private";
+  emoji?: string;
+  color?: string;
+  tags?: string[];
+}
+
+export async function updateCommunity(id: string, wallet: string, updates: UpdateInput): Promise<{ ok: boolean; error?: string }> {
+  const c = await load(id);
+  if (!c) return { ok: false, error: "Not found" };
+  if (c.owner !== wallet) return { ok: false, error: "Not authorized" };
+  if (updates.name !== undefined) c.name = updates.name.trim().slice(0, 40);
+  if (updates.description !== undefined) c.description = updates.description.trim().slice(0, 200);
+  if (updates.type !== undefined) {
+    c.type = updates.type;
+    if (updates.type === "private" && !c.inviteCode) {
+      c.inviteCode = Math.random().toString(36).slice(2, 10).toUpperCase();
+    }
+  }
+  if (updates.emoji !== undefined) c.emoji = updates.emoji.slice(0, 4);
+  if (updates.color !== undefined) c.color = updates.color.slice(0, 9);
+  if (updates.tags !== undefined) c.tags = updates.tags.slice(0, 10).map(t => t.trim().slice(0, 20)).filter(Boolean);
+  await persist(c);
+  return { ok: true };
+}
