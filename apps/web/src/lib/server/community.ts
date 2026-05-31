@@ -1,5 +1,12 @@
 import "server-only";
 import { redis } from "./redis";
+import { CREATOR_USERNAMES, getProfile } from "./profile";
+
+async function isCreatorWallet(wallet: string): Promise<boolean> {
+  if (!wallet) return false;
+  const profile = await getProfile(wallet);
+  return !!profile && CREATOR_USERNAMES.some(u => u.toLowerCase() === profile.username.toLowerCase());
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -255,10 +262,53 @@ export async function deletePost(communityId: string, postId: string, wallet: st
   const c = await load(communityId);
   if (!c) return { ok: false };
   const post = c.posts.find(p => p.id === postId);
-  if (!post || (post.author !== wallet && c.owner !== wallet)) return { ok: false };
+  if (!post) return { ok: false };
+  const creatorAdmin = await isCreatorWallet(wallet);
+  if (!creatorAdmin && post.author !== wallet && c.owner !== wallet) return { ok: false };
   c.posts = c.posts.filter(p => p.id !== postId);
   await persist(c);
   return { ok: true };
+}
+
+export async function deleteCommunity(id: string, wallet: string): Promise<{ ok: boolean; error?: string }> {
+  const c = await load(id);
+  if (!c) return { ok: false, error: "Not found" };
+  const creatorAdmin = await isCreatorWallet(wallet);
+  if (!creatorAdmin && c.owner !== wallet) return { ok: false, error: "Not authorized" };
+  cache.delete(id);
+  await redis.set(KEY(id), null as unknown as Community, 1);
+  const ids = (await redis.get<string[]>(KEY_IDS)) ?? [];
+  await redis.set(KEY_IDS, ids.filter(i => i !== id), 30 * 24 * 3600);
+  return { ok: true };
+}
+
+export async function getFlaggedPosts(): Promise<{ communityId: string; communityName: string; post: CommunityPost }[]> {
+  const ids = (await redis.get<string[]>(KEY_IDS)) ?? [...cache.keys()];
+  const all = await Promise.all(ids.map(id => load(id)));
+  const result: { communityId: string; communityName: string; post: CommunityPost }[] = [];
+  for (const c of all.filter(Boolean) as Community[]) {
+    for (const post of c.posts) {
+      if (post.flagged) result.push({ communityId: c.id, communityName: c.name, post });
+    }
+  }
+  return result.sort((a, b) => b.post.createdAt - a.post.createdAt);
+}
+
+export async function getAdminStats(): Promise<{
+  totalCommunities: number; totalPosts: number; totalMembers: number;
+  flaggedPosts: number; publicChannels: number;
+}> {
+  const ids = (await redis.get<string[]>(KEY_IDS)) ?? [...cache.keys()];
+  const all = (await Promise.all(ids.map(id => load(id)))).filter(Boolean) as Community[];
+  const memberSet = new Set<string>();
+  let totalPosts = 0, flaggedPosts = 0, publicChannels = 0;
+  for (const c of all) {
+    totalPosts += c.posts.length;
+    flaggedPosts += c.posts.filter(p => p.flagged).length;
+    if (c.type === "public") publicChannels++;
+    c.members.forEach(m => memberSet.add(m));
+  }
+  return { totalCommunities: all.length, totalPosts, totalMembers: memberSet.size, flaggedPosts, publicChannels };
 }
 
 export async function editPost(communityId: string, postId: string, wallet: string, newText: string): Promise<{ ok: boolean }> {

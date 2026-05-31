@@ -71,7 +71,7 @@ export const NAV: NavItem[] = [
 
   // ── Community ─────────────────────────────────────────────────────────────
   { id: "marketplace",  label: "Marketplace",  iconId: "tag",   section: "COMMUNITY" },
-  { id: "community",    label: "Channel",       iconId: "users", comingSoon: true },
+  { id: "community",    label: "Channel",       iconId: "users" },
   { id: "predictions",  label: "Predictions",   iconId: "chart", comingSoon: true },
 
   // ── Hidden from sidebar (mobile only / stream) ────────────────────────────

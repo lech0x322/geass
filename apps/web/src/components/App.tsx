@@ -2399,6 +2399,7 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
             <CommunityTab
               wallet={wallet}
               isMobile={isMobile}
+              isCreator={pro.isCreator}
               onBuy={(mint) => { setCtMintAddress(mint); setTab("gems"); }}
             />
           )}

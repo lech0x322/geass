@@ -452,10 +452,11 @@ function CreateForm({ wallet, walletAlias, walletEmoji, onCreated }: {
 interface Props {
   wallet: string;
   isMobile?: boolean;
+  isCreator?: boolean;
   onBuy?: (mint: string, symbol: string) => void;
 }
 
-export function CommunityTab({ wallet, isMobile, onBuy }: Props) {
+export function CommunityTab({ wallet, isMobile, isCreator = false, onBuy }: Props) {
   const [channels,      setChannels]      = useState<Channel[]>([]);
   const [active,        setActive]        = useState<string | null>(null);
   const [activeCh,      setActiveCh]      = useState<Channel | null>(null);
@@ -472,8 +473,10 @@ export function CommunityTab({ wallet, isMobile, onBuy }: Props) {
   const [joinCode,      setJoinCode]      = useState("");
   const [joining,       setJoining]       = useState(false);
   const [postError,     setPostError]     = useState("");
-  const [view,          setView]          = useState<"list" | "create" | "channel">("list");
+  const [view,          setView]          = useState<"list" | "create" | "channel" | "admin">("list");
   const [leftOpen,      setLeftOpen]      = useState(!isMobile);
+  const [adminStats,    setAdminStats]    = useState<{ totalCommunities: number; totalPosts: number; totalMembers: number; flaggedPosts: number; publicChannels: number } | null>(null);
+  const [flaggedPosts,  setFlaggedPosts]  = useState<{ communityId: string; communityName: string; post: Post }[]>([]);
   const chatRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -578,14 +581,37 @@ export function CommunityTab({ wallet, isMobile, onBuy }: Props) {
     }).catch(() => {});
   }
 
-  async function deletePost(postId: string) {
-    if (!active || !wallet) return;
-    await fetch(`/api/community/${active}/post`, {
+  async function deletePost(postId: string, communityId?: string) {
+    const cid = communityId ?? active;
+    if (!cid || !wallet) return;
+    await fetch(`/api/community/${cid}/post`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ postId, wallet }),
     });
-    setPosts(prev => prev.filter(p => p.id !== postId));
+    if (cid === active) setPosts(prev => prev.filter(p => p.id !== postId));
+    if (communityId) setFlaggedPosts(prev => prev.filter(fp => fp.post.id !== postId));
+  }
+
+  async function deleteCommunity(communityId: string) {
+    if (!wallet || !isCreator) return;
+    if (!confirm("Delete this entire community? This cannot be undone.")) return;
+    await fetch("/api/admin", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet, communityId }),
+    });
+    setChannels(prev => prev.filter(c => c.id !== communityId));
+    if (active === communityId) { setActive(null); setActiveCh(null); setView("list"); }
+  }
+
+  async function loadAdmin() {
+    if (!wallet || !isCreator) return;
+    try {
+      const r = await fetch(`/api/admin?wallet=${wallet}`);
+      const d = await r.json();
+      if (r.ok) { setAdminStats(d.stats); setFlaggedPosts(d.flagged ?? []); }
+    } catch { /* ignore */ }
   }
 
   function onCreated(ch: Channel) {
@@ -623,10 +649,18 @@ export function CommunityTab({ wallet, isMobile, onBuy }: Props) {
             </div>
           )}
 
-          <button type="button" onClick={() => setView(view === "create" ? "list" : "create")}
-            style={{ ...btnCss(view === "create"), width: "100%", padding: "7px", fontSize: 10 }}>
-            {view === "create" ? "← BACK" : "+ NEW COMMUNITY"}
-          </button>
+          <div style={{ display: "flex", gap: 4 }}>
+            <button type="button" onClick={() => setView(view === "create" ? "list" : "create")}
+              style={{ ...btnCss(view === "create"), flex: 1, padding: "7px", fontSize: 10 }}>
+              {view === "create" ? "← BACK" : "+ NEW"}
+            </button>
+            {isCreator && (
+              <button type="button" onClick={() => { setView(view === "admin" ? "list" : "admin"); if (view !== "admin") loadAdmin(); }}
+                style={{ ...btnCss(view === "admin", "#ff2b4e"), padding: "7px 10px", fontSize: 9, fontWeight: 700 }}>
+                ⚙ ADMIN
+              </button>
+            )}
+          </div>
         </div>
 
         {/* List */}
@@ -635,7 +669,16 @@ export function CommunityTab({ wallet, isMobile, onBuy }: Props) {
             <div style={{ padding: 20, textAlign: "center", fontSize: 10, color: MUTED }}>Loading…</div>
           )}
           {!loading && channels.map(ch => (
-            <ChannelRow key={ch.id} ch={ch} active={active === ch.id} onClick={() => openChannel(ch.id)} />
+            <div key={ch.id} style={{ position: "relative" }}>
+              <ChannelRow ch={ch} active={active === ch.id} onClick={() => openChannel(ch.id)} />
+              {isCreator && view !== "admin" && (
+                <button type="button" onClick={e => { e.stopPropagation(); deleteCommunity(ch.id); }}
+                  style={{ position: "absolute", top: 8, right: 8, background: "transparent", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 10, opacity: 0.4, fontFamily: MONO }}
+                  title="Delete community">
+                  ✕
+                </button>
+              )}
+            </div>
           ))}
         </div>
       </div>
@@ -656,6 +699,58 @@ export function CommunityTab({ wallet, isMobile, onBuy }: Props) {
             <div style={{ fontSize: 32 }}>💬</div>
             <div style={{ fontSize: 13, color: TEXT2, fontWeight: 700 }}>Select a community</div>
             <div style={{ fontSize: 10, color: MUTED }}>or create your own</div>
+          </div>
+        )}
+
+        {/* Admin view */}
+        {view === "admin" && isCreator && (
+          <div style={{ flex: 1, overflowY: "auto", padding: "16px" }}>
+            <div style={{ fontSize: 11, color: RED, fontWeight: 700, letterSpacing: "1.5px", marginBottom: 14 }}>⚙ CREATOR ADMIN</div>
+
+            {/* Stats */}
+            {adminStats && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
+                {[
+                  { l: "Communities",  v: adminStats.totalCommunities },
+                  { l: "Posts",        v: adminStats.totalPosts },
+                  { l: "Members",      v: adminStats.totalMembers },
+                  { l: "Flagged",      v: adminStats.flaggedPosts, warn: adminStats.flaggedPosts > 0 },
+                ].map(s => (
+                  <div key={s.l} style={{ background: SURFACE, border: `1px solid ${BORDER}`, padding: "10px 12px" }}>
+                    <div style={{ fontSize: 9, color: MUTED, marginBottom: 3 }}>{s.l}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: s.warn ? "#ef4444" : TEXT, fontFamily: MONO }}>{s.v}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Flagged posts */}
+            {flaggedPosts.length > 0 && (
+              <div>
+                <div style={{ fontSize: 9, color: "#ef4444", fontWeight: 700, letterSpacing: "1px", marginBottom: 8 }}>
+                  FLAGGED POSTS ({flaggedPosts.length})
+                </div>
+                {flaggedPosts.map(({ communityId, communityName, post }) => (
+                  <div key={post.id} style={{ background: "#ef444408", border: "1px solid #ef444425", padding: "10px 12px", marginBottom: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+                      <span style={{ fontSize: 9, color: "#ef4444", fontWeight: 700 }}>#{communityName}</span>
+                      <span style={{ fontSize: 9, color: MUTED }}>{post.authorAlias}</span>
+                      <button type="button" onClick={() => deletePost(post.id, communityId)}
+                        style={{ marginLeft: "auto", background: "#ef444420", border: "1px solid #ef444450", color: "#ef4444", fontSize: 9, fontFamily: MONO, padding: "2px 8px", cursor: "pointer" }}>
+                        DELETE
+                      </button>
+                    </div>
+                    <div style={{ fontSize: 11, color: TEXT2 }}>{post.text}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {adminStats && flaggedPosts.length === 0 && (
+              <div style={{ fontSize: 10, color: MUTED }}>No flagged posts ✓</div>
+            )}
+            {!adminStats && (
+              <div style={{ fontSize: 10, color: MUTED }}>Loading admin data…</div>
+            )}
           </div>
         )}
 
@@ -734,7 +829,7 @@ export function CommunityTab({ wallet, isMobile, onBuy }: Props) {
                 <PostCard
                   key={post.id}
                   post={post}
-                  isOwner={activeCh?.isOwner ?? false}
+                  isOwner={(activeCh?.isOwner ?? false) || isCreator}
                   wallet={wallet}
                   communityId={active}
                   onDelete={deletePost}
