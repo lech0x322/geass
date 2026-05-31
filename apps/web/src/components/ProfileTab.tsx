@@ -284,11 +284,6 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isCreator, isM
                   ? <IconVerified size={18} />
                   : null
               }
-              {isCreator && (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 700, color: "#f59e0b", background: "transparent", border: "1px solid #f59e0b60", padding: "3px 9px", fontFamily: MONO, letterSpacing: "1px" }}>
-                  <IconCrown size={9} /> CREATOR
-                </span>
-              )}
               {!isCreator && isPro && (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 700, color: RED, background: "transparent", border: `1px solid ${RED}`, padding: "3px 9px", fontFamily: MONO, letterSpacing: "1px" }}>
                   <IconCrown size={9} /> PRO
