@@ -1,40 +1,83 @@
 import "server-only";
 import { redis } from "./redis";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
 export interface CommunityPost {
-  id:           string;
-  author:       string;
-  authorAlias:  string;
-  text:         string;
-  tokenMint?:   string;
-  createdAt:    number;
-  reactions:    { fire: number; gem: number; rug: number };
+  id:          string;
+  author:      string;
+  authorAlias: string;
+  authorEmoji: string;
+  text:        string;
+  type:        "text" | "call" | "buy";
+  tokenMint?:  string;
+  tokenSym?:   string;
+  createdAt:   number;
+  reactions:   { fire: number; gem: number; rug: number };
+  flagged?:    boolean;
 }
 
 export interface Community {
-  id:          string;
-  name:        string;
-  description: string;
-  type:        "public" | "private";
-  inviteCode?: string;
-  owner:       string;
-  members:     string[];
-  posts:       CommunityPost[];
-  createdAt:   number;
-  emoji:       string;
-  color:       string;
-  tags:        string[];
-  price?:      number; // SOL — 0 or undefined = free
+  id:              string;
+  name:            string;
+  description:     string;
+  type:            "public" | "private";
+  inviteCode?:     string;
+  owner:           string;
+  members:         string[];
+  posts:           CommunityPost[];
+  createdAt:       number;
+  emoji:           string;
+  color:           string;
+  tags:            string[];
+  price?:          number;
+  // Token gating
+  tokenMint?:      string;
+  tokenSymbol?:    string;
+  tokenLogo?:      string;
+  tokenPrice?:     number;
+  tokenMcap?:      number;
+  minTokensToPost: number;
+  // Computed
+  sentiment:       number;
 }
 
-// ── In-memory write-through cache ─────────────────────────────────────────────
-const cache = new Map<string, Community>();
+// ── Spam detection ────────────────────────────────────────────────────────────
 
+const SPAM_PATTERNS = [
+  /free\s*sol/i, /airdrop/i, /dm\s*me/i, /click\s*link/i, /t\.me\//i,
+  /telegram\.me/i, /bit\.ly/i, /tinyurl/i, /join\s*now/i, /limited\s*time/i,
+  /send\s*sol/i, /double\s*your/i, /guaranteed\s*profit/i, /100x\s*guaranteed/i,
+];
+
+export function isSpam(text: string): boolean {
+  return SPAM_PATTERNS.some(p => p.test(text));
+}
+
+// ── Sentiment calculation ─────────────────────────────────────────────────────
+
+export function calcSentiment(posts: CommunityPost[]): number {
+  const recent = posts.slice(0, 50);
+  if (!recent.length) return 50;
+  let pos = 0, neg = 0;
+  for (const p of recent) {
+    pos += p.reactions.fire + p.reactions.gem;
+    neg += p.reactions.rug;
+  }
+  const total = pos + neg;
+  if (!total) return 50;
+  return Math.round((pos / total) * 100);
+}
+
+// ── Cache + persistence ───────────────────────────────────────────────────────
+
+const cache = new Map<string, Community>();
 const KEY_IDS = "community:ids";
 function KEY(id: string) { return `community:${id}`; }
-const TTL = 30 * 24 * 3600; // 30 days
+const TTL = 30 * 24 * 3600;
 
 async function persist(c: Community): Promise<void> {
+  c.sentiment = calcSentiment(c.posts);
   cache.set(c.id, c);
   await redis.set(KEY(c.id), c, TTL);
   const ids = (await redis.get<string[]>(KEY_IDS)) ?? [];
@@ -47,11 +90,21 @@ async function persist(c: Community): Promise<void> {
 async function load(id: string): Promise<Community | null> {
   if (cache.has(id)) return cache.get(id)!;
   const stored = await redis.get<Community>(KEY(id));
-  if (stored) { cache.set(id, stored); return stored; }
+  if (stored) {
+    // Migrate old records that lack new fields
+    if (stored.minTokensToPost === undefined) stored.minTokensToPost = 0;
+    if (stored.sentiment === undefined) stored.sentiment = calcSentiment(stored.posts ?? []);
+    for (const p of stored.posts ?? []) {
+      if (!p.type) p.type = "text";
+      if (!p.authorEmoji) p.authorEmoji = "👤";
+    }
+    cache.set(id, stored);
+    return stored;
+  }
   return null;
 }
 
-// ── Seed (runs once; skips if Redis already has data) ─────────────────────────
+// ── Seed ──────────────────────────────────────────────────────────────────────
 
 let seeded = false;
 async function seedIfEmpty(): Promise<void> {
@@ -63,11 +116,11 @@ async function seedIfEmpty(): Promise<void> {
     return;
   }
 
-  const demos: Omit<Community, "posts">[] = [
-    { id: "degen-lounge",  name: "Degen Lounge",  emoji: "🎰", color: "#ef4444", description: "High-risk high-reward plays. Meme coins, early launches, ape calls.", type: "public", owner: "GEASS", members: ["GEASS"], createdAt: Date.now() - 7 * 86400000,  tags: ["meme","degen","ape"] },
-    { id: "solana-alpha",  name: "Solana Alpha",  emoji: "⚡", color: "#a855f7", description: "Curated on-chain alpha for Solana traders. No noise, just signals.",   type: "public", owner: "GEASS", members: ["GEASS"], createdAt: Date.now() - 14 * 86400000, tags: ["alpha","solana","signals"] },
-    { id: "kol-watchers",  name: "KOL Watchers",  emoji: "👁️", color: "#3b82f6", description: "Track what the top KOL wallets are buying and selling in real time.",  type: "public", owner: "GEASS", members: ["GEASS"], createdAt: Date.now() - 3 * 86400000,  tags: ["kol","copy-trade","alpha"] },
-    { id: "meme-workshop", name: "Meme Workshop", emoji: "🧪", color: "#10b981", description: "Token idea brainstorming — narratives, names, and early launches.",    type: "public", owner: "GEASS", members: ["GEASS"], createdAt: Date.now() - 2 * 86400000,  tags: ["meme","launch","creative"] },
+  const demos: Omit<Community, "posts" | "sentiment">[] = [
+    { id: "degen-lounge",  name: "Degen Lounge",  emoji: "🎰", color: "#ef4444", description: "High-risk high-reward plays. Meme coins, early launches, ape calls.", type: "public", owner: "GEASS", members: ["GEASS"], createdAt: Date.now() - 7 * 86400000,  tags: ["meme","degen","ape"],    minTokensToPost: 0 },
+    { id: "solana-alpha",  name: "Solana Alpha",  emoji: "⚡", color: "#a855f7", description: "Curated on-chain alpha for Solana traders. No noise, just signals.",   type: "public", owner: "GEASS", members: ["GEASS"], createdAt: Date.now() - 14 * 86400000, tags: ["alpha","solana"],        minTokensToPost: 0 },
+    { id: "kol-watchers",  name: "KOL Watchers",  emoji: "👁️", color: "#3b82f6", description: "Track what the top KOL wallets are buying and selling in real time.",  type: "public", owner: "GEASS", members: ["GEASS"], createdAt: Date.now() - 3 * 86400000,  tags: ["kol","copy-trade"],      minTokensToPost: 0 },
+    { id: "meme-workshop", name: "Meme Workshop", emoji: "🧪", color: "#10b981", description: "Token idea brainstorming — narratives, names, and early launches.",    type: "public", owner: "GEASS", members: ["GEASS"], createdAt: Date.now() - 2 * 86400000,  tags: ["meme","launch"],         minTokensToPost: 0 },
   ];
   const welcomes: Record<string, string> = {
     "degen-lounge":  "Welcome to Degen Lounge 🎰 Share your highest-conviction plays.",
@@ -76,8 +129,12 @@ async function seedIfEmpty(): Promise<void> {
     "meme-workshop": "Welcome to Meme Workshop 🧪 Brainstorm token names, narratives, and early ideas.",
   };
   for (const d of demos) {
-    const post: CommunityPost = { id: `seed-${d.id}-0`, author: "GEASS", authorAlias: "GEASS", text: welcomes[d.id] ?? "", createdAt: Date.now() - 3 * 3600000, reactions: { fire: 0, gem: 0, rug: 0 } };
-    await persist({ ...d, posts: [post] });
+    const post: CommunityPost = {
+      id: `seed-${d.id}-0`, author: "GEASS", authorAlias: "GEASS", authorEmoji: "⚡",
+      type: "text", text: welcomes[d.id] ?? "", createdAt: Date.now() - 3 * 3600000,
+      reactions: { fire: 3, gem: 2, rug: 0 },
+    };
+    await persist({ ...d, posts: [post], sentiment: 100 });
   }
 }
 
@@ -91,12 +148,12 @@ function slugify(name: string): string {
 
 async function uniqueId(base: string): Promise<string> {
   let id = base || "community";
-  let n  = 2;
+  let n = 2;
   while ((await load(id)) !== null) id = `${base}-${n++}`;
   return id;
 }
 
-// ── Public API (async) ────────────────────────────────────────────────────────
+// ── Public API ────────────────────────────────────────────────────────────────
 
 export async function listCommunities(wallet?: string): Promise<Community[]> {
   const ids = (await redis.get<string[]>(KEY_IDS)) ?? [...cache.keys()];
@@ -113,7 +170,10 @@ export async function getCommunity(id: string): Promise<Community | null> {
 export interface CreateInput {
   name: string; description: string; type: "public" | "private";
   emoji: string; color: string; tags: string[];
-  owner: string; ownerAlias: string; price?: number;
+  owner: string; ownerAlias: string; ownerEmoji: string;
+  price?: number;
+  tokenMint?: string; tokenSymbol?: string; tokenLogo?: string;
+  tokenPrice?: number; tokenMcap?: number; minTokensToPost?: number;
 }
 
 export async function createCommunity(input: CreateInput): Promise<Community> {
@@ -124,6 +184,8 @@ export async function createCommunity(input: CreateInput): Promise<Community> {
   const welcome: CommunityPost = {
     id: `welcome-${id}`, author: input.owner,
     authorAlias: input.ownerAlias || input.owner.slice(0, 8),
+    authorEmoji: input.ownerEmoji || "👤",
+    type: "text",
     text: `Welcome to ${input.name}! 🎉 ${input.description}`,
     createdAt: Date.now(), reactions: { fire: 0, gem: 0, rug: 0 },
   };
@@ -133,6 +195,11 @@ export async function createCommunity(input: CreateInput): Promise<Community> {
     posts: [welcome], createdAt: Date.now(),
     emoji: input.emoji, color: input.color, tags: input.tags,
     price: input.price && input.price > 0 ? input.price : undefined,
+    tokenMint: input.tokenMint, tokenSymbol: input.tokenSymbol,
+    tokenLogo: input.tokenLogo, tokenPrice: input.tokenPrice,
+    tokenMcap: input.tokenMcap,
+    minTokensToPost: input.minTokensToPost ?? 0,
+    sentiment: 50,
   };
   await persist(c);
   return c;
@@ -158,17 +225,25 @@ export async function leaveCommunity(id: string, wallet: string): Promise<{ ok: 
   return { ok: true };
 }
 
-export async function addPost(id: string, wallet: string, alias: string, text: string, tokenMint?: string): Promise<CommunityPost | null> {
+export async function addPost(
+  id: string, wallet: string, alias: string, authorEmoji: string,
+  text: string, type: "text" | "call" | "buy" = "text",
+  tokenMint?: string, tokenSym?: string,
+): Promise<CommunityPost | null> {
   const c = await load(id);
   if (!c || !c.members.includes(wallet)) return null;
   const post: CommunityPost = {
     id:          `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     author:      wallet,
     authorAlias: alias || wallet.slice(0, 8),
+    authorEmoji: authorEmoji || "👤",
+    type,
     text:        text.slice(0, 500),
     tokenMint,
+    tokenSym,
     createdAt:   Date.now(),
     reactions:   { fire: 0, gem: 0, rug: 0 },
+    flagged:     isSpam(text),
   };
   c.posts.unshift(post);
   if (c.posts.length > 200) c.posts = c.posts.slice(0, 200);
@@ -192,6 +267,7 @@ export async function editPost(communityId: string, postId: string, wallet: stri
   const post = c.posts.find(p => p.id === postId);
   if (!post || post.author !== wallet) return { ok: false };
   post.text = newText.slice(0, 500);
+  post.flagged = isSpam(newText);
   await persist(c);
   return { ok: true };
 }
@@ -207,12 +283,9 @@ export async function reactToPost(communityId: string, postId: string, reaction:
 }
 
 export interface UpdateInput {
-  name?: string;
-  description?: string;
-  type?: "public" | "private";
-  emoji?: string;
-  color?: string;
-  tags?: string[];
+  name?: string; description?: string; type?: "public" | "private";
+  emoji?: string; color?: string; tags?: string[];
+  minTokensToPost?: number;
 }
 
 export async function updateCommunity(id: string, wallet: string, updates: UpdateInput): Promise<{ ok: boolean; error?: string }> {
@@ -230,6 +303,7 @@ export async function updateCommunity(id: string, wallet: string, updates: Updat
   if (updates.emoji !== undefined) c.emoji = updates.emoji.slice(0, 4);
   if (updates.color !== undefined) c.color = updates.color.slice(0, 9);
   if (updates.tags !== undefined) c.tags = updates.tags.slice(0, 10).map(t => t.trim().slice(0, 20)).filter(Boolean);
+  if (updates.minTokensToPost !== undefined) c.minTokensToPost = Math.max(0, updates.minTokensToPost);
   await persist(c);
   return { ok: true };
 }

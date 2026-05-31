@@ -2396,7 +2396,11 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
           )}
 
           {tab === "community" && (
-            <CommunityTab wallet={wallet} isMobile={isMobile} />
+            <CommunityTab
+              wallet={wallet}
+              isMobile={isMobile}
+              onBuy={(mint) => { setCtMintAddress(mint); setTab("gems"); }}
+            />
           )}
 
           {tab === "predictions" && (
