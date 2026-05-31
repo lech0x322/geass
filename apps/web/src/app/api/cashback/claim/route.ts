@@ -7,7 +7,7 @@ import bs58 from "bs58";
 import { redis } from "@/lib/server/redis";
 import { enforceRateLimit } from "@/lib/server/withRateLimit";
 import { SOLANA_RPC, GEASS_WALLET_PRIVKEY } from "@/lib/env";
-import { getOrInit } from "../route";
+import { getOrInit } from "@/lib/server/cashback";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
