@@ -305,6 +305,35 @@ export const IconVerified = ({ size = 16, style, className }: IconProps) => (
   </svg>
 );
 
+/** Gold shield badge — unique to the platform creator. */
+export const IconCreatorBadge = ({ size = 18, style, className }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    xmlns="http://www.w3.org/2000/svg"
+    style={{ display: "inline-block", flexShrink: 0, ...style }}
+    className={className}
+    aria-label="Creator"
+  >
+    <defs>
+      <linearGradient id="gold-g" x1="3" y1="2" x2="21" y2="22" gradientUnits="userSpaceOnUse">
+        <stop offset="0%"   stopColor="#ffe066" />
+        <stop offset="55%"  stopColor="#f59e0b" />
+        <stop offset="100%" stopColor="#b45309" />
+      </linearGradient>
+    </defs>
+    {/* Shield */}
+    <path d="M12 2L3 6v6c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V6L12 2z" fill="url(#gold-g)" />
+    {/* Crown */}
+    <path d="M7 16h10M7 16l1.5-5 2.5 2.5 1-3.5 1 3.5 2.5-2.5L17 16" stroke="#fff" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" fill="none" />
+    {/* Crown jewel dots */}
+    <circle cx="8.5" cy="11" r=".7" fill="#fff" />
+    <circle cx="12" cy="9.5" r=".7" fill="#fff" />
+    <circle cx="15.5" cy="11" r=".7" fill="#fff" />
+  </svg>
+);
+
 /** Camera icon for photo upload. */
 export const IconCamera = (p: IconProps) => (
   <Svg {...p}>

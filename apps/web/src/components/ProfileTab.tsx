@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { PublicKey, Transaction, SystemProgram, Connection, LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { IconUser, IconWallet, IconActivity, IconCopy, IconCheck, IconRefresh, IconArrowUpRight, IconCrown, IconChart, IconVerified, IconCamera, IconSolana } from "./icons";
+import { IconUser, IconWallet, IconActivity, IconCopy, IconCheck, IconRefresh, IconArrowUpRight, IconCrown, IconChart, IconVerified, IconCreatorBadge, IconCamera, IconSolana } from "./icons";
 import JupiterSwapModal from "./JupiterSwapModal";
 import type { UseInternalWallet } from "@/lib/useInternalWallet";
 
@@ -56,11 +56,12 @@ interface Props {
   solBalance: string | null;
   solPrice: number | null;
   isPro: boolean;
+  isCreator: boolean;
   isMobile: boolean;
   iw: UseInternalWallet;
 }
 
-export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile, iw }: Props) {
+export function ProfileTab({ wallet, solBalance, solPrice, isPro, isCreator, isMobile, iw }: Props) {
   const [copied, setCopied]           = useState(false);
   const [editing, setEditing]         = useState(false);
   // Saved values
@@ -277,8 +278,18 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isMobile, iw }
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <span style={{ fontSize: 17, fontWeight: 800, color: "#f5f5f7", letterSpacing: "-.3px" }}>{displayName || "Anon Trader"}</span>
-              {isPro && <IconVerified size={18} />}
-              {isPro && (
+              {isCreator
+                ? <IconCreatorBadge size={20} style={{ filter: "drop-shadow(0 0 4px #f59e0b80)" }} />
+                : isPro
+                  ? <IconVerified size={18} />
+                  : null
+              }
+              {isCreator && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 700, color: "#f59e0b", background: "transparent", border: "1px solid #f59e0b60", padding: "3px 9px", fontFamily: MONO, letterSpacing: "1px" }}>
+                  <IconCrown size={9} /> CREATOR
+                </span>
+              )}
+              {!isCreator && isPro && (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 700, color: RED, background: "transparent", border: `1px solid ${RED}`, padding: "3px 9px", fontFamily: MONO, letterSpacing: "1px" }}>
                   <IconCrown size={9} /> PRO
                 </span>
