@@ -364,6 +364,14 @@ export const IconTag = (p: IconProps) => (
   </Svg>
 );
 
+/** Coin / cashback */
+export const IconCoin = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v1m0 8v1m-3.5-5.5c0-1.1.9-2 2-2h3a1 1 0 0 1 0 2h-2a1 1 0 0 0 0 2h2a1 1 0 0 1 0 2h-3a2 2 0 0 1-2-2" />
+  </Svg>
+);
+
 /** Trending up arrow. */
 export const IconTrendingUp = (p: IconProps) => (
   <Svg {...p}>
