@@ -48,28 +48,39 @@ export interface NavItem {
   sidebarHidden?: boolean;
   /** Show a "Coming Soon" overlay instead of real content. */
   comingSoon?: boolean;
+  /** Sidebar section header shown above this item (first item of each group). */
+  section?: string;
   /** Sub-items shown when the nav item expands (e.g. Settings). */
   sub?: { id: SettingsSection; label: string }[];
 }
 
 export const NAV: NavItem[] = [
-  { id: "home",      label: "Home",                                                         iconId: "home",      mobile: true },
-  { id: "trades",    label: "Realtime Trades", mobileLabel: "KOL",     badge: "LIVE",  iconId: "broadcast", mobile: true, sidebarHidden: true },
-  { id: "trending",  label: "Trending",                                 badge: "NEW",   iconId: "flame",     mobile: true, sidebarHidden: true },
-  { id: "launch",    label: "Launch",                                                    iconId: "rocket"     },
-  { id: "gems",      label: "Alpha Scanner",   mobileLabel: "Scanner", badge: "PRO",   pro: true, iconId: "zap",    mobile: true },
-  { id: "autosnipe",  label: "Auto-Snipe",                               badge: "NEW",   pro: true, iconId: "target" },
-  { id: "community",   label: "Channel",        badge: "SOON", iconId: "users", comingSoon: true },
-  { id: "predictions", label: "Predictions",    badge: "SOON", iconId: "chart", comingSoon: true },
-  { id: "social",      label: "Tracker",        badge: "NEW", iconId: "globe" },
-  { id: "ai-trading",  label: "AI Trading",     badge: "NEW", iconId: "bot"   },
-  { id: "intel",       label: "Intel",          badge: "NEW", iconId: "zap"   },
-  { id: "watchlist",    label: "Watchlist",                    iconId: "target" },
-  { id: "marketplace", label: "Marketplace",  badge: "NEW",   iconId: "tag"    },
+  // ── Main ──────────────────────────────────────────────────────────────────
+  { id: "home",     label: "Home",         iconId: "home",   mobile: true, section: "MAIN" },
+
+  // ── Trading ───────────────────────────────────────────────────────────────
+  { id: "launch",    label: "Launch",        iconId: "rocket",                     section: "TRADING" },
+  { id: "gems",      label: "Alpha Scanner", mobileLabel: "Scanner", badge: "PRO", pro: true, iconId: "zap", mobile: true },
+  { id: "autosnipe", label: "Auto-Snipe",    iconId: "target", pro: true },
+  { id: "watchlist", label: "Watchlist",     iconId: "target" },
+
+  // ── Intelligence ──────────────────────────────────────────────────────────
+  { id: "intel",      label: "Intel",          iconId: "zap",       section: "INTEL" },
+  { id: "ai-trading", label: "AI Trading",     iconId: "bot" },
+  { id: "social",     label: "Social Tracker", iconId: "globe" },
+
+  // ── Community ─────────────────────────────────────────────────────────────
+  { id: "marketplace",  label: "Marketplace",  iconId: "tag",   section: "COMMUNITY" },
+  { id: "community",    label: "Channel",       iconId: "users", comingSoon: true },
+  { id: "predictions",  label: "Predictions",   iconId: "chart", comingSoon: true },
+
+  // ── Hidden from sidebar (mobile only / stream) ────────────────────────────
+  { id: "trades",  label: "Realtime Trades", mobileLabel: "KOL", badge: "LIVE", iconId: "broadcast", mobile: true, sidebarHidden: true },
+  { id: "trending", label: "Trending",       iconId: "flame",   mobile: true, sidebarHidden: true },
+
+  // ── Account ───────────────────────────────────────────────────────────────
   {
-    id: "settings",
-    label: "Settings",
-    iconId: "cog",
+    id: "settings", label: "Settings", iconId: "cog", section: "ACCOUNT",
     sub: [
       { id: "sounds",   label: "Sound Alerts" },
       { id: "referral", label: "Rewards" },
@@ -77,8 +88,8 @@ export const NAV: NavItem[] = [
       { id: "trading",  label: "Trading" },
     ],
   },
-  { id: "pro",     label: "GEASS Pro",                                   pro: true, iconId: "crown" },
-  { id: "profile", label: "Profile", mobileLabel: "Me", iconId: "user", mobile: true, mobileOnly: true },
+  { id: "pro",     label: "GEASS Pro", pro: true, iconId: "crown" },
+  { id: "profile", label: "Profile",  mobileLabel: "Me", iconId: "user", mobile: true, mobileOnly: true },
 ];
 
 export const toB64 = (arr: Uint8Array): string => {

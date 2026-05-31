@@ -804,6 +804,11 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
 
           return (
             <div key={n.id}>
+              {n.section && !sidebarCollapsed && (
+                <div style={{ fontSize: 8, fontWeight: 700, color: "#2e2e36", letterSpacing: "2px", padding: "14px 10px 5px", fontFamily: MONO, userSelect: "none" }}>
+                  {n.section}
+                </div>
+              )}
               <button
                 onClick={() => {
                   if (hasSub && !sidebarCollapsed) { setSettingsOpen(v => !v); return; }
@@ -839,9 +844,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                     <span style={{ flex: 1 }}>{n.label}</span>
                     {n.badge && (
                       <span style={{ fontSize: 7, fontWeight: 700, fontFamily: MONO,
-                        color: n.badge === "NEW" ? "#10b981" : n.pro ? "#8b5cf6" : "#10b981",
-                        border: `1px solid ${(n.badge === "NEW" ? "#10b981" : n.pro ? "#8b5cf6" : "#10b981") + "35"}`,
-                        padding: "1px 6px", borderRadius: 0, letterSpacing: "1px" }}>
+                        color: n.badge === "LIVE" ? "#ef4444" : n.badge === "PRO" ? "#8b5cf6" : "#5a5a63",
+                        border: `1px solid ${n.badge === "LIVE" ? "#ef444435" : n.badge === "PRO" ? "#8b5cf635" : "#2a2a3035"}`,
+                        padding: "1px 6px", letterSpacing: "1px" }}>
                         {n.badge}
                       </span>
                     )}
