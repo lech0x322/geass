@@ -17,14 +17,15 @@ export async function PUT(req: Request) {
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
-  const wallet   = String(body.wallet   ?? "").trim();
-  const username = String(body.username ?? "").trim();
-  const emoji    = String(body.emoji    ?? "🧠").slice(0, 4);
+  const wallet      = String(body.wallet      ?? "").trim();
+  const username    = String(body.username    ?? "").trim();
+  const displayName = String(body.displayName ?? "").trim();
+  const emoji       = String(body.emoji       ?? "🧠").slice(0, 4);
 
-  if (!wallet)   return NextResponse.json({ error: "wallet required" }, { status: 400 });
+  if (!wallet)   return NextResponse.json({ error: "wallet required" },   { status: 400 });
   if (!username) return NextResponse.json({ error: "username required" }, { status: 400 });
 
-  const result = await setProfile(wallet, username, emoji);
+  const result = await setProfile(wallet, username, emoji, displayName);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.error === "Username already taken" ? 409 : 400 });
 
   const profile = await getProfile(wallet);

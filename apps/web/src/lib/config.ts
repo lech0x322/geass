@@ -19,11 +19,11 @@ export const TIER: Record<string, { l: string; c: string }> = {
   RUGGED: { l: "RUG", c: "#6b7280" },
 };
 
-export type NavId = "home" | "trades" | "launch" | "gems" | "referral" | "pro" | "autosnipe" | "settings" | "trending" | "profile" | "community" | "predictions" | "social" | "ai-trading" | "intel" | "watchlist" | "marketplace" | "cashback";
+export type NavId = "home" | "trades" | "launch" | "gems" | "referral" | "pro" | "autosnipe" | "settings" | "trending" | "profile" | "community" | "predictions" | "social" | "ai-trading" | "intel" | "watchlist" | "marketplace";
 
 export type NavIconId =
   | "home" | "broadcast" | "flame" | "rocket" | "zap" | "target"
-  | "users" | "cog" | "crown" | "user" | "chart" | "globe" | "bot" | "tag" | "coin";
+  | "users" | "cog" | "crown" | "user" | "chart" | "globe" | "bot" | "tag";
 
 export type SettingsSection = "sounds" | "referral" | "wallet" | "trading";
 /** Settings sub-items that navigate to a different tab entirely. */
@@ -66,7 +66,6 @@ export const NAV: NavItem[] = [
   { id: "intel",       label: "Intel",          badge: "NEW", iconId: "zap"   },
   { id: "watchlist",    label: "Watchlist",                    iconId: "target" },
   { id: "marketplace", label: "Marketplace",  badge: "NEW",   iconId: "tag"    },
-  { id: "cashback",    label: "Cashback",     badge: "NEW",   iconId: "coin"   },
   {
     id: "settings",
     label: "Settings",
