@@ -5,6 +5,7 @@ import { PublicKey, Transaction, SystemProgram, Connection, LAMPORTS_PER_SOL } f
 import { IconUser, IconWallet, IconActivity, IconCopy, IconCheck, IconRefresh, IconArrowUpRight, IconCrown, IconChart, IconVerified, IconCreatorBadge, IconCamera, IconSolana } from "./icons";
 import JupiterSwapModal from "./JupiterSwapModal";
 import type { UseInternalWallet } from "@/lib/useInternalWallet";
+import { resizeAvatar, getCachedAvatar, setCachedAvatar, fetchAvatar, uploadAvatar } from "@/lib/avatar";
 
 const RPC = process.env.NEXT_PUBLIC_RPC_URL ?? "https://api.mainnet-beta.solana.com";
 const MONO = "'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace";
@@ -121,16 +122,15 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isCreator, isM
     } finally { setClaiming(false); }
   };
 
-  const uploadAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const b64 = reader.result as string;
-      setAvatar(b64);
-      try { localStorage.setItem(`geass_avatar_${wallet}`, b64); } catch {}
-    };
-    reader.readAsDataURL(file);
+    try {
+      const dataUrl = await resizeAvatar(file);
+      setAvatar(dataUrl);
+      setCachedAvatar(wallet, dataUrl);
+      await uploadAvatar(wallet, dataUrl);  // syncs to all devices
+    } catch { /* keep local copy even if upload fails */ }
   };
 
   const [activity, setActivity]     = useState<ActivityTx[]>([]);
@@ -157,10 +157,12 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isCreator, isM
   }, [wallet]);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(`geass_avatar_${wallet}`);
-      if (raw) setAvatar(raw);
-    } catch {}
+    if (!wallet) return;
+    const cached = getCachedAvatar(wallet);
+    if (cached) setAvatar(cached);
+    fetchAvatar(wallet).then(remote => {
+      if (remote) { setAvatar(remote); setCachedAvatar(wallet, remote); }
+    });
   }, [wallet]);
 
   useEffect(() => {
@@ -271,7 +273,7 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isCreator, isM
             </div>
             <label title="Upload photo" style={{ position: "absolute", bottom: -1, right: -1, width: 22, height: 22, background: "#0c0c0e", border: "1px solid #2a2a30", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
               <IconCamera size={10} style={{ color: "#9a9aa2" }} />
-              <input type="file" accept="image/*" onChange={uploadAvatar} style={{ display: "none" }} />
+              <input type="file" accept="image/*" onChange={onAvatarFile} style={{ display: "none" }} />
             </label>
           </div>
 

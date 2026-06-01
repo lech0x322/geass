@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { IconWallet, IconCopy, IconCheck, IconArrowUpRight, IconUser, IconVerified, IconCreatorBadge, IconCamera } from "./icons";
+import { resizeAvatar, getCachedAvatar, setCachedAvatar, fetchAvatar, uploadAvatar } from "@/lib/avatar";
 
 const EMOJIS = ["🧠", "🦊", "🐉", "🌑", "⚡", "🎯", "💎", "🔥", "🏹", "🐋", "🦁", "🌙", "🚀", "👾", "🤖"];
 
@@ -32,12 +33,14 @@ export function ProfilePanel({ wallet, solBalance, solPrice, isPro, isCreator = 
   const [saving, setSaving]           = useState(false);
   const handleCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Avatar stays in localStorage (base64 too large for Redis)
+  // Avatar: paint cached copy instantly, then sync from server across devices
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(`geass_avatar_${wallet}`);
-      if (raw) setAvatar(raw);
-    } catch {}
+    if (!wallet) return;
+    const cached = getCachedAvatar(wallet);
+    if (cached) setAvatar(cached);
+    fetchAvatar(wallet).then(remote => {
+      if (remote) { setAvatar(remote); setCachedAvatar(wallet, remote); }
+    });
   }, [wallet]);
 
   // Load profile from server — syncs across all devices
@@ -72,16 +75,15 @@ export function ProfilePanel({ wallet, solBalance, solPrice, isPro, isCreator = 
     }, 500);
   }, [draftHandle, editing, handle, wallet]);
 
-  const uploadAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const b64 = reader.result as string;
-      setAvatar(b64);
-      try { localStorage.setItem(`geass_avatar_${wallet}`, b64); } catch {}
-    };
-    reader.readAsDataURL(file);
+    try {
+      const dataUrl = await resizeAvatar(file);
+      setAvatar(dataUrl);
+      setCachedAvatar(wallet, dataUrl);
+      await uploadAvatar(wallet, dataUrl);  // syncs to all devices
+    } catch { /* keep local copy even if upload fails */ }
   };
 
   const save = async () => {
@@ -150,7 +152,7 @@ export function ProfilePanel({ wallet, solBalance, solPrice, isPro, isCreator = 
             )}
             <label title="Upload photo" style={{ position: "absolute", bottom: 0, right: 0, width: 16, height: 16, borderRadius: "50%", background: "#27272a", border: "1px solid #3f3f46", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
               <IconCamera size={8} style={{ color: "#a1a1aa" }} />
-              <input type="file" accept="image/*" onChange={uploadAvatar} style={{ display: "none" }} />
+              <input type="file" accept="image/*" onChange={onAvatarFile} style={{ display: "none" }} />
             </label>
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
