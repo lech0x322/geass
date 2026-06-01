@@ -380,10 +380,10 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isCreator, isM
         </div>
 
         <div style={{ ...CARD }}>
-          <div style={{ position: "absolute", top: 0, left: 0, width: 2, height: "100%", background: isPro ? "#8b5cf6" : "#34343a" }} />
+          <div style={{ position: "absolute", top: 0, left: 0, width: 2, height: "100%", background: isCreator ? RED : isPro ? "#8b5cf6" : "#34343a" }} />
           <div style={LABEL}><IconChart size={9} style={{ marginRight: 4 }} />STATUS</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: isPro ? "#8b5cf6" : "#5a5a63", fontFamily: MONO, letterSpacing: "-.5px" }}>{isPro ? "PRO" : "FREE"}</div>
-          <div style={{ fontSize: 10, color: "#5a5a63", marginTop: 3, fontFamily: MONO }}>{isPro ? "All features unlocked" : "Upgrade for full access"}</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: isCreator ? RED : isPro ? "#8b5cf6" : "#5a5a63", fontFamily: MONO, letterSpacing: "-.5px" }}>{isCreator ? "CREATOR" : isPro ? "PRO" : "FREE"}</div>
+          <div style={{ fontSize: 10, color: "#5a5a63", marginTop: 3, fontFamily: MONO }}>{isCreator ? "Full access — all features" : isPro ? "All features unlocked" : "Upgrade for full access"}</div>
         </div>
 
         {!isMobile && (

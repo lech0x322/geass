@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { IconWallet, IconCopy, IconCheck, IconArrowUpRight, IconCrown, IconUser, IconVerified, IconCamera } from "./icons";
+import React, { useState, useEffect, useRef } from "react";
+import { IconWallet, IconCopy, IconCheck, IconArrowUpRight, IconUser, IconVerified, IconCreatorBadge, IconCamera } from "./icons";
 
 const EMOJIS = ["🧠", "🦊", "🐉", "🌑", "⚡", "🎯", "💎", "🔥", "🏹", "🐋", "🦁", "🌙", "🚀", "👾", "🤖"];
 
@@ -16,15 +16,21 @@ interface Props {
 }
 
 export function ProfilePanel({ wallet, solBalance, solPrice, isPro, isCreator = false, onClose, onProfileSaved }: Props) {
-  const [username, setUsername] = useState("Anon Trader");
-  const [emoji, setEmoji]       = useState("🧠");
-  const [avatar, setAvatar]     = useState<string | null>(null);
-  const [copied, setCopied]     = useState(false);
-  const [editing, setEditing]   = useState(false);
-  const [draftName, setDraftName]   = useState("Anon Trader");
-  const [draftEmoji, setDraftEmoji] = useState("🧠");
-  const [saveError, setSaveError]   = useState("");
-  const [saving, setSaving]         = useState(false);
+  // Saved values — two-name system synced with ProfileTab
+  const [handle, setHandle]           = useState("");            // unique @username
+  const [displayName, setDisplayName] = useState("Anon Trader"); // public name, not unique
+  const [emoji, setEmoji]             = useState("🧠");
+  const [avatar, setAvatar]           = useState<string | null>(null);
+  const [copied, setCopied]           = useState(false);
+  const [editing, setEditing]         = useState(false);
+  // Draft values
+  const [draftHandle, setDraftHandle]           = useState("");
+  const [draftDisplayName, setDraftDisplayName] = useState("Anon Trader");
+  const [draftEmoji, setDraftEmoji]             = useState("🧠");
+  const [handleAvail, setHandleAvail] = useState<"idle" | "checking" | "ok" | "taken">("idle");
+  const [saveError, setSaveError]     = useState("");
+  const [saving, setSaving]           = useState(false);
+  const handleCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Avatar stays in localStorage (base64 too large for Redis)
   useEffect(() => {
@@ -34,21 +40,37 @@ export function ProfilePanel({ wallet, solBalance, solPrice, isPro, isCreator = 
     } catch {}
   }, [wallet]);
 
-  // Load username+emoji from server — syncs across all devices
+  // Load profile from server — syncs across all devices
   useEffect(() => {
     if (!wallet) return;
     fetch(`/api/profile?wallet=${encodeURIComponent(wallet)}`)
       .then(r => r.json())
-      .then((d: { profile: { username: string; emoji: string; isCreator: boolean } | null }) => {
+      .then((d: { profile: { username: string; displayName?: string; emoji: string } | null }) => {
         if (d.profile) {
-          setUsername(d.profile.username);
-          setDraftName(d.profile.username);
-          setEmoji(d.profile.emoji);
-          setDraftEmoji(d.profile.emoji);
+          setHandle(d.profile.username);   setDraftHandle(d.profile.username);
+          const dn = d.profile.displayName ?? d.profile.username;
+          setDisplayName(dn);              setDraftDisplayName(dn);
+          setEmoji(d.profile.emoji);       setDraftEmoji(d.profile.emoji);
         }
       })
       .catch(() => {});
   }, [wallet]);
+
+  // Check handle availability with debounce
+  useEffect(() => {
+    if (!editing) return;
+    const clean = draftHandle.trim().toLowerCase();
+    if (clean === handle.toLowerCase() || clean.length < 2) { setHandleAvail("idle"); return; }
+    setHandleAvail("checking");
+    if (handleCheckTimer.current) clearTimeout(handleCheckTimer.current);
+    handleCheckTimer.current = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/profile/check-handle?handle=${encodeURIComponent(clean)}&wallet=${encodeURIComponent(wallet)}`);
+        const d = await r.json() as { available: boolean };
+        setHandleAvail(d.available ? "ok" : "taken");
+      } catch { setHandleAvail("idle"); }
+    }, 500);
+  }, [draftHandle, editing, handle, wallet]);
 
   const uploadAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -63,18 +85,21 @@ export function ProfilePanel({ wallet, solBalance, solPrice, isPro, isCreator = 
   };
 
   const save = async () => {
-    const n = draftName.trim() || "Anon Trader";
+    if (handleAvail === "taken") { setSaveError("Username already taken"); return; }
+    const h  = draftHandle.trim().toLowerCase();
+    const dn = draftDisplayName.trim() || h;
     setSaving(true); setSaveError("");
     try {
       const res = await fetch("/api/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet, username: n, emoji: draftEmoji }),
+        body: JSON.stringify({ wallet, username: h, displayName: dn, emoji: draftEmoji }),
       });
-      const data = await res.json() as { profile?: { username: string; emoji: string; isCreator: boolean }; error?: string };
+      const data = await res.json() as { profile?: { username: string; displayName: string; emoji: string; isCreator: boolean }; error?: string };
       if (!res.ok) { setSaveError(data.error ?? "Failed to save"); return; }
       if (data.profile) {
-        setUsername(data.profile.username);
+        setHandle(data.profile.username);
+        setDisplayName(data.profile.displayName);
         setEmoji(data.profile.emoji);
         onProfileSaved?.(data.profile.username, data.profile.emoji, data.profile.isCreator);
       }
@@ -91,12 +116,15 @@ export function ProfilePanel({ wallet, solBalance, solPrice, isPro, isCreator = 
   const solUsd = solNum != null && solPrice ? solNum * solPrice : null;
   const effectivelyPro = isPro || isCreator;
 
+  const handleHint  = handleAvail === "checking" ? "checking…" : handleAvail === "ok" ? "available ✓" : handleAvail === "taken" ? "taken ✕" : "";
+  const handleColor = handleAvail === "ok" ? "#10b981" : handleAvail === "taken" ? "#ef4444" : "#52525b";
+
   return (
     <aside style={{ width: 240, background: "#0c0c0e", borderLeft: "1px solid #18181b", display: "flex", flexDirection: "column", flexShrink: 0, overflowY: "auto" }}>
       <div style={{ height: 56, display: "flex", alignItems: "center", padding: "0 14px", borderBottom: "1px solid #18181b", gap: 8, flexShrink: 0 }}>
         <IconUser size={13} style={{ color: "#52525b" }} />
         <span style={{ fontSize: 10, fontWeight: 700, color: "#52525b", letterSpacing: "1px" }}>PROFILE</span>
-        <button onClick={() => { setDraftName(username); setDraftEmoji(emoji); setEditing(v => !v); setSaveError(""); }}
+        <button onClick={() => { setDraftHandle(handle); setDraftDisplayName(displayName); setDraftEmoji(emoji); setEditing(v => !v); setHandleAvail("idle"); setSaveError(""); }}
           style={{ marginLeft: "auto", padding: "3px 9px", borderRadius: 5, border: "1px solid #27272a", background: "transparent", color: "#52525b", fontSize: 9, cursor: "pointer" }}>
           {editing ? "Cancel" : "Edit"}
         </button>
@@ -127,13 +155,17 @@ export function ProfilePanel({ wallet, solBalance, solPrice, isPro, isCreator = 
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: "#f4f4f5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{username}</span>
-              {effectivelyPro && <IconVerified size={14} />}
+              <span style={{ fontSize: 13, fontWeight: 800, color: "#f4f4f5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayName || "Anon Trader"}</span>
               {isCreator
-                ? <span style={{ fontSize: 8, color: "#ff2b4e", fontWeight: 700, background: "#ff2b4e18", border: "1px solid #ff2b4e40", padding: "1px 5px", borderRadius: 3, letterSpacing: "0.5px" }}>CREATOR</span>
-                : effectivelyPro && <IconCrown size={11} style={{ color: "#a855f7", flexShrink: 0 }} />
+                ? <IconCreatorBadge size={15} style={{ flexShrink: 0, filter: "drop-shadow(0 0 4px #f59e0b80)" }} />
+                : effectivelyPro
+                  ? <IconVerified size={14} />
+                  : null
               }
             </div>
+            {handle && (
+              <div style={{ fontSize: 9, color: "#5a5a63", fontFamily: "monospace", marginTop: 1 }}>@{handle}</div>
+            )}
             <button onClick={copy}
               style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9, fontFamily: "monospace", color: "#52525b", background: "transparent", border: "none", cursor: "pointer", padding: 0, marginTop: 2 }}>
               {wallet.slice(0, 6)}…{wallet.slice(-4)}
@@ -144,9 +176,26 @@ export function ProfilePanel({ wallet, solBalance, solPrice, isPro, isCreator = 
 
         {/* Edit form */}
         {editing && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, background: "#111113", border: "1px solid #27272a", borderRadius: 10, padding: "10px" }}>
-            <input value={draftName} onChange={e => setDraftName(e.target.value)} maxLength={24} placeholder="Username"
-              style={{ background: "#0c0c0e", border: "1px solid #27272a", borderRadius: 6, padding: "6px 10px", color: "#f4f4f5", fontSize: 11, outline: "none", width: "100%", boxSizing: "border-box" }} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 9, background: "#111113", border: "1px solid #27272a", borderRadius: 10, padding: "10px" }}>
+            {/* Display name — non-unique */}
+            <div>
+              <div style={{ fontSize: 8, color: "#52525b", letterSpacing: ".5px", marginBottom: 4 }}>DISPLAY NAME</div>
+              <input value={draftDisplayName} onChange={e => setDraftDisplayName(e.target.value)} maxLength={32} placeholder="Anon Trader"
+                style={{ background: "#0c0c0e", border: "1px solid #27272a", borderRadius: 6, padding: "6px 10px", color: "#f4f4f5", fontSize: 11, outline: "none", width: "100%", boxSizing: "border-box" }} />
+            </div>
+            {/* Handle — unique */}
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                <span style={{ fontSize: 8, color: "#52525b", letterSpacing: ".5px" }}>USERNAME (UNIQUE)</span>
+                {handleHint && <span style={{ fontSize: 8, color: handleColor, fontWeight: 700 }}>{handleHint}</span>}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", background: "#0c0c0e", border: `1px solid ${handleColor === "#52525b" ? "#27272a" : handleColor}`, borderRadius: 6, transition: "border-color .15s" }}>
+                <span style={{ padding: "6px 4px 6px 10px", fontSize: 11, color: "#52525b", fontFamily: "monospace", userSelect: "none" }}>@</span>
+                <input value={draftHandle} onChange={e => setDraftHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))} maxLength={20} placeholder="yourhandle"
+                  style={{ flex: 1, background: "transparent", border: "none", padding: "6px 10px 6px 0", color: "#f4f4f5", fontSize: 11, outline: "none", fontFamily: "monospace" }} />
+              </div>
+            </div>
+            {/* Emoji */}
             <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
               {EMOJIS.map(e => (
                 <button key={e} onClick={() => setDraftEmoji(e)}
@@ -156,7 +205,7 @@ export function ProfilePanel({ wallet, solBalance, solPrice, isPro, isCreator = 
               ))}
             </div>
             {saveError && <div style={{ fontSize: 10, color: "#ef4444" }}>{saveError}</div>}
-            <button onClick={save} disabled={saving}
+            <button onClick={save} disabled={saving || handleAvail === "taken" || handleAvail === "checking"}
               style={{ padding: "6px", borderRadius: 6, border: "none", background: saving ? "#27272a" : "#ef4444", color: saving ? "#52525b" : "#fff", fontSize: 10, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer" }}>
               {saving ? "Saving…" : "Save"}
             </button>
