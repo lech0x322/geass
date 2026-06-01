@@ -2222,9 +2222,11 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
                 <h1 style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: "#f4f4f5", display: "flex", alignItems: "center", gap: 8, fontFamily: MONO }}>
                   <IconCrown size={isMobile ? 16 : 18} /> GEASS PLANS
                 </h1>
-                {(pro.active || pro.isCreator) && (
-                  <span style={{ fontSize: 8, fontWeight: 700, color: "#10b981", background: "#10b98120", border: "1px solid #10b98140", padding: "2px 8px" }}>● {pro.isCreator ? "CREATOR" : pro.tier?.toUpperCase()}</span>
-                )}
+                {pro.isCreator ? (
+                  <IconCreatorBadge size={18} style={{ filter: "drop-shadow(0 0 4px #f59e0b80)" }} />
+                ) : pro.active ? (
+                  <span style={{ fontSize: 8, fontWeight: 700, color: "#10b981", background: "#10b98120", border: "1px solid #10b98140", padding: "2px 8px" }}>● {pro.tier?.toUpperCase()}</span>
+                ) : null}
               </div>
               <p style={{ fontSize: 11, color: "#52525b", marginBottom: 28, fontFamily: MONO }}>Pay once on-chain · 30 days · no credit card · cancel anytime</p>
 
@@ -2232,7 +2234,9 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
               {(pro.active || pro.isCreator) && (
                 <div style={{ background: "#0a120a", border: "1px solid #10b98130", padding: "14px 18px", marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, fontFamily: MONO }}>
                   <div>
-                    <div style={{ fontSize: 9, color: "#10b981", fontWeight: 700, letterSpacing: "1px", marginBottom: 4 }}>● {pro.isCreator ? "CREATOR ACCESS" : `${pro.tier?.toUpperCase()} ACTIVE`}</div>
+                    <div style={{ fontSize: 9, color: "#10b981", fontWeight: 700, letterSpacing: "1px", marginBottom: 4, display: "flex", alignItems: "center", gap: 5 }}>
+                      {pro.isCreator ? <IconCreatorBadge size={14} style={{ filter: "drop-shadow(0 0 3px #f59e0b80)" }} /> : `● ${pro.tier?.toUpperCase()} ACTIVE`}
+                    </div>
                     {pro.expiresAt && !pro.isCreator && (
                       <div style={{ fontSize: 11, color: "#5a5a63" }}>
                         Expires in {Math.max(0, Math.ceil((pro.expiresAt - Date.now()) / 86_400_000))} days · {new Date(pro.expiresAt).toLocaleDateString()}
