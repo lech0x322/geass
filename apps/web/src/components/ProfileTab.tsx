@@ -40,7 +40,6 @@ const SectionHead = ({ label, title, color }: { label: string; title: string; co
   </div>
 );
 
-const EMOJIS = ["🧠", "🦊", "🐉", "🌑", "⚡", "🎯", "💎", "🔥", "🏹", "🐋", "🦁", "🌙", "🚀", "👾", "🤖"];
 
 interface ActivityTx {
   sig: string; ts: number; type: string; desc: string;
@@ -268,7 +267,11 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isCreator, isM
               {avatar ? (
                 <img src={avatar} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               ) : (
-                <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>{emoji}</div>
+                <label title="Upload a profile photo" style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, cursor: "pointer" }}>
+                  <IconCamera size={16} style={{ color: RED }} />
+                  <span style={{ fontSize: 7, color: "#9a9aa2", fontFamily: MONO, letterSpacing: ".5px" }}>ADD PHOTO</span>
+                  <input type="file" accept="image/*" onChange={onAvatarFile} style={{ display: "none" }} />
+                </label>
               )}
             </div>
             <label title="Upload photo" style={{ position: "absolute", bottom: -1, right: -1, width: 22, height: 22, background: "#0c0c0e", border: "1px solid #2a2a30", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
@@ -346,17 +349,13 @@ export function ProfileTab({ wallet, solBalance, solPrice, isPro, isCreator, isM
               </div>
             </div>
 
-            {/* Emoji */}
+            {/* Profile photo prompt */}
             <div>
-              <div style={LABEL}>AVATAR EMOJI</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {EMOJIS.map(e => (
-                  <button key={e} onClick={() => setDraftEmoji(e)}
-                    style={{ width: 38, height: 38, border: `1px solid ${draftEmoji === e ? RED : "#18181c"}`, background: draftEmoji === e ? `${RED}18` : "#000", fontSize: 18, cursor: "pointer", transition: "all 0.15s" }}>
-                    {e}
-                  </button>
-                ))}
-              </div>
+              <div style={LABEL}>PROFILE PHOTO</div>
+              <label title="Upload a profile photo" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 14px", border: `1px solid ${RED}`, background: `${RED}12`, color: RED, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: MONO, letterSpacing: ".5px" }}>
+                <IconCamera size={13} /> {avatar ? "CHANGE PHOTO" : "UPLOAD PHOTO"}
+                <input type="file" accept="image/*" onChange={onAvatarFile} style={{ display: "none" }} />
+              </label>
             </div>
 
             {saveError && <div style={{ fontSize: 10, color: RED, fontFamily: MONO }}>{saveError}</div>}

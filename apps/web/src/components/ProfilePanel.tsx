@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef } from "react";
 import { IconWallet, IconCopy, IconCheck, IconArrowUpRight, IconUser, IconVerified, IconCreatorBadge, IconCamera } from "./icons";
 import { resizeAvatar, getCachedAvatar, setCachedAvatar, fetchAvatar, uploadAvatar } from "@/lib/avatar";
 
-const EMOJIS = ["🧠", "🦊", "🐉", "🌑", "⚡", "🎯", "💎", "🔥", "🏹", "🐋", "🦁", "🌙", "🚀", "👾", "🤖"];
 
 interface Props {
   wallet: string;
@@ -146,9 +145,11 @@ export function ProfilePanel({ wallet, solBalance, solPrice, isPro, isCreator = 
             {avatar ? (
               <img src={avatar} alt="avatar" style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover", border: "2px solid #27272a" }} />
             ) : (
-              <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#1a1a1e", border: "2px solid #27272a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
-                {emoji}
-              </div>
+              <label title="Upload a profile photo" style={{ width: 44, height: 44, borderRadius: "50%", background: "#1a1a1e", border: "2px dashed #ff2b4e60", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1, cursor: "pointer" }}>
+                <IconCamera size={12} style={{ color: "#ff2b4e" }} />
+                <span style={{ fontSize: 5.5, color: "#a1a1aa", letterSpacing: ".3px" }}>ADD</span>
+                <input type="file" accept="image/*" onChange={onAvatarFile} style={{ display: "none" }} />
+              </label>
             )}
             <label title="Upload photo" style={{ position: "absolute", bottom: 0, right: 0, width: 16, height: 16, borderRadius: "50%", background: "#27272a", border: "1px solid #3f3f46", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
               <IconCamera size={8} style={{ color: "#a1a1aa" }} />
@@ -197,15 +198,11 @@ export function ProfilePanel({ wallet, solBalance, solPrice, isPro, isCreator = 
                   style={{ flex: 1, background: "transparent", border: "none", padding: "6px 10px 6px 0", color: "#f4f4f5", fontSize: 11, outline: "none", fontFamily: "monospace" }} />
               </div>
             </div>
-            {/* Emoji */}
-            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-              {EMOJIS.map(e => (
-                <button key={e} onClick={() => setDraftEmoji(e)}
-                  style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${draftEmoji === e ? "#ef4444" : "#27272a"}`, background: draftEmoji === e ? "#ef444420" : "transparent", fontSize: 14, cursor: "pointer" }}>
-                  {e}
-                </button>
-              ))}
-            </div>
+            {/* Profile photo */}
+            <label title="Upload a profile photo" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 6, border: "1px solid #ff2b4e", background: "#ff2b4e12", color: "#ff2b4e", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
+              <IconCamera size={11} /> {avatar ? "Change photo" : "Upload photo"}
+              <input type="file" accept="image/*" onChange={onAvatarFile} style={{ display: "none" }} />
+            </label>
             {saveError && <div style={{ fontSize: 10, color: "#ef4444" }}>{saveError}</div>}
             <button onClick={save} disabled={saving || handleAvail === "taken" || handleAvail === "checking"}
               style={{ padding: "6px", borderRadius: 6, border: "none", background: saving ? "#27272a" : "#ef4444", color: saving ? "#52525b" : "#fff", fontSize: 10, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer" }}>

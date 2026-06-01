@@ -24,7 +24,7 @@ import {
   IconCog, IconCrown, IconChevronDown, IconSolana, IconSearch, IconX,
   IconMenu, IconRefresh, IconLock, IconSpeaker, IconWallet, IconPower,
   IconCheck, IconChart, IconArrowUpRight, IconCopy, IconUser, IconHome,
-  IconGlobe, IconBot, IconTag,
+  IconGlobe, IconBot, IconTag, IconCreatorBadge,
 } from "./icons";
 import { ProfileTab } from "./ProfileTab";
 import { ProfilePanel } from "./ProfilePanel";
@@ -897,10 +897,12 @@ export function App({ wallet, balance: initialBalance, onDisconnect }: Props) {
         {!sidebarCollapsed && (pro.active || pro.isCreator) && (() => {
           const isB = pro.tier === "billionaire";
           const c = pro.isCreator ? "#ff2b4e" : isB ? "#ff2b4e" : "#8b5cf6";
-          const label = pro.isCreator ? "CREATOR" : isB ? "BILLIONAIRE" : "MILLIONER";
+          const label = isB ? "BILLIONAIRE" : "MILLIONER";
           return (
             <div style={{ padding: "5px 10px", background: `${c}12`, border: `1px solid ${c}40`, fontSize: 9, color: c, fontWeight: 700, letterSpacing: ".5px", display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: MONO }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><IconCrown size={11} /> {label}</span>
+              {pro.isCreator
+                ? <IconCreatorBadge size={13} style={{ filter: "drop-shadow(0 0 3px #f59e0b80)" }} />
+                : <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><IconCrown size={11} /> {label}</span>}
               {pro.expiresAt && !pro.isCreator && <span style={{ fontWeight: 500, opacity: .7 }}>{Math.max(0, Math.ceil((pro.expiresAt - Date.now()) / 86_400_000))}d</span>}
             </div>
           );
